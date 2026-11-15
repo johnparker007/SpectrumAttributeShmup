@@ -35,7 +35,11 @@
     endm
 
     macro PLOT_PLAYERS
-    PLOT_LIST player_positions,9
+    ifdef LIVE_SHMUP
+        PLOT_LIST player_positions,10
+    else
+        PLOT_LIST player_positions,9
+    endif
 .loop:
     FETCH_DOT 2,.inactive
     jr c,.split

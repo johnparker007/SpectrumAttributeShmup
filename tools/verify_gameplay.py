@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 
-from benchmark_motion import DEAD, step
+from benchmark_motion import DEAD
 from moving_overlay import hit
 from profile_blokius import build, capture
 from profile_ringo8 import HIT, MODELS
@@ -30,6 +30,7 @@ REPLAY = ([0] * 6 + [FIRE] * 37 + [LEFT | UP | FIRE] * 32 + [RIGHT | DOWN | FIRE
           + [RESTART] * 4 + [FIRE] * 43 + [0] * 492 + [RESTART | FIRE] * 4 + [FIRE] * 46)
 IDLE = [0] * 370
 ENEMY_SHIPS = 12
+PLAYER_PAIRS = 5
 EXPLOSION_TICKS = 6
 HIDDEN = (96, 0)
 PLAYER_START = (8, 21)
@@ -69,6 +70,10 @@ def move_dots(records):
     return moved
 
 
+def pair_shots(x, y):
+    return ((x, y), (x, y + 2))
+
+
 def expected(inputs):
     restart_held = False
     message_rows = 0
@@ -88,8 +93,7 @@ def expected(inputs):
             enemy_hits = [False] * ENEMY_SHIPS
             player_hit = False
             incoming = [(DEAD, 0, 0)] * 32
-            volleys = [(DEAD, 0, 0)] * 3
-            shots = [(DEAD, 0)] * 9
+            pairs = [(DEAD, 0)] * PLAYER_PAIRS
         if not restart:
             player_explosion = max(0, player_explosion - 1)
             if respawn_wait:
@@ -112,9 +116,9 @@ def expected(inputs):
                 if reload:
                     reload -= 1
                 elif command & FIRE and player[0] <= 57:
-                    free = next((n for n, (x, _, _) in enumerate(volleys) if x == DEAD), None)
+                    free = next((n for n, (x, _) in enumerate(pairs) if x == DEAD), None)
                     if free is not None:
-                        volleys[free] = (player[0] + 4, player[1] + 2, -1)
+                        pairs[free] = (player[0] + 4, player[1] + 1)
                         reload = 8
             expired = set()
             for slot, (x, y) in enumerate(enemies):
@@ -135,7 +139,7 @@ def expected(inputs):
             if spawn_wait:
                 spawn_wait -= 1
             elif enemies[spawn_slot][0] == HIDDEN[0] and not explosions[spawn_slot] and spawn_slot not in expired:
-                spawn_wait = 4
+                spawn_wait = 9
                 enemies[spawn_slot] = (67, 21)
                 profiles[spawn_slot] = wave
                 spawn_slot = (spawn_slot + 1) % ENEMY_SHIPS
@@ -143,7 +147,7 @@ def expected(inputs):
                 if not remaining:
                     remaining = ENEMY_SHIPS
                     wave = (wave + 1) % len(SHIP_Y)
-            _, volleys, shots = step([], volleys)
+            pairs = [(x + 1 if x < 62 else DEAD, y) for x, y in pairs]
             incoming = move_dots(incoming)
             if tick % 8 == 0:
                 spread_wait = max(0, spread_wait - 1)
@@ -167,7 +171,13 @@ def expected(inputs):
         visible = alive and (not invulnerable or invulnerable % 2)
         displayed = visible or player_explosion > 0
         player_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
-        enemy_hits = [box_visible(enemy) and bool(hit(enemy, shots, 2)) for enemy in enemies]
+        enemy_hits = [False] * ENEMY_SHIPS
+        for slot, enemy in enumerate(enemies):
+            if box_visible(enemy):
+                for n, (x, y) in enumerate(pairs):
+                    if x != DEAD and hit(enemy, pair_shots(x, y), 2):
+                        pairs[n] = (DEAD, y)
+                        enemy_hits[slot] = True
         # The observation point precedes both scanline writes in the Frame 2 slot.
         panel_delta = -1 if lives else 0 if player_explosion else 1
         results.append({
@@ -182,9 +192,9 @@ def expected(inputs):
             "sprite_xy": packed((player[0] + 12 if displayed else HIDDEN[0] + 12, player[1] + 12)),
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
-            "volleys": [packed(volley) for volley in volleys],
+            "pairs": [packed(pair) for pair in pairs],
             "incoming": [packed(dot) for dot in incoming],
-            "shots": [packed(shot) for shot in shots],
+            "shots": [packed(shot) for pair in pairs for shot in pair_shots(*pair)],
         })
         message_rows = max(0, min(16, message_rows + 2 * panel_delta))
     return results
@@ -222,10 +232,11 @@ def verify_logic(emulator, game, model, inputs, seconds):
         fields.extend((("enemies", peek("enemy_boxes", 2, 2 * slot)),
                        ("enemy_motion", peek("enemyMotion", 2, 2 * slot)),
                        ("enemy_image", peek(f"sprite{slot + 9:02d}", 2))))
-    fields += [("volleys", peek("volleys", 3, 3 * slot)) for slot in range(3)]
+    fields += [("pairs", peek("player_pairs", 2, 2 * slot)) for slot in range(PLAYER_PAIRS)]
     incoming_samples = (0, 4, 31)   # Opening shots and the end of the pool.
     fields += [("incoming", peek("enemy_records", 3, 3 * slot)) for slot in incoming_samples]
-    fields += [("shots", peek("player_shots", 2, 2 * slot)) for slot in (0, 1, 2, 8)]
+    shot_samples = (0, 1, 8, 9)
+    fields += [("shots", peek("player_shots", 2, 2 * slot)) for slot in shot_samples]
     points = [(f"{point} AND {n}={n}", expression) for n, (_, expression) in enumerate(fields, 1)]
     oracle = expected(inputs)
     log = breakpoint_log(emulator, game / "main.tap", model, seconds, points, fast_autoload=True)
@@ -246,9 +257,9 @@ def verify_logic(emulator, game, model, inputs, seconds):
             blast = motion >> 8
             sample.extend((state["enemies"][slot], motion,
                            symbols[f"explosion{4 - (blast + 1) // 2}" if blast else "enemyArt"]))
-        sample += state["volleys"]
+        sample += state["pairs"]
         sample += [state["incoming"][slot] for slot in incoming_samples]
-        sample += [state["shots"][slot] for slot in (0, 1, 2, 8)]
+        sample += [state["shots"][slot] for slot in shot_samples]
         for (condition, value), (expected_condition, _), wanted, (field, _) in zip(row, points, sample, fields):
             if (condition, int(value)) != (expected_condition, wanted):
                 raise ValueError(f"{model}: gameplay tick {tick + 1}, {field} yielded {value}, expected {wanted}")
@@ -258,6 +269,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
         "waves_verified": sorted({state["wave"] + 1 for state in oracle}),
         "restarts_verified": sum(state["restart"] for state in oracle),
         "peak_enemy_dots": max(sum(dot % 256 != DEAD for dot in state["incoming"]) for state in oracle),
+        "peak_player_dots": max(sum(dot % 256 != DEAD for dot in state["shots"]) for state in oracle),
         "peak_visible_ships": max(sum(ship % 256 < 64 for ship in state["enemies"]) for state in oracle),
         "player_explosions": sum(state["player_explosion"] == EXPLOSION_TICKS for state in oracle),
     }
@@ -518,12 +530,17 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         if report["replay"]["pairs"] < len(REPLAY):
             raise ValueError(f"{model}: replay paging trace ended before tick {len(REPLAY)}. Increase --replay-seconds.")
         report["replay"].update(played.result())
+        if report["replay"]["peak_player_dots"] != PLAYER_PAIRS * 2:
+            raise ValueError(f"{model}: replay did not exercise all five player pairs")
         report["keyboard_idle"]["simultaneous_enemy_ships_verified"] = formation.result()
         report["keyboard_idle"].update(idle.result())
         check_arithmetic(emulator, replay, model)
         aiming = trace(emulator, replay / "aim.sna", replay / "aim.sym", ["passed", "failed"], model, 1)
         if [event["labels"] for event in aiming["events"]] != [["passed"]]:
             raise ValueError(f"{model}: the bearing probe failed")
+        paired = trace(emulator, replay / "player_pairs.sna", replay / "player_pairs.sym", ["passed", "failed"], model, 1)
+        if [event["labels"] for event in paired["events"]] != [["passed"]]:
+            raise ValueError(f"{model}: the paired-shot collision probe failed")
         hud = {**hud_updates.result(), **hud_video.result()}
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
@@ -561,6 +578,8 @@ def main():
             assemble_arithmetic_probe(assembler, replay)
             aim_probe = Path(__file__).resolve().parents[1] / "tests" / "enemies" / "aim.asm"
             run([assembler, "--sym=aim.sym", aim_probe], replay)
+            pair_probe = Path(__file__).resolve().parents[1] / "tests" / "collision" / "player_pairs.asm"
+            run([assembler, "--sym=player_pairs.sym", pair_probe], replay)
             models = (args.model,) if args.model else MODELS
             results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio)
                        for model in models]

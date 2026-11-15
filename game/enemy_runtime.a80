@@ -103,8 +103,8 @@ stepWave:
     rrca
     rrca
     ld (ix),a
-    ld a,4
-    ld (spawnWait),a             ; at least five game ticks between spawns
+    ld a,9
+    ld (spawnWait),a             ; at least ten game ticks between spawns
     ld a,(spawnSlot)
     inc a
     cp WAVE_ENEMIES

@@ -48,11 +48,52 @@ collisionEnemy:
     ld ix,(next_box)
     ld c,(ix)
     ld h,(ix+1)
+    ifdef LIVE_SHMUP
+    ld de,player_pairs
+    ld b,PLAYER_PAIRS
+    xor a
+    ex af,af'
+.pair:
+    ld a,(de)
+    cp 63
+    sbc a,a
+    ld l,a                      ; ignore spent pairs and positions outside the viewport
+    ld a,(de)
+    sub c
+    inc a                       ; the bullet is two dots wide
+    cp 6
+    sbc a,a
+    and l
+    ld l,a
+    inc de
+    ld a,(de)
+    sub h
+    add a,2                     ; the lower bullet is two rows below the upper one
+    cp 7
+    sbc a,a
+    and l
+    ld l,a
+    ex af,af'
+    or l
+    ex af,af'
+    dec de
+    ld a,(de)
+    or l                        ; retire the whole pair before checking the next box
+    ld (de),a
+    inc de
+    inc de
+    djnz .pair
+    ld b,5                      ; 73 T-states match the original nine-shot scan
+.delay:
+    djnz .delay
+    inc de
+    else
     ld de,player_positions
     ld b,9
     xor a
     ex af,af'
     FIXED_BOX_SCAN 2
+    endif
     ex af,af'
     ld hl,(next_result)
     ld (hl),a

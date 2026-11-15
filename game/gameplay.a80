@@ -1,14 +1,13 @@
 ; One game tick in Frame 1. Frame 2 tests the resulting positions and draws
 ; the same projectile list. The next tick consumes the collision results.
-    include "motion_step.a80"
-
 SHIP_LEFT equ 2             ; leave two dots against the left edge
 PLAYER_RIGHT equ 59
 PLAYER_BOTTOM equ 43
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 12
 EXPLOSION_TICKS equ 6
-PROJECTILE_POOL_BYTES equ 3*3+9*2+ENEMY_COUNT*3
+PLAYER_PAIRS equ 5
+PROJECTILE_POOL_BYTES equ PLAYER_PAIRS*2+ENEMY_COUNT*3
 PLAYER_START equ 8+21*256
 STARTING_LIVES equ 3
 RESPAWN_TICKS equ 12          ; brief gap before a replacement ship appears
@@ -58,7 +57,7 @@ controlsReady:
     call firePlayer
 .moveEnemy:
     call stepWave
-    MOVE_VOLLEYS
+    call movePlayerPairs
     call moveIncoming
     call spawnIncoming
     call syncActors
@@ -159,13 +158,12 @@ firePlayer:
     ld a,(playerXY+1)
     add a,2
     ld d,a
-    ld hl,volleys
-    ld b,3
+    ld hl,player_pairs
+    ld b,PLAYER_PAIRS
 .find:
     ld a,(hl)
     inc a
     jr z,.spawn
-    inc hl
     inc hl
     inc hl
     djnz .find
@@ -173,11 +171,36 @@ firePlayer:
 .spawn:
     ld (hl),c
     inc hl
+    dec d                       ; upper shot is one dot above the centreline
     ld (hl),d
-    inc hl
-    ld (hl),#ff                 ; first MOVE_VOLLEYS increment starts age at 0
     ld a,8
     ld (fireWait),a
+    ret
+
+movePlayerPairs:
+    dup PLAYER_PAIRS, slot
+        ld hl,player_pairs+slot*2
+        ld a,(hl)
+        inc a
+        jr z,1f
+        cp 63
+        jr c,2f
+        ld a,#ff
+2:
+        ld (hl),a
+1:
+    edup
+    ret
+
+expandPlayerPairs:
+    ; Collision has already retired any spent pair before plotting.
+    dup PLAYER_PAIRS, slot
+        ld hl,(player_pairs+slot*2)
+        ld (player_shots+slot*4),hl
+        inc h
+        inc h
+        ld (player_shots+slot*4+2),hl
+    edup
     ret
 
 updatePlayerLife:
@@ -281,7 +304,7 @@ resetEncounter:
     ld bc,runEnd-playerXY
     ldir
     ld hl,initialPools
-    ld de,volleys
+    ld de,player_pairs
     dup PROJECTILE_POOL_BYTES : ldi : edup
     ld hl,initialShips
     ld de,enemy_boxes
@@ -352,8 +375,6 @@ rewindBarrel:
     ld (tilesLUT+29*2),hl
     jp barrelScroll_Init
 
-    MOTION_WRITE_SHOT
-
 playerXY: dw 0
 playerLives: db STARTING_LIVES
 enemyKills: db 0
@@ -385,19 +406,18 @@ initialShips:
     dup 15 : db HIDDEN_BOX,0 : edup
     defs WAVE_ENEMIES*2
 
-volleys:
-    defs 3*3
-player_shots:
-    defs 9*2
-player_positions equ player_shots
+player_pairs:
+    defs PLAYER_PAIRS*2
 enemy_records:
     defs ENEMY_COUNT*3
 enemy_end:
-    assert enemy_end-volleys=PROJECTILE_POOL_BYTES
+    assert enemy_end-player_pairs=PROJECTILE_POOL_BYTES
 enemy_positions equ enemy_records
+player_shots:
+    defs PLAYER_PAIRS*4
+player_positions equ player_shots
 initialPools:
-    dup 3 : db #ff,0,0 : edup
-    dup 9 : db #ff,0 : edup
+    dup PLAYER_PAIRS : db #ff,0 : edup
     dup ENEMY_COUNT : db #ff,0,0 : edup
 
     ifdef REPLAY_CONTROLS
