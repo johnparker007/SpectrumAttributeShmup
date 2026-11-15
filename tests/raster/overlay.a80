@@ -13,6 +13,7 @@ overlayEntry:
     endif
 overlayBegin:
     ifdef LIVE_SHMUP
+        call checkPlayerContact
         call expandPlayerPairs
         ld a,(playerLives)
         or a

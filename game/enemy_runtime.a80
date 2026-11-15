@@ -254,6 +254,36 @@ enemyShotEmitted:
 
     include "aim_incoming.a80"
 
+checkPlayerContact:
+    ld a,(player_hit)
+    or a
+    ret nz                       ; a bullet already hit this game tick
+    ld bc,(player_box)
+    ld a,c
+    cp HIDDEN_BOX
+    ret z
+    ; Two 5-by-5 boxes overlap when both top-left coordinates differ by
+    ; at most four dots. The byte subtraction also handles clipped enemy X.
+    dup WAVE_ENEMIES, slot
+        ld hl,(enemy_boxes+slot*2)
+        ld a,l
+        sub c
+        add a,4
+        cp 9
+        jr nc,1f
+        ld a,h
+        sub b
+        add a,4
+        cp 9
+        jp c,.hit
+1:
+    edup
+    ret
+.hit:
+    ld a,#ff
+    ld (player_hit),a
+    ret
+
 syncEnemyShips:
     ; DE is the display offset. An explosion retains the last drawn position.
     dup WAVE_ENEMIES, slot

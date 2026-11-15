@@ -175,7 +175,10 @@ def expected(inputs):
         alive = lives > 0 and not respawn_wait
         visible = alive and (not invulnerable or invulnerable % 2)
         displayed = visible or player_explosion > 0
-        player_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
+        bullet_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
+        contact = alive and any(box_visible(enemy) and abs(enemy[0] - player[0]) < 5
+                                and abs(enemy[1] - player[1]) < 5 for enemy in enemies)
+        player_hit = bullet_hit or contact
         enemy_hits = [False] * ENEMY_SHIPS
         for slot, enemy in enumerate(enemies):
             if box_visible(enemy):
@@ -197,6 +200,8 @@ def expected(inputs):
             "sprite_xy": packed((player[0] + 12 if displayed else HIDDEN[0] + 12, player[1] + 12)),
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
+            "contact": contact,
+            "bullet_hit": bullet_hit,
             "pairs": [packed(pair) for pair in pairs],
             "incoming": [packed(dot) for dot in incoming],
             "shots": [packed(shot) for pair in pairs for shot in pair_shots(*pair)],
@@ -277,6 +282,11 @@ def verify_logic(emulator, game, model, inputs, seconds):
         "peak_player_dots": max(sum(dot % 256 != DEAD for dot in state["shots"]) for state in oracle),
         "peak_visible_ships": max(sum(map(visible_enemy, state["enemies"])) for state in oracle),
         "player_explosions": sum(state["player_explosion"] == EXPLOSION_TICKS for state in oracle),
+        "contact_only_deaths": sum(previous["contact"] and not previous["bullet_hit"]
+                                   and state["player_explosion"] == EXPLOSION_TICKS
+                                   for previous, state in zip(oracle, oracle[1:])),
+        "protected_contact_ticks": sum(state["contact"] and not state["bullet_hit"] and state["invincible"] > 0
+                                       for state in oracle),
     }
 
 
@@ -571,6 +581,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         report["replay"].update(played.result())
         if report["replay"]["peak_player_dots"] != PLAYER_PAIRS * 2:
             raise ValueError(f"{model}: replay did not exercise all five player pairs")
+        if not report["replay"]["contact_only_deaths"] or not report["replay"]["protected_contact_ticks"]:
+            raise ValueError(f"{model}: replay did not exercise lethal and protected ship contact")
         report["keyboard_idle"]["simultaneous_enemy_ships_verified"] = formation.result()
         report["keyboard_idle"]["left_exit_positions_verified"] = left_exit.result()
         report["keyboard_idle"].update(idle.result())
