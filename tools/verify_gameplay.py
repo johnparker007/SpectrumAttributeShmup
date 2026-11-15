@@ -25,7 +25,7 @@ RIGHT, LEFT, UP, DOWN, FIRE, RESTART = (1, 2, 4, 8, 16, 32)
 REPLAY = ([0] * 6 + [FIRE] * 37 + [LEFT | UP | FIRE] * 32 + [RIGHT | DOWN | FIRE] * 64
           + [LEFT | UP] * 18 + [LEFT | RIGHT | UP | DOWN] * 9 + [0] * 60
           + [RESTART] * 4 + [0] * 535 + [RESTART | FIRE] * 4 + [FIRE] * 46)
-IDLE = [0] * 120
+IDLE = [0] * 370
 APPROACH_STREAM = [RIGHT] * 16 + [DOWN] * 8
 CROSSING_CASES = {
     "up": [UP] * 18,
@@ -41,6 +41,9 @@ WAVES = (
     (0, ((52, 15, 24, 16), (57, 23, 40, 48), (59, 33, 32, 8))),
 )
 HIDDEN = (96, 0)
+PLAYER_START = (8, 21)
+RESPAWN_TICKS = 12
+INVINCIBLE_TICKS = 75
 
 
 def box_visible(point):
@@ -59,8 +62,8 @@ def expected(inputs):
         restart = bool(command & RESTART) and not restart_held
         restart_held = bool(command & RESTART)
         if index == 0 or restart:
-            player = (8, 21)
-            health, kills, invulnerable, reload, respawn, cursor = 3, 0, 0, 0, 0, 0
+            player = PLAYER_START
+            lives, kills, invulnerable, respawn_wait, reload, wave_wait, cursor = 3, 0, 0, 0, 0, 0, 0
             tick = wave = emitter = 0
             enemies = [(52, 21), HIDDEN, HIDDEN]
             enemy_hits = [False] * 3
@@ -69,12 +72,18 @@ def expected(inputs):
             volleys = [(DEAD, 0, 0)] * 3
             shots = [(DEAD, 0)] * 9
         if not restart:
-            if invulnerable:
+            if respawn_wait:
+                respawn_wait -= 1
+                if respawn_wait == 0:
+                    player = PLAYER_START
+                    reload = 0
+                    invulnerable = INVINCIBLE_TICKS
+            elif invulnerable:
                 invulnerable -= 1
-            elif player_hit and health:
-                health -= 1
-                invulnerable = 24
-            if health:
+            elif player_hit and lives:
+                lives -= 1
+                respawn_wait = RESPAWN_TICKS if lives else 0
+            if lives and not respawn_wait and invulnerable != INVINCIBLE_TICKS:
                 x, y = player
                 dx = bool(command & RIGHT) - bool(command & LEFT)
                 dy = bool(command & DOWN) - bool(command & UP)
@@ -96,10 +105,10 @@ def expected(inputs):
                     elif tick % 4 == 0:
                         enemies[slot] = (x - 1 if x > 2 else 96, y)
                 if not any(map(box_visible, enemies)):
-                    respawn = 28
+                    wave_wait = 28
             else:
-                respawn -= 1
-                if respawn == 0:
+                wave_wait -= 1
+                if wave_wait == 0:
                     wave = (wave + 1) % len(WAVES)
                     enemies = [(x, y) for x, y, _, _ in WAVES[wave][1]]
                     enemies += [HIDDEN] * (3 - len(enemies))
@@ -116,13 +125,17 @@ def expected(inputs):
                     emitted = (x - 1, y + 2, path, wave, tick)
                     cursor = (cursor + 1) % len(incoming)
             tick = (tick + 1) % 256
-        player_hit = health > 0 and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
+        alive = lives > 0 and not respawn_wait
+        visible = alive and (not invulnerable or invulnerable % 2)
+        player_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
         enemy_hits = [box_visible(enemy) and bool(hit(enemy, shots, 2)) for enemy in enemies]
         results.append({
-            "header": packed((tick, command, health, kills)),
+            "header": packed((tick, command, lives, kills)),
             "player": packed(player), "enemies": [packed(enemy) for enemy in enemies],
             "wave": wave, "restart": restart, "emitted": emitted,
-            "hit_wait": invulnerable,
+            "respawn_wait": respawn_wait, "invincible": invulnerable, "visible": bool(visible),
+            "player_box": packed((player[0] if alive else HIDDEN[0], player[1])),
+            "sprite_xy": packed((player[0] + 12 if visible else HIDDEN[0] + 12, player[1] + 12)),
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
             "volleys": [packed(volley) for volley in volleys],
@@ -146,12 +159,13 @@ def verify_logic(emulator, game, model, inputs, seconds):
     point = f"PC={symbols['overlayEnd']:04X}H"
     fields = [
         ("header", "+".join(f"{peek(label)}*{256**n}" for n, label in
-                            enumerate(("gameTick", "lastControls", "playerHealth", "enemyKills")))),
+                            enumerate(("gameTick", "lastControls", "playerLives", "enemyKills")))),
         ("player", peek("playerXY", 2)),
         ("wave", peek("waveIndex")),
         ("score", peek("hudScore", 2)),
-        ("hit_wait", peek("hitWait")),
-        ("player_art", peek("sprite08", 2)),
+        ("timers", peek("respawnWait", 2)),
+        ("player_box", peek("player_box", 2)),
+        ("sprite_xy", peek("sprite08", 2, 4)),
         ("flags", peek("collision_actual", 2)),
         ("flags", peek("collision_actual", offset=2) + "+" + peek("player_hit") + "*256"),
     ]
@@ -168,9 +182,8 @@ def verify_logic(emulator, game, model, inputs, seconds):
     for tick, state in enumerate(oracle):
         row = hits[tick * len(points):(tick + 1) * len(points)]
         sample = [state[key] for key in ("header", "player", "wave")]
-        wait = state["hit_wait"]
-        art = "playerHitArt" if wait and not wait & 4 else "playerArt"
-        sample += [int(str(state["header"] >> 24), 16), wait, symbols[art]]
+        sample += [int(str(state["header"] >> 24), 16), packed((state["respawn_wait"], state["invincible"])),
+                   state["player_box"], state["sprite_xy"]]
         sample += state["flags"] + state["enemies"]
         sample += state["volleys"]
         sample += [state["incoming"][slot] for slot in (0, 15, 31)]
@@ -180,7 +193,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
                 raise ValueError(f"{model}: gameplay tick {tick + 1}, {field} yielded {value}, expected {wanted}")
     return {
         "ticks": len(oracle), "kills": max(state["header"] >> 24 for state in oracle),
-        "minimum_health": min(state["header"] >> 16 & 255 for state in oracle),
+        "minimum_lives": min(state["header"] >> 16 & 255 for state in oracle),
         "waves_verified": sorted({state["wave"] + 1 for state in oracle}),
         "restarts_verified": sum(state["restart"] for state in oracle),
         "peak_enemy_dots": max(sum(dot % 256 != DEAD for dot in state["incoming"]) for state in oracle),
@@ -199,36 +212,69 @@ def verify_crossings(emulator, game, model):
         if contact is None or not 0 < contact < len(rows) - 1:
             raise ValueError(f"{name}: replay does not capture a complete crossing")
         command, delta = directions[name]
-        hit, damaged = rows[contact:contact + 2]
+        hit, destroyed = rows[contact:contact + 2]
         if (hit["wave"] != 0 or hit["header"] >> 8 & 255 != command
                 or hit["player"] - rows[contact - 1]["player"] != delta
-                or hit["header"] >> 16 & 255 != 3 or damaged["header"] >> 16 & 255 != 2
-                or damaged["hit_wait"] != 24):
-            raise ValueError(f"{name}: replay did not test a fresh hit while crossing the straight stream")
+                or hit["header"] >> 16 & 255 != 3 or destroyed["header"] >> 16 & 255 != 2
+                or destroyed["respawn_wait"] != RESPAWN_TICKS or destroyed["visible"]):
+            raise ValueError(f"{name}: replay did not test destruction while crossing the straight stream")
         cursor = end
     return list(CROSSING_CASES)
 
 
-def verify_damage_video(emulator, game, model):
-    video = game / f"damage-{model}.raw"
+def verify_life_cycle(emulator, game, model):
+    result = verify_logic(emulator, game, model, IDLE, 85)
+    reference = expected(IDLE)
+
+    def lives(state):
+        return state["header"] >> 16 & 255
+
+    deaths = [index for index in range(1, len(reference))
+              if lives(reference[index - 1]) > lives(reference[index])]
+    if len(deaths) != 3 or lives(reference[-1]) != 0:
+        raise ValueError(f"{model}: idle replay did not lose all three ships")
+    for death in deaths[:-1]:
+        spawn = death + RESPAWN_TICKS
+        absent = reference[death:spawn]
+        protected = reference[spawn:spawn + INVINCIBLE_TICKS]
+        if (any(row["visible"] or row["player_box"] % 256 != HIDDEN[0] for row in absent)
+                or protected[0]["player"] != packed(PLAYER_START)
+                or [row["invincible"] for row in protected] != list(range(INVINCIBLE_TICKS, 0, -1))
+                or [row["visible"] for row in protected] != [index % 2 == 0 for index in range(INVINCIBLE_TICKS)]
+                or any(lives(row) != lives(reference[death]) for row in protected)
+                or not any(row["flags"][1] >> 8 for row in protected)):
+            raise ValueError(f"{model}: idle replay did not exercise absence, blinking and protected overlaps")
+    game_over = reference[deaths[-1]:]
+    if any(row["visible"] or row["respawn_wait"] or row["invincible"] for row in game_over):
+        raise ValueError(f"{model}: player returned after the final life")
+    return {**result, "ships_destroyed": len(deaths), "respawns": len(deaths) - 1,
+            "protected_game_frames_per_respawn": INVINCIBLE_TICKS}
+
+
+def verify_respawn_video(emulator, game, model):
+    video = game / f"respawn-{model}.raw"
     capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 20)
-    # Check the wing silhouette, including the transparent corners. Skip
-    # the centre row because a bullet can cover it during a hit.
+    # With no input the ship stays at (8, 21). Skip its centre row, which
+    # the incoming stream can cover. The trace verifies the exact cadence.
     shape = {0: " #   ", 1: " ### ", 3: " ### ", 4: " #   "}
-    positions = {(row["player"] % 256, row["player"] // 256)
-                 for row in expected(CROSSINGS) if row["hit_wait"] and not row["hit_wait"] & 4}
-    white = {bytes([level]) * 12 for level in (192, 255)}
+    ship_colours = ({bytes((0, level, 0)) * 4 for level in (192, 255)},
+                    {bytes([level]) * 12 for level in (192, 255)})
     size = WIDTH * HEIGHT * 3
+    x, y = PLAYER_START
+    edges = []
     with video.open("rb") as recording:
         while frame := recording.read(size):
             if len(frame) != size:
-                raise ValueError(f"{model}: truncated collision video")
-            for x, y in positions:
-                if all(all(paper_row(frame, (y + row) * 4 + line)[(x + col) * 12:(x + col + 1) * 12] in white
-                           for line in range(4)) == (pixel == "#")
-                       for row, pattern in shape.items() for col, pixel in enumerate(pattern)):
+                raise ValueError(f"{model}: truncated respawn video")
+            seen = any(all(all(paper_row(frame, (y + row) * 4 + line)[(x + col) * 12:(x + col + 1) * 12] in colour
+                               for line in range(4)) == (pixel == "#")
+                           for row, pattern in shape.items() for col, pixel in enumerate(pattern))
+                       for colour in ship_colours)
+            if (not edges and seen) or (edges and seen != edges[-1]):
+                edges.append(seen)
+                if len(edges) == 5:
                     return True
-    raise ValueError(f"{model}: player did not visibly flash after crossing the stream")
+    raise ValueError(f"{model}: respawn video did not show the ship repeatedly disappearing and returning")
 
 
 def verify_gameplay_video(emulator, replay, model):
@@ -362,7 +408,7 @@ def verify(emulator, stock, game, replay, crossing, model, seconds, replay_secon
         raster = pool.submit(capture, emulator, replay, model, replay_seconds, paging=True, scenery=True)
         live_raster = pool.submit(capture, emulator, game, model, seconds, paging=True, scenery=True)
         played = pool.submit(verify_logic, emulator, replay, model, REPLAY, 135)
-        idle = pool.submit(verify_logic, emulator, game, model, IDLE, 32)
+        idle = pool.submit(verify_life_cycle, emulator, game, model)
         art = pool.submit(verify_gameplay_video, emulator, replay, model)
         keyboard = pool.submit(verify_keyboard, emulator, game, model)
         dense_pool = pool.submit(verify_dense_pool, emulator, replay, model)
@@ -373,7 +419,7 @@ def verify(emulator, stock, game, replay, crossing, model, seconds, replay_secon
         hud_updates = pool.submit(check_hud_updates, emulator, replay, model, scores)
         hud_video = pool.submit(check_hud_video, emulator, replay, model)
         hits = pool.submit(verify_crossings, emulator, crossing, model)
-        flash = pool.submit(verify_damage_video, emulator, crossing, model)
+        blink = pool.submit(verify_respawn_video, emulator, game, model)
         _, baseline = examine(reference.result(), model)
         report = {}
         for label, trace in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
@@ -394,7 +440,7 @@ def verify(emulator, stock, game, replay, crossing, model, seconds, replay_secon
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
                 "wave_fire": wave_fire.result(), "score_hud": hud,
-                "straight_stream_crossings": hits.result(), "damage_flash_seen": flash.result(), **music.result()}
+                "straight_stream_crossings": hits.result(), "respawn_blink_seen": blink.result(), **music.result()}
 
 
 def main():

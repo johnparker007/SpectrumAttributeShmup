@@ -7,8 +7,14 @@ PLAYER_RIGHT equ 59
 PLAYER_BOTTOM equ 43
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 3
+PLAYER_START equ 8+21*256
+STARTING_LIVES equ 3
+RESPAWN_TICKS equ 12          ; brief gap before a replacement ship appears
+INVINCIBLE_TICKS equ 75       ; three seconds at the 25 Hz game rate
 
 gameInit:
+    ld hl,playerArt
+    ld (sprite08+SPRITE.IMAGE),hl
     ld hl,enemyArt
     dup WAVE_ENEMIES, slot
         ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
@@ -18,7 +24,7 @@ gameInit:
     jp syncActors
 
 motionStep:
-    call applyHits
+    call updatePlayerLife
     call readControls
     ifdef REPLAY_CONTROLS
         call readReplay
@@ -32,9 +38,15 @@ controlsReady:
     and e
     and 32
     jp nz,restartGame
-    ld a,(playerHealth)
+    ld a,(playerLives)
     or a
     jr z,.moveEnemy
+    ld a,(respawnWait)
+    or a
+    jr nz,.moveEnemy
+    ld a,(invincibleTicks)
+    cp INVINCIBLE_TICKS
+    jr z,.moveEnemy             ; present the new ship at its spawn point first
     call movePlayer
     call firePlayer
 .moveEnemy:
@@ -161,24 +173,39 @@ firePlayer:
     ld (fireWait),a
     ret
 
-applyHits:
-    ld hl,hitWait
+updatePlayerLife:
+    ld a,(playerLives)
+    or a
+    ret z
+    ld hl,respawnWait
+    ld a,(hl)
+    or a
+    jr nz,.respawn
+    ld hl,invincibleTicks
     ld a,(hl)
     or a
     jr z,.checkPlayer
-    dec (hl)
+    dec (hl)                    ; discard the overlap from the previous protected frame
     ret
 .checkPlayer:
     ld a,(player_hit)
     or a
     ret z
-    ld hl,playerHealth
-    ld a,(hl)
-    or a
-    ret z
+    ld hl,playerLives
     dec (hl)
-    ld a,24
-    ld (hitWait),a
+    ret z                       ; game over
+    ld a,RESPAWN_TICKS
+    ld (respawnWait),a
+    ret
+.respawn:
+    dec (hl)
+    ret nz
+    ld hl,PLAYER_START
+    ld (playerXY),hl
+    xor a
+    ld (fireWait),a
+    ld a,INVINCIBLE_TICKS
+    ld (invincibleTicks),a
     ret
 
 stepWave:
@@ -318,23 +345,25 @@ saveEnemyCursor:
     ret
 
 syncActors:
-    ; Show a hit in the playfield. The renderer owns the border colour.
-    ld hl,playerArt
-    ld a,(hitWait)
-    or a
-    jr z,.playerArtReady
-    bit 2,a
-    jr nz,.playerArtReady
-    ld hl,playerHitArt
-.playerArtReady:
-    ld (sprite08+SPRITE.IMAGE),hl
     ld hl,(playerXY)
-    ld a,(playerHealth)
+    ld a,(playerLives)
     or a
-    jr nz,.playerVisible
+    jr z,.shipAbsent
+    ld a,(respawnWait)
+    or a
+    jr nz,.shipAbsent
+    ld (player_box),hl          ; blinking changes the draw position only
+    ld a,(invincibleTicks)
+    or a
+    jr z,.shipPosition
+    rrca
+    jr c,.shipPosition         ; visible on odd protected frames
     ld l,HIDDEN_BOX
-.playerVisible:
+    jr .shipPosition
+.shipAbsent:
+    ld l,HIDDEN_BOX
     ld (player_box),hl
+.shipPosition:
     ld de,#0c0c                ; logical origin is 12 dots inside sprite buffer
     add hl,de
     ld (sprite08+SPRITE.X),hl
@@ -415,15 +444,18 @@ rewindBarrel:
     MOTION_WRITE_SHOT
 
 playerXY: dw 0
-playerHealth: db 0
+playerLives: db 0
 enemyKills: db 0
 gameTick: db 0
-hitWait: db 0
+respawnWait: db 0
+invincibleTicks: db 0
 fireWait: db 0
 waveWait: db 0
 enemyWrite: dw 0
 runEnd:
-initialPlayer: db 8,21,3,0,0,0,0,0
+initialPlayer:
+    dw PLAYER_START
+    db STARTING_LIVES,0,0,0,0,0,0
     dw enemy_records
     assert $-initialPlayer=runEnd-playerXY
 
@@ -463,7 +495,6 @@ initialPools:
     align 256
 trajectories: incbin "trajectories.bin"
 playerArt: incbin "player_art.bin"
-playerHitArt: incbin "player_hit_art.bin"
 enemyArt: incbin "enemy_art.bin"
 
     ifdef REPLAY_CONTROLS

@@ -87,7 +87,6 @@ doSinScroll equ barrelScroll_Update
         (game / "trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))
-        (game / "player_hit_art.bin").write_bytes(ship_art(player_shape, 7))
         (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))
         defines.append("LIVE_SHMUP")
         if replay is not None:
