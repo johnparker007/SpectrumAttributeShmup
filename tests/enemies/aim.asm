@@ -5,7 +5,7 @@ start:
     ld sp,#bfff
 
     macro CHECK_BEARING targetX,targetY,direction
-        ld hl,targetX+targetY*256-514
+        ld hl,0+(targetX)+(targetY)*256-514
         ld (playerXY),hl
         ld bc,32*256+24
         call aimIncoming
@@ -19,20 +19,31 @@ start:
         cp 24
         jp nz,failed
     endm
-    CHECK_BEARING 12,24,0
-    CHECK_BEARING 52,24,64
-    CHECK_BEARING 32,4,168
-    CHECK_BEARING 32,44,176
-    CHECK_BEARING 16,8,40
-    CHECK_BEARING 48,8,104
-    CHECK_BEARING 16,40,48
-    CHECK_BEARING 48,40,112
-    CHECK_BEARING 12,14,0
-    CHECK_BEARING 22,4,168
+    macro CHECK_QUADRANTS dx,dy,bearing
+        CHECK_BEARING 32+(dx),24+(dy),(bearing)*8
+        CHECK_BEARING 32-(dy),24+(dx),((bearing)+8)*8
+        CHECK_BEARING 32-(dx),24-(dy),((bearing)+16)*8
+        CHECK_BEARING 32+(dy),24-(dx),((bearing)+24)*8
+    endm
+    CHECK_QUADRANTS -20,0,0
+    CHECK_QUADRANTS -20,-4,1
+    CHECK_QUADRANTS -20,-8,2
+    CHECK_QUADRANTS -20,-13,3
+    CHECK_QUADRANTS -20,-20,4
+    CHECK_QUADRANTS -13,-20,5
+    CHECK_QUADRANTS -8,-20,6
+    CHECK_QUADRANTS -4,-20,7
+    CHECK_BEARING 12,23,0
+    CHECK_BEARING 12,22,8
+    CHECK_BEARING 12,18,8
+    CHECK_BEARING 12,17,16
+    CHECK_BEARING 32,24,128
 passed: halt
     nop
 failed: halt
 
 playerXY: dw 0
     include "aim_incoming.a80"
+    align 256
+aimThresholds: incbin "aim_thresholds.bin"
     savesna "aim.sna", start

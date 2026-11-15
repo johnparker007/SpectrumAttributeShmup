@@ -1,42 +1,65 @@
-; B/C are the shot origin. Quantize the bearing into eight directions
-; using a 2:1 ratio to select the horizontal or vertical axis.
+; B/C are the shot origin. D returns the bearing times eight.
+; Bearings start at left and advance through up, right and down.
+; The shot origin and player centre are both inside the 64-by-48 viewport.
 aimIncoming:
     push bc
     ld hl,(playerXY)
-    ld e,#40
+    ld e,0
     ld a,l
     add a,2
     sub b
-    jr nc,.dx
+    jr c,.left
+    ld e,#80
+    jr .dx
+.left:
     neg
-    ld e,0
 .dx:
     ld b,a
-    ld d,48
     ld a,h
     add a,2
     sub c
-    jr nc,.dy
+    jr nc,.down
     neg
-    ld d,40
-.dy:
     ld c,a
-    add a,a
-    cp b
-    jr c,.horizontal
-    jr z,.horizontal
-    ld a,b
-    add a,a
-    cp c
-    jr c,.vertical
-    jr nz,.angled
-.vertical:
-    ld e,#80
-.angled:
-    ld a,d
-    or e
-    ld e,a
-.horizontal:
     ld d,e
+    jr .magnitudes
+.down:
+    ld c,a
+    ld a,e
+    xor #80
+    ld d,a                       ; bit 7 selects the sign of the bearing offset
+.magnitudes:
+    ld a,b
+    cp c
+    jr nc,.majorReady
+    ld a,c
+    ld c,b
+    inc d                        ; bit 0 reflects the angle for a Y-major shot
+.majorReady:
+    add a,a
+    add a,a
+    ld l,a
+    ld h,high aimThresholds
+    ld a,c
+    ld b,0
+    dup 4, boundary
+        cp (hl)
+        jr c,.angle
+        ld b,(boundary+1)*8
+        inc l
+    edup
+.angle:
+    ld a,b
+    bit 0,d
+    jr z,.signed
+    ld a,64
+    sub b
+.signed:
+    bit 7,d
+    jr z,.combine
+    neg
+.combine:
+    add a,e
+    ld d,a
     pop bc
     ret

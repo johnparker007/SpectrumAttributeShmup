@@ -6,7 +6,7 @@ Enemy ships enter beyond the right edge and move left one logical dot every othe
 
 The scenery advances every other game tick, at the same horizontal speed as the enemy ships. Tile animations update every game tick.
 
-The ships take turns firing, with at most one shot across the formation every eight game ticks. An integer comparison of the horizontal and vertical distances picks one of eight bearings toward the player. When the player is absent, shots go straight left. Horizontal and vertical shots alternate one and two dots per game tick. Diagonal shots move one dot on each axis per tick. The build bakes the X and Y deltas into separate tables. Collisions are sampled at the resulting position, once per game tick.
+The ships take turns firing, with at most one shot across the formation every eight game ticks. At firing time, integer comparisons against precomputed thresholds pick the closest of 32 bearings toward the player. When the player is absent, shots go straight left. Horizontal and vertical shots alternate one and two dots per game tick. Exact diagonal shots move one dot on each axis per tick. The build distributes the intermediate angles' X and Y steps across eight-tick sequences. In flight, each shot reads its deltas from the same two 256-byte tables and uses the same three-byte record. Collisions are sampled at the resulting position, once per game tick.
 
 A cyan hit destroys an opponent, and an incoming hit destroys a vulnerable player ship. Both play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Movement and firing work on both blink phases after the spawn frame. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
 
@@ -28,7 +28,7 @@ The HUD tests compare each bitmap update and its page restore against score and 
 
 The replay checks 1,630 HUD frames and expects 64 life-icon row updates and 213 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The attribute strip takes 340 T-states per game tick.
 
-The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. The gameplay trace compares both player and enemy explosion artwork with the expected frame sequence. A separate assembly probe verifies all eight aimed bearings and two axis boundaries.
+The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. The gameplay trace compares both player and enemy explosion artwork with the expected frame sequence. A separate assembly probe verifies all 32 aimed bearings and tests both sides of two angle boundaries.
 
 The main replay ends a run with a nonzero score. The trace checks that the final score stays fixed and that the 16 bitmap rows of the game-over panel are installed and restored incrementally. Headless video checks both lines and the final score together, followed by a cleared panel and reset HUD after Enter.
 
@@ -42,4 +42,4 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | Enemy shots checked at emission | 78 | 78 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `32a6370bd1322dd9265410eb28bc98430bb63d2d8e8a644b85967f8460b60f3b`.
+Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `1f579e9e2fa7fa4e60f0ffca64d1451679fdbc4f7271ee0bafa3f9ad8aab3c55`.

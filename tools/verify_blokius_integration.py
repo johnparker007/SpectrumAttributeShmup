@@ -5,14 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from itertools import groupby
 import json
-from math import sin, tau
+from math import cos, sin, tan, tau
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from benchmark_motion import STEPS
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -25,6 +24,22 @@ GAME_OVER_TEXT = ("GAME OVER".center(16), "ENTER TO RESTART")
 SHIP_PATTERNS = ((21, 0, 64), (13, 5, 64), (29, 7, 32), (22, 11, 64))
 SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in range(64))
                for centre, amplitude, period in SHIP_PATTERNS)
+SHOT_DIRECTIONS = 32
+SHOT_PERIOD = 8
+SHOT_VECTORS = tuple((-round(12 * cos(tau * bearing / SHOT_DIRECTIONS)),
+                      -round(12 * sin(tau * bearing / SHOT_DIRECTIONS)))
+                     for bearing in range(SHOT_DIRECTIONS))
+
+
+def shot_steps(axis):
+    # The table is indexed by the arrival phase, with phase 0 wrapping.
+    for vector in SHOT_VECTORS:
+        total = vector[axis]
+        sign = -1 if total < 0 else 1
+        positions = [abs(total) * step // SHOT_PERIOD for step in range(SHOT_PERIOD + 1)]
+        steps = [(sign * (end - start)) % 256 for start, end in zip(positions, positions[1:])]
+        yield steps[-1]
+        yield from steps[:-1]
 
 
 def ship_art(rows, colour):
@@ -118,25 +133,13 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
-        # Index by the phase after moving. Diagonals take one source step
-        # per tick. Straight shots alternate one and two source steps.
-        x_steps, y_steps = bytearray(), bytearray()
-        for direction in (-1, 1, 0, 0):
-            for path in STEPS:
-                diagonal = direction != 0 and any(path)
-                cadence = (1,) * 8 if diagonal else (2, 1) * 4
-                if not diagonal and path[:4] != path[4:]:
-                    raise ValueError("The straight trajectory must repeat after four source steps")
-                x_steps.extend((direction * distance) % 256 for distance in cadence)
-                deltas = [0] * 8
-                source_step = 0
-                for phase in (*range(1, 8), 0):
-                    distance = cadence[phase]
-                    deltas[phase] = sum(path[(source_step + step) % 8] for step in range(1, distance + 1)) % 256
-                    source_step += distance
-                y_steps.extend(deltas)
-        (game / "incoming_x.bin").write_bytes(x_steps)
-        (game / "incoming_y.bin").write_bytes(y_steps)
+        (game / "incoming_x.bin").write_bytes(bytes(shot_steps(0)))
+        (game / "incoming_y.bin").write_bytes(bytes(shot_steps(1)))
+        # Minimum minor-axis distance to cross each of the four angular
+        # midpoints within the first octant, for every major-axis distance.
+        (game / "aim_thresholds.bin").write_bytes(bytes(
+            int(major * tan(tau * (bearing + 0.5) / SHOT_DIRECTIONS)) + 1
+            for major in range(64) for bearing in range(4)))
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))

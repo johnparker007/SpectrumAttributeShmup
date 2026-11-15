@@ -4,18 +4,19 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+from math import atan2, tau
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 
-from benchmark_motion import DEAD, STEPS, step
+from benchmark_motion import DEAD, step
 from moving_overlay import hit
 from profile_blokius import build, capture
 from profile_ringo8 import HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols, trace
 from verify_ay_stream import register_pairs
-from verify_blokius_integration import SHIP_Y, examine, install
+from verify_blokius_integration import SHIP_Y, SHOT_DIRECTIONS, SHOT_PERIOD, SHOT_VECTORS, examine, install
 from verify_dot_overlay import verify_audio
 from verify_score_hud import (
     assemble_arithmetic_probe, check_arithmetic, check_game_over_video, check_hud_updates, check_hud_video,
@@ -46,12 +47,8 @@ def packed(values):
 
 def aim(x, y, player):
     dx, dy = player[0] + 2 - x, player[1] + 2 - y
-    horizontal = 64 if dx >= 0 else 0
-    if abs(dy) * 2 <= abs(dx):
-        return horizontal
-    if abs(dx) * 2 <= abs(dy):
-        horizontal = 128
-    return horizontal + (40 if dy < 0 else 48)
+    bearing = round(atan2(-dy, -dx) / tau * SHOT_DIRECTIONS) if dx or dy else SHOT_DIRECTIONS // 2
+    return (bearing % SHOT_DIRECTIONS) * SHOT_PERIOD
 
 
 def move_dots(records):
@@ -61,16 +58,12 @@ def move_dots(records):
             moved.append((x, y, path))
             continue
         phase = path & 7
-        direction = 0 if path & 128 else 1 if path & 64 else -1
-        steps = STEPS[path >> 3 & 7]
-        diagonal = direction != 0 and any(steps)
-        distance = 1 if diagonal else 1 + phase % 2
-        dx = distance * direction
+        dx, dy = ((-1 if total < 0 else 1) * ((phase + 1) * abs(total) // 8 - phase * abs(total) // 8)
+                  for total in SHOT_VECTORS[path >> 3])
         if not 0 <= x + dx < 64:
             moved.append((DEAD, y, path))
             continue
-        old_phase = phase if diagonal else (phase * 3) // 2
-        next_y = y + sum(steps[(old_phase + n) & 7] for n in range(1, distance + 1))
+        next_y = y + dy
         path = path & ~7 | ((phase + 1) & 7)
         moved.append((x + dx, next_y, path) if 0 <= next_y < 48 else (DEAD, y, path))
     return moved
@@ -221,7 +214,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
                        ("enemy_motion", peek("enemyMotion", 2, 2 * slot)),
                        ("enemy_image", peek(f"sprite{slot + 9:02d}", 2))))
     fields += [("volleys", peek("volleys", 3, 3 * slot)) for slot in range(3)]
-    incoming_samples = (0, 4, 31)   # Horizontal, opening diagonal, and end of the pool.
+    incoming_samples = (0, 4, 31)   # Opening shots and the end of the pool.
     fields += [("incoming", peek("enemy_records", 3, 3 * slot)) for slot in incoming_samples]
     fields += [("shots", peek("player_shots", 2, 2 * slot)) for slot in (0, 1, 2, 8)]
     points = [(f"{point} AND {n}={n}", expression) for n, (_, expression) in enumerate(fields, 1)]
@@ -510,7 +503,7 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
                 "wave_fire": wave_fire.result(), "score_hud": hud, "game_over": game_over.result(),
-                "aim_directions_verified": 8, "respawn_blink_seen": blink.result(), **music.result()}
+                "aim_directions_verified": SHOT_DIRECTIONS, "respawn_blink_seen": blink.result(), **music.result()}
 
 
 def main():

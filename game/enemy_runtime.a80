@@ -122,8 +122,7 @@ stepWave:
     ld (waveIndex),a
     ret
 
-; Packed trajectory bits 7/6 select X direction and bits 0–2 select the
-; phase in the baked trajectory for that direction.
+; Packed trajectory bits 3–7 select the bearing and bits 0–2 select its phase.
 moveIncoming:
     ld d,high incomingX
     ; Sparse fire leaves most slots empty. An untaken call costs less than
@@ -273,3 +272,5 @@ shipTrajectories: incbin "ship_trajectories.bin"
 incomingX: incbin "incoming_x.bin"
 incomingY: incbin "incoming_y.bin"
     assert incomingY-incomingX=256
+aimThresholds: incbin "aim_thresholds.bin"
+    assert low aimThresholds=0
