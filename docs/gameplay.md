@@ -6,7 +6,7 @@ Enemy ships enter beyond the right edge and move left one logical dot every othe
 
 The scenery advances every other game tick, at the same horizontal speed as the enemy ships. Tile animations update every game tick.
 
-The ships take turns firing, with at most one shot across the formation every eight game ticks. An integer comparison of the horizontal and vertical distances picks one of eight bearings toward the player. When the player is absent, shots go straight left. Enemy shots alternate one and two trajectory steps per game tick. The build bakes the X and Y deltas into separate tables, with both axes of a diagonal using the same step length. Collisions are sampled at the resulting position, once per game tick.
+The ships take turns firing, with at most one shot across the formation every eight game ticks. An integer comparison of the horizontal and vertical distances picks one of eight bearings toward the player. When the player is absent, shots go straight left. Horizontal and vertical shots alternate one and two dots per game tick. Diagonal shots move one dot on each axis per tick. The build bakes the X and Y deltas into separate tables. Collisions are sampled at the resulting position, once per game tick.
 
 A cyan hit destroys an opponent, and an incoming hit destroys a vulnerable player ship. Both play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Movement and firing work on both blink phases after the spawn frame. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
 
@@ -42,4 +42,4 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | Enemy shots checked at emission | 78 | 78 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `048ca7d6e41686cbfc2ea970a8329335665fa94c4e3cdeefb04d7071a19d1934`.
+Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `32a6370bd1322dd9265410eb28bc98430bb63d2d8e8a644b85967f8460b60f3b`.

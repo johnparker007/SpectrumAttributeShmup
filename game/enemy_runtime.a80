@@ -123,7 +123,7 @@ stepWave:
     ret
 
 ; Packed trajectory bits 7/6 select X direction and bits 0–2 select the
-; phase in the baked one-step, two-step rhythm.
+; phase in the baked trajectory for that direction.
 moveIncoming:
     ld d,high incomingX
     ; Sparse fire leaves most slots empty. An untaken call costs less than

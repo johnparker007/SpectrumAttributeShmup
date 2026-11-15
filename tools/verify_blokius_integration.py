@@ -118,24 +118,25 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
-        # Index by the phase after moving. Eight ticks consume twelve of the
-        # old steps, so each source trajectory must repeat after twelve.
-        cadence = (2, 1, 2, 1, 2, 1, 2, 1)
-        (game / "incoming_x.bin").write_bytes(bytes(
-            (direction * distance) % 256 for direction in (-1, 1, 0, 0)
-            for _ in STEPS for distance in cadence))
-        y_steps = bytearray()
-        for path in STEPS:
-            if path[:4] != path[4:]:
-                raise ValueError("The enemy trajectory must repeat after four steps")
-            deltas = [0] * 8
-            source_step = 0
-            for phase in (*range(1, 8), 0):
-                distance = cadence[phase]
-                deltas[phase] = sum(path[(source_step + step) % 8] for step in range(1, distance + 1)) % 256
-                source_step += distance
-            y_steps.extend(deltas)
-        (game / "incoming_y.bin").write_bytes(y_steps * 4)
+        # Index by the phase after moving. Diagonals take one source step
+        # per tick. Straight shots alternate one and two source steps.
+        x_steps, y_steps = bytearray(), bytearray()
+        for direction in (-1, 1, 0, 0):
+            for path in STEPS:
+                diagonal = direction != 0 and any(path)
+                cadence = (1,) * 8 if diagonal else (2, 1) * 4
+                if not diagonal and path[:4] != path[4:]:
+                    raise ValueError("The straight trajectory must repeat after four source steps")
+                x_steps.extend((direction * distance) % 256 for distance in cadence)
+                deltas = [0] * 8
+                source_step = 0
+                for phase in (*range(1, 8), 0):
+                    distance = cadence[phase]
+                    deltas[phase] = sum(path[(source_step + step) % 8] for step in range(1, distance + 1)) % 256
+                    source_step += distance
+                y_steps.extend(deltas)
+        (game / "incoming_x.bin").write_bytes(x_steps)
+        (game / "incoming_y.bin").write_bytes(y_steps)
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))

@@ -61,13 +61,15 @@ def move_dots(records):
             moved.append((x, y, path))
             continue
         phase = path & 7
-        distance = 1 + phase % 2
-        dx = distance * (0 if path & 128 else 1 if path & 64 else -1)
+        direction = 0 if path & 128 else 1 if path & 64 else -1
+        steps = STEPS[path >> 3 & 7]
+        diagonal = direction != 0 and any(steps)
+        distance = 1 if diagonal else 1 + phase % 2
+        dx = distance * direction
         if not 0 <= x + dx < 64:
             moved.append((DEAD, y, path))
             continue
-        steps = STEPS[path >> 3 & 7]
-        old_phase = (phase * 3) // 2
+        old_phase = phase if diagonal else (phase * 3) // 2
         next_y = y + sum(steps[(old_phase + n) & 7] for n in range(1, distance + 1))
         path = path & ~7 | ((phase + 1) & 7)
         moved.append((x + dx, next_y, path) if 0 <= next_y < 48 else (DEAD, y, path))
