@@ -419,11 +419,10 @@ def verify_formation(emulator, game, model):
             sprite = symbols[f'sprite{9 + slot:02d}'] + 4
             y, x = divmod(packed_xy, 256)
             draw_xy = packed(((x + 12) % 256, y + 12))
-            for address, wanted in ((box, packed_xy), (sprite, draw_xy)):
-                index = len(points) + 1
-                key = f"{cond} AND {index}={index}"
-                points.append((key, f"PEEKW({address:04X}H)"))
-                values[key] = wanted
+            index = len(points) + 1
+            key = f"{cond} AND {index}={index}"
+            points.append((key, f"PEEKW({box:04X}H)+PEEKW({sprite:04X}H)*65536"))
+            values[key] = packed_xy + draw_xy * 65536
     log = breakpoint_log(emulator, game / "main.tap", model, 160, points, fast_autoload=True)
     hits = HIT.findall(log)
     observed = {}
