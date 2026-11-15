@@ -69,6 +69,8 @@ The [AY playback experiment](docs/ay-playback.md) profiles the archived Blokius 
 
 The [projectile integration experiment](docs/projectile-integration.md) runs the full 32-dot workload and scheduled hitbox checks in a temporary copy of the stock engine.
 
+The [projectile motion benchmark](docs/projectile-motion.md) verifies integer trajectories, volley expansion, and retirement at the viewport edges.
+
 ## Blokius WIP audit
 
 `Blokius - sprite manager wip 1.zip` rebuilt headlessly with SjASMPlus 1.20.2 using the archive's preconverted assets. The generated TAP and SNA matched the archived binaries byte for byte. The `game` directory contains `main.asm`, `spriteManager.asm`, `hotspotCollision.asm`, `barrelScroll.asm`, and `hud.asm`. Its `music/resources.a80` places the 1,617-byte player at 55000 and the 2,015-byte song at 57158 in bank 0. The player call in `main.asm` is commented out in this WIP. The original `meadows edge 1.vt2` was located alongside its numbered revisions.
