@@ -19,8 +19,9 @@ stepWave:
     bit 0,c                       ; resolve hits every tick, move on even ticks
     jr nz,.skipY
     dec (hl)
-    jr z,.hide
     ld a,(hl)
+    cp #fb                       ; a five-dot sprite is fully offscreen at X=-5
+    jr z,.hide
     and 63
     exx
     ld l,a
@@ -267,7 +268,12 @@ syncEnemyShips:
         ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
 1:
         ld hl,(enemy_boxes+slot*2)
-        add hl,de
+        ld a,l
+        add a,e                  ; negative playfield X lands in the left pad
+        ld l,a
+        ld a,h
+        add a,d                  ; apply the Y offset without carry from X
+        ld h,a
         ld (sprite09+slot*SPRITE+SPRITE.X),hl
         jr 3f
 2:

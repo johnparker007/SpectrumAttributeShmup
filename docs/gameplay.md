@@ -2,7 +2,7 @@
 
 Use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. Press **Enter** to restart at any time. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. Hold Space to fire two parallel cyan shots at a time, with up to five pairs in flight. The two shots share an X coordinate and fly two dots apart vertically.
 
-Enemy ships enter beyond the right edge and move left one logical dot every other game tick. The formation has 12 slots and admits a new ship every ten ticks when its next slot is free, spacing them five dots apart horizontally. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
+Enemy ships enter beyond the right edge and move left one logical dot every other game tick. The renderer uses offscreen padding to clip each ship as it exits on the left. The ship retires once its last dot leaves the viewport. The formation has 12 slots and admits a new ship every ten ticks when its next slot is free, spacing them five dots apart horizontally. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
 
 The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
 
@@ -28,7 +28,7 @@ The HUD tests compare each bitmap update and its page restore against score and 
 
 The replay checks 1,630 HUD frames and expects 64 life-icon row updates and 117 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The attribute strip takes 340 T-states per game tick.
 
-The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. The gameplay trace checks ten simultaneous player shots and compares both player and enemy explosion artwork with the expected frame sequence. Assembly probes verify all 32 aimed bearings, two angle boundaries and paired-shot retirement when either shot hits.
+The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. A separate trace verifies the coordinates and visible pixels of a ship exiting on the left. The gameplay trace checks ten simultaneous player shots and compares both player and enemy explosion artwork with the expected frame sequence. Assembly probes verify all 32 aimed bearings, two angle boundaries and paired-shot retirement when either shot hits.
 
 The main replay ends a run with a nonzero score. The trace checks that the final score stays fixed and that the 16 bitmap rows of the game-over panel are installed and restored incrementally. Headless video checks both lines and the final score together, followed by a cleared panel and reset HUD after Enter.
 
@@ -36,12 +36,12 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | --- | ---: | ---: |
 | Replay frame pairs checked against stock paging | ≥815 | ≥815 |
 | Keyboard-build frame pairs checked against stock paging | ≥256 | ≥256 |
-| Minimum Frame 1 margin across the 815-tick replay | 1,641 T-states | 1,594 T-states |
+| Minimum Frame 1 margin across the 815-tick replay | 1,485 T-states | 1,438 T-states |
 | Minimum Frame 2 margin across the 815-tick replay | 4,371 T-states | 4,372 T-states |
 | Visible enemy ships checked together | 12 | 12 |
 | Player shots verified in flight together | 10 | 10 |
-| Enemy shots checked at emission | 72 | 72 |
-| Aimed three-way spreads checked | 13 | 13 |
+| Enemy shots checked at emission | 79 | 79 |
+| Aimed three-way spreads checked | 16 | 16 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `08b291cc98401f9fed77380bfd4645b2cf9ae54f774812f561358b9bfc080e4f`.
+Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `09ff077dd200a625f34940815c0411063186e26e3525ceecb30653df32e78b19`.

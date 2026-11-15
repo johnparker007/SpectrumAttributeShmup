@@ -39,7 +39,12 @@ INVINCIBLE_TICKS = 75
 
 
 def box_visible(point):
-    return point[0] < 64
+    return -4 <= point[0] < 64
+
+
+def visible_enemy(xy):
+    x = xy % 256
+    return x < 64 or x >= 252
 
 
 def packed(values):
@@ -132,7 +137,7 @@ def expected(inputs):
                     enemies[slot] = (HIDDEN[0], y)
                 elif tick % 2:
                     continue
-                elif x == 1:
+                elif x == -4:
                     enemies[slot] = (HIDDEN[0], y)
                 else:
                     enemies[slot] = (x - 1, SHIP_Y[profiles[slot]][(x - 1) % 64])
@@ -154,7 +159,7 @@ def expected(inputs):
                 x, y = enemies[emitter]
                 spread = profiles[emitter] % 2
                 emitter = (emitter + 1) % ENEMY_SHIPS
-                if x < 64 and (not spread or not spread_wait):
+                if 0 <= x < 64 and (not spread or not spread_wait):
                     if spread:
                         spread_wait = 2
                     path = aim(x, y + 2, player) if lives and not respawn_wait else 0
@@ -182,7 +187,7 @@ def expected(inputs):
         panel_delta = -1 if lives else 0 if player_explosion else 1
         results.append({
             "header": packed((tick, command, lives, kills)),
-            "player": packed(player), "enemies": [packed(enemy) for enemy in enemies],
+            "player": packed(player), "enemies": [packed((x % 256, y)) for x, y in enemies],
             "enemy_motion": [packed((profile * 64, blast)) for profile, blast in zip(profiles, explosions)],
             "enemy_hits": enemy_hits, "player_explosion": player_explosion,
             "wave": wave, "restart": restart, "emitted": emitted,
@@ -270,7 +275,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
         "restarts_verified": sum(state["restart"] for state in oracle),
         "peak_enemy_dots": max(sum(dot % 256 != DEAD for dot in state["incoming"]) for state in oracle),
         "peak_player_dots": max(sum(dot % 256 != DEAD for dot in state["shots"]) for state in oracle),
-        "peak_visible_ships": max(sum(ship % 256 < 64 for ship in state["enemies"]) for state in oracle),
+        "peak_visible_ships": max(sum(map(visible_enemy, state["enemies"])) for state in oracle),
         "player_explosions": sum(state["player_explosion"] == EXPLOSION_TICKS for state in oracle),
     }
 
@@ -386,7 +391,7 @@ def verify_formation(emulator, game, model):
     candidates = []
     for current_lives in (2, 0):
         state = next(row for row in reference if (row["header"] >> 16 & 255) == current_lives
-                     and all(x % 256 < 64 for x in row["enemies"]))
+                     and all(map(visible_enemy, row["enemies"])))
         tick = state['header'] & 255
         candidates.append((f"{point} AND PEEK({tick_address:04X}H)={tick} AND PEEK({lives_address:04X}H)={current_lives}", state))
     points = []
@@ -395,7 +400,9 @@ def verify_formation(emulator, game, model):
         for slot, packed_xy in enumerate(state['enemies']):
             box = symbols['enemy_boxes'] + slot * 2
             sprite = symbols[f'sprite{9 + slot:02d}'] + 4
-            for address, wanted in ((box, packed_xy), (sprite, packed_xy + 0x0C0C)):
+            y, x = divmod(packed_xy, 256)
+            draw_xy = packed(((x + 12) % 256, y + 12))
+            for address, wanted in ((box, packed_xy), (sprite, draw_xy)):
                 index = len(points) + 1
                 key = f"{cond} AND {index}={index}"
                 points.append((key, f"PEEKW({address:04X}H)"))
@@ -408,6 +415,37 @@ def verify_formation(emulator, game, model):
     if observed != values or len(hits) != log.count("Catch breakpoint:"):
         raise ValueError(f"{model}: captured {len(observed)} of {len(values)} twelve-ship formation fields")
     return ENEMY_SHIPS
+
+
+def verify_left_exit(emulator, game, model):
+    symbols = read_symbols(game / "main.sym")
+    frame = f"PC={symbols['overlayEnd']:04X}H"
+    tick = f"PEEK({symbols['gameTick']:04X}H)"
+    point = f"{frame} AND {tick}>=135 AND {tick}<=145"
+    viewport = f"PEEKW({symbols['attrPointer']:04X}H)"
+    top = 21 * symbols["attrBufferWidth"]
+    centre = 23 * symbols["attrBufferWidth"]
+    expressions = (f"PEEKW({symbols['enemy_boxes']:04X}H)",
+                   f"PEEKW({symbols['sprite09'] + 4:04X}H)",
+                   f"PEEK({viewport}+{top})+PEEK({viewport}+{top + 1})*256+PEEK({viewport}+{centre})*65536")
+    checks = [(f"{point} AND {n}={n}", expression) for n, expression in enumerate(expressions, 1)]
+    log = breakpoint_log(emulator, game / "main.tap", model, 26, checks, fast_autoload=True)
+    hits = HIT.findall(log)
+    columns = [[int(raw) for marker, raw in hits if marker == condition][:11:2] for condition, _ in checks]
+    x_positions = (0, -1, -2, -3, -4, 67)
+    if (len(hits) != log.count("Catch breakpoint:")
+            or columns[:2] != [[packed((x % 256, 21)) for x in x_positions],
+                               [packed((x + 12, 33)) for x in x_positions]]
+            or len(columns[2]) != len(x_positions)):
+        raise ValueError(f"{model}: incorrect enemy coordinates during left-edge exit")
+    for x, attributes in zip(x_positions[:5], columns[2]):
+        # The silhouette has a single top-row dot at X+3, then its centre
+        # row shows the final dot once the top has passed the left edge.
+        dot = x + 3
+        shift = (dot // 2) * 8 + (dot % 2) * 3 if dot >= 0 else 16
+        if (attributes >> shift) & 7 != 3:
+            raise ValueError(f"{model}: missing visible portion of the enemy at X={x}")
+    return len(x_positions) - 1
 
 
 def verify_keyboard(emulator, game, model):
@@ -505,6 +543,7 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         art = pool.submit(verify_gameplay_video, emulator, replay, model)
         keyboard = pool.submit(verify_keyboard, emulator, game, model)
         formation = pool.submit(verify_formation, emulator, game, model)
+        left_exit = pool.submit(verify_left_exit, emulator, game, model)
         music = pool.submit(verify_audio, emulator, replay, model, audio, True)
         scenery = pool.submit(verify_rewind, emulator, replay, model)
         wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
@@ -533,6 +572,7 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         if report["replay"]["peak_player_dots"] != PLAYER_PAIRS * 2:
             raise ValueError(f"{model}: replay did not exercise all five player pairs")
         report["keyboard_idle"]["simultaneous_enemy_ships_verified"] = formation.result()
+        report["keyboard_idle"]["left_exit_positions_verified"] = left_exit.result()
         report["keyboard_idle"].update(idle.result())
         check_arithmetic(emulator, replay, model)
         aiming = trace(emulator, replay / "aim.sna", replay / "aim.sym", ["passed", "failed"], model, 1)
