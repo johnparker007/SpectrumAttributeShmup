@@ -40,7 +40,7 @@ def capture_video(emulator, model, load_options, video, seconds):
         "--machine", model, "--realvideo", *load_options,
         "--exit-after", str(seconds), "--quickexit",
         "--verbose", "2", "--vofile", video,
-    ], emulator.parent)
+    ], emulator.parent, timeout=max(25, seconds + 20))
     if not re.search(r"Writing video output file.*352 X 304, bgr24", log):
         raise ValueError(f"Unexpected capture format for {model}:\n{log}")
 

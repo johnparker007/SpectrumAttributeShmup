@@ -12,6 +12,11 @@ overlayEntry:
         ld a,0                 ; sound wrapper plus 7 keeps HALT phase
     endif
 overlayBegin:
+    ifdef LIVE_SHMUP
+        ld a,(playerLives)
+        or a
+        jp z,overlayEnd
+    endif
     ld hl,(attrPointer)
     ifdef OVERLAY_FAST_PLOT
         ld (dotViewport+1),hl
@@ -27,6 +32,8 @@ overlayEnd:
 hudAttributesDone:
         call hudStep
 hudFrame2Done:
+        call gameOverAttributes
+        call gameOverStep
     endif
     ifndef OVERLAY_MOTION
     ; Confirm untouched lane selection at two opposite viewport edges.

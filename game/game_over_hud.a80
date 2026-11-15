@@ -1,0 +1,84 @@
+; Two centred character rows in the Spectrum bitmap and Ringo attribute buffer.
+GAME_OVER_X equ 8
+GAME_OVER_Y equ 10
+GAME_OVER_WIDTH equ 16
+GAME_OVER_ROWS equ 16
+GAME_OVER_PIXEL equ #4000+(GAME_OVER_Y/8)*#800+(GAME_OVER_Y&7)*32+GAME_OVER_X
+
+; Paint or restore one scanline in both bitmap banks during each video frame.
+gameOverStep:
+    ld a,(playerLives)
+    or a
+    ld a,(gameOverRows)
+    jr z,.show
+    or a
+    ret z
+    dec a
+    ld (gameOverRows),a
+    ld b,a
+    ld hl,gameOverBlank
+    jr .address
+.show:
+    cp GAME_OVER_ROWS
+    ret z
+    ld b,a
+    inc a
+    ld (gameOverRows),a
+    ld a,b
+    dup 4 : add a,a : edup
+    ld e,a
+    ld d,0
+    ld hl,gameOverText
+    add hl,de
+.address:
+    ld a,b
+    and 7
+    add a,high GAME_OVER_PIXEL
+    ld d,a
+    ld e,low GAME_OVER_PIXEL
+    bit 3,b
+    jr z,.write
+    ld e,low GAME_OVER_PIXEL+32
+.write:
+    push hl
+    push de
+    ld bc,GAME_OVER_WIDTH
+    ldir
+    SET_PAGE 7
+    pop de
+    pop hl
+    set 7,d
+    ld bc,GAME_OVER_WIDTH
+    ldir
+    SET_PAGE 0
+    ret
+
+; Mask incomplete or clearing text with black until the bitmap is ready.
+gameOverAttributes:
+    ld a,(gameOverRows)
+    or a
+    ret z
+    ld c,0
+    cp GAME_OVER_ROWS
+    jr nz,.panel
+    ld a,(playerLives)
+    or a
+    jr nz,.panel
+    ld c,HUD_ATTR
+.panel:
+    ld hl,(attrPointer)
+    ld de,ROW_BYTES*(GAME_OVER_Y*2)+GAME_OVER_X
+    add hl,de
+    ld de,ROW_BYTES-GAME_OVER_WIDTH+1
+    ld b,4
+.row:
+    dup GAME_OVER_WIDTH-1 : ld (hl),c : inc hl : edup
+    ld (hl),c
+    add hl,de
+    djnz .row
+    ret
+
+gameOverRows: db 0
+gameOverBlank: defs GAME_OVER_WIDTH,#f0 ; stock bitmap used by the scenery
+gameOverText: incbin "game_over.bin"
+    assert $-gameOverText=GAME_OVER_WIDTH*GAME_OVER_ROWS

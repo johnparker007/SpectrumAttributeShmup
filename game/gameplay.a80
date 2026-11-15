@@ -227,6 +227,9 @@ stepWave:
     ld a,(de)
     or a
     jr z,.move
+    ld a,(playerLives)
+    or a
+    jr z,.hide                  ; shots already in flight leave the final score alone
     ld hl,enemyKills
     inc (hl)
     call hudAward
@@ -416,6 +419,7 @@ resetEncounter:
     jp loadWave
 
     include "score_hud.a80"
+    include "game_over_hud.a80"
 
 rewindBarrel:
     xor a

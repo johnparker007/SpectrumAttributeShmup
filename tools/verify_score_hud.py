@@ -144,41 +144,68 @@ def check_hud_updates(emulator, replay, model, targets):
             "attribute_strip_tstates": sorted(set(attrs))}
 
 
+def white_bitmap(glyph_rows):
+    return b"".join(bytes((255 if value & (0x80 >> bit) else 0,)) * 3
+                    for value in glyph_rows for bit in range(8))
+
+
+def hud_bitmap(replay, symbols, score, lives):
+    width = symbols["HUD_WIDTH"]
+    score_start = symbols["HUD_DIGIT_RIGHT"] - symbols["HUD_X"] - 3
+    font = (replay / "score_digits.bin").read_bytes()
+    image = bytearray((replay / "hud_initial.bin").read_bytes())
+    digits = [int(digit) for digit in f"{score:04d}"]
+    for row in range(8):
+        start = width * row
+        image[start + lives:start + 3] = bytes(3 - lives)
+        image[start + score_start:start + score_start + 4] = bytes(font[8 * digit + row] for digit in digits)
+    return white_bitmap(image)
+
+
+def bitmap_region(frame, col, row, width, rows):
+    start, end = col * 24, (col + width) * 24
+    return b"".join(paper_row(frame, y)[start:end] for y in range(row * 8, row * 8 + rows))
+
+
 def check_hud_video(emulator, replay, model):
     video = replay / f"score-{model}.raw"
     capture_video(emulator, model, ["--tape", replay / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 15)
     symbols = read_symbols(replay / "main.sym")
-    width = symbols["HUD_WIDTH"]
-    x = symbols["HUD_X"] * 8 * 3
-    digit_column = symbols["HUD_DIGIT_RIGHT"] - symbols["HUD_X"]
-    font = (replay / "score_digits.bin").read_bytes()
-    initial = (replay / "hud_initial.bin").read_bytes()
-
-    def bitmap(glyph_rows):
-        data = b"".join(bytes((255 if value & (0x80 >> bit) else 0,)) * 3
-                        for value in glyph_rows for bit in range(8))
-        return data
-
-    wanted = {}
-    for lives in range(4):
-        for score, glyph in (("000000", font[:8]), ("000100", font[8:16])):
-            image = bytearray(initial)
-            for row, pixels in enumerate(glyph):
-                start = width * row
-                image[start + lives:start + 3] = bytes(3 - lives)
-                image[start + digit_column] = pixels
-            wanted[bitmap(image)] = (score, lives)
+    wanted = {hud_bitmap(replay, symbols, score, lives): (f"{score * 100:06d}", lives)
+              for lives in range(4) for score in (0, 1)}
     observed = set()
     frame_size = WIDTH * HEIGHT * 3
     with video.open("rb") as recording:
         while frame := recording.read(frame_size):
             if len(frame) != frame_size:
                 raise ValueError(f"{model}: truncated score video")
-            row_bytes = width * 8 * 3
-            region = b"".join(paper_row(frame, row)[x:x + row_bytes] for row in range(8))
+            region = bitmap_region(frame, symbols["HUD_X"], 0, symbols["HUD_WIDTH"], 8)
             if region in wanted:
                 observed.add(wanted[region])
     if not {("000000", 3), ("000100", 2)} <= observed:
         raise ValueError(f"{model}: video missed the opening HUD or its first score and life changes")
     return {"scores_seen_in_video": sorted({score for score, _ in observed}),
             "life_icon_counts_seen_in_video": sorted({lives for _, lives in observed})}
+
+
+def check_game_over_video(emulator, replay, model, final_score):
+    video = replay / f"game-over-{model}.raw"
+    capture_video(emulator, model, ["--tape", replay / "main.tap", "--fastautoload", "--vofilefps", "10"], video, 80)
+    symbols = read_symbols(replay / "main.sym")
+    text_bitmap = white_bitmap((replay / "game_over.bin").read_bytes())
+    final_hud = hud_bitmap(replay, symbols, final_score, 0)
+    restart_hud = hud_bitmap(replay, symbols, 0, 3)
+    final_frames = 0
+    frame_size = WIDTH * HEIGHT * 3
+    with video.open("rb") as recording:
+        while frame := recording.read(frame_size):
+            if len(frame) != frame_size:
+                raise ValueError(f"{model}: truncated game-over video")
+            hud = bitmap_region(frame, symbols["HUD_X"], 0, symbols["HUD_WIDTH"], 8)
+            message = bitmap_region(frame, symbols["GAME_OVER_X"], symbols["GAME_OVER_Y"],
+                                    symbols["GAME_OVER_WIDTH"], symbols["GAME_OVER_ROWS"])
+            if message == text_bitmap and hud == final_hud:
+                final_frames += 1
+            elif final_frames >= 2 and message != text_bitmap and hud == restart_hud:
+                return {"final_score": final_score * 100, "prompt_frames_seen": final_frames, "restart_seen": True}
+    raise ValueError(f"{model}: saw {final_frames} game-over frames with the final score and missed the complete sequence")

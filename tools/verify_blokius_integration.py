@@ -20,6 +20,9 @@ from verify_dot_overlay import TESTS, install_audio, verify_audio, verify_overla
 from verify_zesarux_raster import run
 
 
+GAME_OVER_TEXT = ("GAME OVER".center(16), "ENTER TO RESTART")
+
+
 def ship_art(rows, colour):
     data = bytearray()
     for shift in (0, 1):
@@ -58,6 +61,7 @@ halt1 equ $+7
     ifdef LIVE_SHMUP
         call hudStep
 hudFrame1Done:
+        call gameOverStep
     endif
 halt2 equ $+7
     SET_RENDER_FRAME renderFrame1
@@ -75,13 +79,17 @@ doSinScroll equ barrelScroll_Update
     defines = ["OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
                "BARREL_SCENERY"]
     if live:
-        for source_name in ("gameplay.a80", "score_hud.a80"):
+        for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         font = (game / "font" / "n13.bin").read_bytes()
-        glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)] for char in "0123456789"}
+        digits = "0123456789"
+        glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)]
+                  for char in set(digits + "".join(GAME_OVER_TEXT))}
         if any(len(glyph) != 8 for glyph in glyphs.values()):
             raise ValueError("The archived score font is incomplete")
-        (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in "0123456789"))
+        (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in digits))
+        (game / "game_over.bin").write_bytes(bytes(glyphs[char][row] for line in GAME_OVER_TEXT
+                                                 for row in range(8) for char in line))
         icon = bytes((0, 0x20, 0x38, 0x7C, 0x38, 0x20, 0, 0))
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
