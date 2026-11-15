@@ -7,6 +7,8 @@ stepWave:
     ld hl,enemy_boxes
     ld de,collision_actual
     ld b,WAVE_ENEMIES
+    ld a,(gameTick)
+    ld c,a
 .next:
     ld a,(hl)
     cp HIDDEN_BOX
@@ -14,6 +16,8 @@ stepWave:
     ld a,(de)
     or a
     jr nz,.hit
+    bit 0,c                       ; resolve hits every tick, move on even ticks
+    jr nz,.skipY
     dec (hl)
     jr z,.hide
     ld a,(hl)
@@ -118,10 +122,10 @@ stepWave:
     ld (waveIndex),a
     ret
 
-; Packed trajectory bits 7/6 hold stationary/right X flags. Bits 0–2 remain
-; the sub-step counter, and the Y lookup combines two steps for each X mode.
+; Packed trajectory bits 7/6 select X direction and bits 0–2 select the
+; phase in the baked one-step, two-step rhythm.
 moveIncoming:
-    ld d,high liveTrajectories
+    ld d,high incomingX
     ; Sparse fire leaves most slots empty. An untaken call costs less than
     ; advancing the three-byte pointer and counting each empty slot.
     dup ENEMY_COUNT, slot
@@ -133,33 +137,26 @@ moveIncoming:
     ret
 
 moveDot:
-    inc a                        ; X+1 already computed while checking for #ff
+    dec a                        ; undo the empty-slot check to recover X
     ld c,a
     inc hl
     inc hl
     ld a,(hl)
-    bit 7,a
-    jr nz,.subtractTwo
-    bit 6,a
-    jr nz,.xReady
-    dec c
-    dec c
-.subtractTwo:
-    dec c
-    dec c
-.xReady:
-    ld a,c
-    cp 64
-    jr nc,.retire
-    ld a,(hl)
-    add a,2
+    inc a
     xor (hl)
     and 7
     xor (hl)
-    ld (hl),a
     ld e,a
-    dec hl
     ld a,(de)
+    add a,c
+    cp 64
+    jr nc,.retire
+    ld c,a
+    ld (hl),e
+    dec hl
+    inc d                        ; Y table follows X on the next page
+    ld a,(de)
+    dec d
     add a,(hl)
     cp 48
     jr nc,.retireY
@@ -273,4 +270,6 @@ playerArt: incbin "player_art.bin"
 
     align 256
 shipTrajectories: incbin "ship_trajectories.bin"
-liveTrajectories: incbin "live_trajectories.bin"
+incomingX: incbin "incoming_x.bin"
+incomingY: incbin "incoming_y.bin"
+    assert incomingY-incomingX=256

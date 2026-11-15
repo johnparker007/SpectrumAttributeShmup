@@ -2,11 +2,11 @@
 
 Use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. Press **Enter** to restart at any time. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. Hold Space to fire up to three simultaneous volleys, each expanding into three cyan shots. Shots retire at the edge of the 64×48 viewport.
 
-Enemy ships enter beyond the right edge and move left one logical dot per game tick. The formation has 12 slots and admits a new ship every five ticks when its next slot is free. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
+Enemy ships enter beyond the right edge and move left one logical dot every other game tick. The formation has 12 slots and admits a new ship every five ticks when its next slot is free. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
 
-The scenery advances every other game tick, at half the horizontal speed of the ships. Tile animations continue to update every game tick.
+The scenery advances every other game tick, at the same horizontal speed as the enemy ships. Tile animations update every game tick.
 
-The ships take turns firing, with at most one shot across the formation every eight game ticks. An integer comparison of the horizontal and vertical distances picks one of eight bearings toward the player. When the player is absent, shots go straight left. Enemy shots advance two trajectory steps per game tick. The build combines the two vertical deltas into one lookup. Collisions are sampled at the resulting position, once per game tick.
+The ships take turns firing, with at most one shot across the formation every eight game ticks. An integer comparison of the horizontal and vertical distances picks one of eight bearings toward the player. When the player is absent, shots go straight left. Enemy shots alternate one and two trajectory steps per game tick. The build bakes the X and Y deltas into separate tables, with both axes of a diagonal using the same step length. Collisions are sampled at the resulting position, once per game tick.
 
 A cyan hit destroys an opponent, and an incoming hit destroys a vulnerable player ship. Both play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Movement and firing work on both blink phases after the spawn frame. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
 
@@ -26,7 +26,7 @@ Generate the song reference with `benchmark_ay.py --through-loop`. The verifier 
 
 The HUD tests compare each bitmap update and its page restore against score and life changes, including resets. They reject writes to the two trailing zeroes and check decimal carries and saturation. Headless video checks `000000` with three ships at startup and the first score update.
 
-The replay checks 1,630 HUD frames and expects 85 life-icon row updates and 256 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The attribute strip takes 340 T-states per game tick.
+The replay checks 1,630 HUD frames and expects 64 life-icon row updates and 213 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The attribute strip takes 340 T-states per game tick.
 
 The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. The gameplay trace compares both player and enemy explosion artwork with the expected frame sequence. A separate assembly probe verifies all eight aimed bearings and two axis boundaries.
 
@@ -36,10 +36,10 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | --- | ---: | ---: |
 | Replay frame pairs checked against stock paging | ≥815 | ≥815 |
 | Keyboard-build frame pairs checked against stock paging | ≥256 | ≥256 |
-| Minimum Frame 1 margin across the 815-tick replay | 1,106 T-states | 1,059 T-states |
+| Minimum Frame 1 margin across the 815-tick replay | 1,089 T-states | 1,042 T-states |
 | Minimum Frame 2 margin across the 815-tick replay | 4,537 T-states | 4,535 T-states |
 | Visible enemy ships checked together | 12 | 12 |
-| Enemy shots checked at emission | 71 | 71 |
+| Enemy shots checked at emission | 78 | 78 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `ec74f2e052807388723b34fa80bbcdb301c7e4e342727faaf5002ee57e835019`.
+Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `048ca7d6e41686cbfc2ea970a8329335665fa94c4e3cdeefb04d7071a19d1934`.

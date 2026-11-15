@@ -60,13 +60,16 @@ def move_dots(records):
         if x == DEAD:
             moved.append((x, y, path))
             continue
-        dx = 0 if path & 128 else 2 if path & 64 else -2
+        phase = path & 7
+        distance = 1 + phase % 2
+        dx = distance * (0 if path & 128 else 1 if path & 64 else -1)
         if not 0 <= x + dx < 64:
             moved.append((DEAD, y, path))
             continue
         steps = STEPS[path >> 3 & 7]
-        next_y = y + steps[(path + 1) & 7] + steps[(path + 2) & 7]
-        path = path & ~7 | ((path + 2) & 7)
+        old_phase = (phase * 3) // 2
+        next_y = y + sum(steps[(old_phase + n) & 7] for n in range(1, distance + 1))
+        path = path & ~7 | ((phase + 1) & 7)
         moved.append((x + dx, next_y, path) if 0 <= next_y < 48 else (DEAD, y, path))
     return moved
 
@@ -128,6 +131,8 @@ def expected(inputs):
                     kills += bool(lives)
                     explosions[slot] = EXPLOSION_TICKS
                     enemies[slot] = (HIDDEN[0], y)
+                elif tick % 2:
+                    continue
                 elif x == 1:
                     enemies[slot] = (HIDDEN[0], y)
                 else:
@@ -214,7 +219,8 @@ def verify_logic(emulator, game, model, inputs, seconds):
                        ("enemy_motion", peek("enemyMotion", 2, 2 * slot)),
                        ("enemy_image", peek(f"sprite{slot + 9:02d}", 2))))
     fields += [("volleys", peek("volleys", 3, 3 * slot)) for slot in range(3)]
-    fields += [("incoming", peek("enemy_records", 3, 3 * slot)) for slot in (0, 15, 31)]
+    incoming_samples = (0, 4, 31)   # Horizontal, opening diagonal, and end of the pool.
+    fields += [("incoming", peek("enemy_records", 3, 3 * slot)) for slot in incoming_samples]
     fields += [("shots", peek("player_shots", 2, 2 * slot)) for slot in (0, 1, 2, 8)]
     points = [(f"{point} AND {n}={n}", expression) for n, (_, expression) in enumerate(fields, 1)]
     oracle = expected(inputs)
@@ -237,7 +243,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
             sample.extend((state["enemies"][slot], motion,
                            symbols[f"explosion{4 - (blast + 1) // 2}" if blast else "enemyArt"]))
         sample += state["volleys"]
-        sample += [state["incoming"][slot] for slot in (0, 15, 31)]
+        sample += [state["incoming"][slot] for slot in incoming_samples]
         sample += [state["shots"][slot] for slot in (0, 1, 2, 8)]
         for (condition, value), (expected_condition, _), wanted, (field, _) in zip(row, points, sample, fields):
             if (condition, int(value)) != (expected_condition, wanted):

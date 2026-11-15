@@ -118,8 +118,24 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
-        doubled_steps = bytes((path[phase - 1] + path[phase]) % 256 for path in STEPS for phase in range(8))
-        (game / "live_trajectories.bin").write_bytes(doubled_steps * 4)
+        # Index by the phase after moving. Eight ticks consume twelve of the
+        # old steps, so each source trajectory must repeat after twelve.
+        cadence = (2, 1, 2, 1, 2, 1, 2, 1)
+        (game / "incoming_x.bin").write_bytes(bytes(
+            (direction * distance) % 256 for direction in (-1, 1, 0, 0)
+            for _ in STEPS for distance in cadence))
+        y_steps = bytearray()
+        for path in STEPS:
+            if path[:4] != path[4:]:
+                raise ValueError("The enemy trajectory must repeat after four steps")
+            deltas = [0] * 8
+            source_step = 0
+            for phase in (*range(1, 8), 0):
+                distance = cadence[phase]
+                deltas[phase] = sum(path[(source_step + step) % 8] for step in range(1, distance + 1)) % 256
+                source_step += distance
+            y_steps.extend(deltas)
+        (game / "incoming_y.bin").write_bytes(y_steps * 4)
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))
