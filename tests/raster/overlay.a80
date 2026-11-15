@@ -1,0 +1,60 @@
+; Draw into the active buffer after stock Frame 2 and before Frame 1 copies it.
+ROW_BYTES equ attrBufferWidth
+HEIGHT equ 48
+CYAN equ 5
+YELLOW equ 6
+ENEMY_COUNT equ 32
+    include "packed_plot.a80"
+
+overlayBegin:
+    ld hl,(attrPointer)
+    ld (viewport),hl
+    PLOT_PLAYERS
+overlayEnemies:
+    PLOT_ENEMIES
+overlayEnd:
+    ; Confirm untouched lane selection at two opposite viewport edges.
+    ld hl,(viewport)
+    ld a,(hl)
+    and #3f
+    cp YELLOW | (CYAN << 3)
+    jp nz,overlayFailed
+    inc hl
+    ld a,(hl)
+    and 7
+    cp CYAN
+    jp nz,overlayFailed
+
+    ld de,47*ROW_BYTES+29      ; HL is already one byte past the viewport base
+    add hl,de
+    ld a,(hl)
+    and #38
+    cp CYAN << 3
+    jp nz,overlayFailed
+    inc hl
+    ld a,(hl)
+    and 7
+    cp YELLOW
+    jp nz,overlayFailed
+
+    ifdef SCHEDULE_COLLISION
+        call verifyCollision
+        ld a,0                 ; 841-T-state passing check plus 7 keeps HALT phase
+    endif
+    ld a,0                     ; preserve the stock four-T-state HALT phase
+    jp mainLoop
+
+overlayFailed:
+    di
+    halt
+
+    DOT_ADDRESS
+    DOT_ROW_OFFSETS
+
+viewport: dw 0
+player_positions: incbin "player_positions.bin"
+enemy_positions: incbin "enemy_positions.bin"
+
+    ifdef SCHEDULE_COLLISION
+        include "fixed_collision.a80"
+    endif

@@ -1,0 +1,94 @@
+; Fixed-time 5x5 box checks. The host supplies valid, screen-relative positions.
+; A' accumulates #ff for hit, 0 for miss. The loop always evaluates both axes.
+    macro FIXED_BOX_SCAN width
+.next:
+    ld a,(de)
+    inc de
+    sub c
+    if width=2
+        inc a                  ; shot can start one dot left of the box
+    endif
+    cp 5+width-1
+    sbc a,a
+    ld l,a
+    ld a,(de)
+    inc de
+    sub h
+    cp 5
+    sbc a,a
+    and l
+    ld l,a
+    ex af,af'
+    or l
+    ex af,af'
+    djnz .next
+    endm
+
+collisionInit:
+    ld hl,enemy_boxes
+    ld (next_box),hl
+    ld hl,collision_actual
+    ld (next_result),hl
+    ld hl,enemy_positions
+    ld (next_shot),hl
+    xor a
+    ld (player_hit),a
+    jp collisionIncomingTwo
+
+collisionPair:
+    call collisionEnemy
+    jp collisionIncomingTwo
+
+collisionEnemy:
+    ld ix,(next_box)
+    ld c,(ix)
+    ld h,(ix+1)
+    ld de,player_positions
+    ld b,9
+    xor a
+    ex af,af'
+    FIXED_BOX_SCAN 2
+    ex af,af'
+    ld hl,(next_result)
+    ld (hl),a
+    inc hl
+    ld (next_result),hl
+    inc ix
+    inc ix
+    ld (next_box),ix
+    ret
+
+collisionIncomingTwo:
+    ld hl,(player_box)
+    ld c,l
+    ld de,(next_shot)
+    ld b,2
+    ld a,(player_hit)
+    ex af,af'
+    FIXED_BOX_SCAN 1
+    ex af,af'
+    ld (player_hit),a
+    ld (next_shot),de
+    ret
+
+verifyCollision:
+    ld hl,collision_actual
+    ld de,collision_expected
+    ld bc,16
+.next:
+    ld a,(de)
+    cpi
+    jp nz,overlayFailed
+    inc de
+    jp pe,.next
+    ret
+
+next_box: dw 0
+next_result: dw 0
+next_shot: dw 0
+collision_actual: defs 15,0
+player_hit: db 0
+
+enemy_boxes: incbin "enemy_boxes.bin"
+player_box: incbin "player_box.bin"
+collision_expected: incbin "collision_expected.bin"

@@ -20,7 +20,7 @@ SLICE_MARKERS = ("rasterWork", "rasterWorkEnd")
 EXPECTED_SLICES = [996, *([1464] * 15), 281]
 
 
-def build_experiment(archive_path, assembler, directory):
+def stage_sample(archive_path, directory):
     with ZipFile(archive_path) as archive:
         if archive.comment != REVISION.encode("ascii"):
             raise ValueError(f"Expected the pinned Ringo-8 ZIP at {REVISION}")
@@ -35,8 +35,13 @@ def build_experiment(archive_path, assembler, directory):
     if patches != 1:
         raise ValueError("Unexpected sample launcher")
     source.write_bytes(data)
-    shutil.copyfile(REPLACEMENT, root / "Engine" / "spritesRenderBIG.a80")
     tap.unlink()
+    return sample
+
+
+def build_experiment(archive_path, assembler, directory):
+    sample = stage_sample(archive_path, directory)
+    shutil.copyfile(REPLACEMENT, sample.parent / "Engine" / "spritesRenderBIG.a80")
     run([assembler, "--sym=main.sym", "main.asm"], sample)
     return sample
 

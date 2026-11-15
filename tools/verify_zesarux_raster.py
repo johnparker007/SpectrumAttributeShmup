@@ -32,19 +32,22 @@ def paper_row(frame, y):
     return frame[start:start + 3 * PAPER_WIDTH]
 
 
-def capture(emulator, snapshot, model):
-    video = snapshot.parent / f"{model}.raw"
+def capture_video(emulator, model, load_options, video, seconds):
     log = run([
         emulator, "--noconfigfile", "--vo", "null", "--ao", "null",
         "--disable-debug-console-win", "--nowelcomemessage",
         "--stats-disable-check-updates", "--stats-disable-check-yesterday-users",
-        "--machine", model, "--realvideo", "--snap-no-change-machine",
-        "--snap", snapshot, "--exit-after", "3", "--quickexit",
+        "--machine", model, "--realvideo", *load_options,
+        "--exit-after", str(seconds), "--quickexit",
         "--verbose", "2", "--vofile", video,
     ], emulator.parent)
     if not re.search(r"Writing video output file.*352 X 304, bgr24", log):
         raise ValueError(f"Unexpected capture format for {model}:\n{log}")
 
+
+def capture(emulator, snapshot, model):
+    video = snapshot.parent / f"{model}.raw"
+    capture_video(emulator, model, ["--snap-no-change-machine", "--snap", snapshot], video, 3)
     frame_bytes = WIDTH * HEIGHT * 3
     transitions = set()
     with video.open("rb") as recording:

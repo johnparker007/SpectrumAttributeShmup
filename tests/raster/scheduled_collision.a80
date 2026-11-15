@@ -1,0 +1,45 @@
+; Split the fixed collision workload around the stock large-sprite OUTs.
+    assert $=#c3c2
+    ld iyl,8
+attrBufferCorrection: ld hl,0
+    ld sp,collision_stack_top
+    call collisionInit         ; initialize and scan the first two enemy dots
+    ld bc,833
+    call DELAY
+    exx
+    jp collision_shadow
+
+deltaFrame: ld bc,0            ; target of the removed large-sprite animation patch
+
+    defs #c431-$
+collision_shadow:
+    out (c),h
+    exx
+    call collisionPair         ; one enemy box and two dots against the player
+    ld bc,366
+    call DELAY
+    exx
+    jp collision_normal
+
+    defs #c4e2-32-$
+    defs 32,0
+collision_stack_top:
+collision_normal:
+    out (c),l
+    exx
+    dec iyl
+    jr z,collision_last
+    call collisionPair
+    ld bc,415
+    call DELAY
+    exx
+    jp collision_shadow
+
+collision_last:
+    ld bc,499
+    call DELAY
+    ld bc,0
+    jp collision_phase_end
+
+    defs #c53f-$
+collision_phase_end:
