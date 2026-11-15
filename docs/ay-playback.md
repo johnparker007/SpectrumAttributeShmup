@@ -19,4 +19,14 @@ The two models produced matching instruction traces on repeated reference runs a
 
 Run the reference benchmark with `--through-loop` to capture all 5,120 ticks before the tracker returns to its loop position. The full capture contains the same first 256 ticks and no envelope data writes after initialization. The uncompressed delta stream for the full song is 49,761 bytes. The standalone prefix benchmark loops through its initialization entry for repeatable timing.
 
-The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) uses the first 256 music ticks. It initializes once, then loops without an extra initialization frame. A captured-audio comparison and full-song banking in the renderer remain open.
+## Banked whole-song playback
+
+```powershell
+python tools/verify_ay_phrases.py --reference <full-reference.json> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output <output-directory>
+```
+
+Repeated runs of complete tick packets share one literal copy. Each three-byte recipe entry contains a virtual offset into two literal banks and a count of consecutive ticks. Runs end at bank boundaries, and no packet crosses one. A host decode reconstructs the entire original delta stream before the snapshot is built. The guest streams register/value pairs directly from the selected bank and restores the previous test bank after each tick.
+
+On both models, the verifier compared every write of the 5,120-tick song and the first 32 ticks after the reconstructed loop against the corresponding captured reference register states and envelope sequence. The loop starts at the first music tick and restores its state without consuming an initialization frame. Native tracker writes after its first loop boundary were outside the reference capture. The complete recipe and literal data take 23,049 bytes versus 49,769 for the loop-ready unpacked stream. The stand-alone banked player took 221–1,424 T-states per tick.
+
+The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) uses the first 256 music ticks. It initializes once, then loops without an extra initialization frame. A captured-audio comparison remains open.
