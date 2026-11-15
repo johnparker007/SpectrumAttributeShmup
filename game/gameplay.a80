@@ -20,10 +20,10 @@ gameInit:
     jp syncActors
 
 scrollScenery:
-    call barrelScroll_DoAnimations
     ld a,(gameTick)
     rrca
     ret c
+    call barrelScroll_DoAnimations
     ld a,(barrelScrollComplete)
     or a
     ret nz
@@ -308,6 +308,7 @@ resetEncounter:
     xor a
     ld (waveIndex),a
     ld (fireSlot),a
+    ld (spreadWait),a
     ld (spawnSlot),a
     ret
 
@@ -375,6 +376,7 @@ lastControls: db 0
 restartHeld: db 0
 waveIndex: db 0
 fireSlot: db 0
+spreadWait: db 0
 spawnSlot: db 0
 player_box: dw 0
 enemy_boxes: defs 15*2

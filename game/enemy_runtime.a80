@@ -173,7 +173,13 @@ moveDot:
 spawnIncoming:
     ld a,(gameTick)
     and 7
-    ret nz                       ; at most one shot per eight ticks across the formation
+    ret nz                       ; one firing opportunity per eight game ticks
+    ld hl,spreadWait
+    ld a,(hl)
+    or a
+    jr z,.select
+    dec (hl)
+.select:
     ld a,(fireSlot)
     ld e,a
     inc a
@@ -183,8 +189,8 @@ spawnIncoming:
 .nextSlot:
     ld (fireSlot),a
     ld d,0
+    sla e
     ld hl,enemy_boxes
-    add hl,de
     add hl,de
     ld a,(hl)
     cp 64
@@ -194,14 +200,38 @@ spawnIncoming:
     ld a,(hl)
     add a,2
     ld c,a
+    ld hl,enemyMotion
+    add hl,de
+    ld a,(hl)
+    and #40                      ; ship paths 1 and 3 use the three-way spread
+    jr z,.aimPending
+    ld hl,spreadWait
+    ld a,(hl)
+    or a
+    ret nz
+    ld (hl),2                    ; at least sixteen ticks between spreads
+    inc a                        ; mark this shot as a spread
+.aimPending:
+    push af
     ld d,0
     ld a,(playerLives)
     or a
-    jr z,.emit
+    jr z,.aimReady
     ld a,(respawnWait)
     or a
     call z,aimIncoming
-.emit:
+.aimReady:
+    pop af
+    jr z,emitIncoming
+    call emitIncoming            ; centre, then 22.5 degrees either side
+    ld a,d
+    sub 16
+    ld d,a
+    call emitIncoming
+    ld a,d
+    add a,32
+    ld d,a
+emitIncoming:
     ld hl,(enemyWrite)
     ld a,(hl)
     inc a

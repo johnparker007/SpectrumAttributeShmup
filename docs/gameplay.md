@@ -4,9 +4,9 @@ Use **O** and **P** to move left and right, **Q** and **A** to move up and down,
 
 Enemy ships enter beyond the right edge and move left one logical dot every other game tick. The formation has 12 slots and admits a new ship every five ticks when its next slot is free. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
 
-The scenery advances every other game tick, at the same horizontal speed as the enemy ships. Tile animations update every game tick.
+The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
 
-The ships take turns firing, with at most one shot across the formation every eight game ticks. At firing time, integer comparisons against precomputed thresholds pick the closest of 32 bearings toward the player. When the player is absent, shots go straight left. Horizontal and vertical shots alternate one and two dots per game tick. Exact diagonal shots move one dot on each axis per tick. The build distributes the intermediate angles' X and Y steps across eight-tick sequences. In flight, each shot reads its deltas from the same two 256-byte tables and uses the same three-byte record. Collisions are sampled at the resulting position, once per game tick.
+The ships take turns firing, with one firing opportunity across the formation every eight game ticks. At firing time, integer comparisons against precomputed thresholds pick the closest of 32 bearings toward the player. The second and fourth flight patterns fire three shots centred on that bearing, with one shot 22.5° to either side and at least 16 game ticks between spreads. The first and third patterns fire single shots. When the player is absent, the centre bearing points straight left. Horizontal and vertical shots alternate one and two dots per game tick. Exact diagonal shots move one dot on each axis per tick. The build distributes the intermediate angles' X and Y steps across eight-tick sequences. In flight, each shot reads its deltas from two 256-byte tables and uses a three-byte record. Collisions are sampled at the resulting position, once per game tick.
 
 A cyan hit destroys an opponent, and an incoming hit destroys a vulnerable player ship. Both play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Movement and firing work on both blink phases after the spawn frame. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
 
@@ -22,7 +22,7 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --phrase-reference <full-reference.json> --output-tap <playable.tap>
 ```
 
-Generate the song reference with `benchmark_ay.py --through-loop`. The verifier builds a keyboard-controlled TAP and a separate deterministic replay build. Only the keyboard-controlled TAP is exported. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 24 scroll ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
+Generate the song reference with `benchmark_ay.py --through-loop`. The verifier builds a keyboard-controlled TAP and a separate deterministic replay build. Only the keyboard-controlled TAP is exported. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 36 game ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
 
 The HUD tests compare each bitmap update and its page restore against score and life changes, including resets. They reject writes to the two trailing zeroes and check decimal carries and saturation. Headless video checks `000000` with three ships at startup and the first score update.
 
@@ -36,10 +36,11 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | --- | ---: | ---: |
 | Replay frame pairs checked against stock paging | ≥815 | ≥815 |
 | Keyboard-build frame pairs checked against stock paging | ≥256 | ≥256 |
-| Minimum Frame 1 margin across the 815-tick replay | 1,089 T-states | 1,042 T-states |
-| Minimum Frame 2 margin across the 815-tick replay | 4,537 T-states | 4,535 T-states |
+| Minimum Frame 1 margin across the 815-tick replay | 939 T-states | 892 T-states |
+| Minimum Frame 2 margin across the 815-tick replay | 4,536 T-states | 4,537 T-states |
 | Visible enemy ships checked together | 12 | 12 |
-| Enemy shots checked at emission | 78 | 78 |
+| Enemy shots checked at emission | 98 | 98 |
+| Aimed three-way spreads checked | 18 | 18 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `1f579e9e2fa7fa4e60f0ffca64d1451679fdbc4f7271ee0bafa3f9ad8aab3c55`.
+Both models matched the 815-tick replay, including two restarts. Headless video checks magenta ships, cyan player shots, yellow enemy shots and white explosion sprites. Independent builds of the keyboard TAP matched SHA-256 `8a669ea196a87a6fd2bc20544b726691bf31977f163a9ebb8e18aa92bcbeb849`.

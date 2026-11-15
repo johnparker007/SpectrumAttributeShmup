@@ -74,13 +74,13 @@ def expected(inputs):
     message_rows = 0
     results = []
     for index, command in enumerate(inputs):
-        emitted = None
+        emitted = []
         restart = bool(command & RESTART) and not restart_held
         restart_held = bool(command & RESTART)
         if index == 0 or restart:
             player = PLAYER_START
             lives, kills, invulnerable, respawn_wait, reload, cursor = 3, 0, 0, 0, 0, 0
-            tick = wave = emitter = spawn_wait = spawn_slot = player_explosion = 0
+            tick = wave = emitter = spawn_wait = spawn_slot = player_explosion = spread_wait = 0
             remaining = ENEMY_SHIPS
             enemies = [HIDDEN] * ENEMY_SHIPS
             profiles = [0] * ENEMY_SHIPS
@@ -146,13 +146,22 @@ def expected(inputs):
             _, volleys, shots = step([], volleys)
             incoming = move_dots(incoming)
             if tick % 8 == 0:
+                spread_wait = max(0, spread_wait - 1)
                 x, y = enemies[emitter]
+                spread = profiles[emitter] % 2
                 emitter = (emitter + 1) % ENEMY_SHIPS
-                if x < 64 and incoming[cursor][0] == DEAD:
+                if x < 64 and (not spread or not spread_wait):
+                    if spread:
+                        spread_wait = 2
                     path = aim(x, y + 2, player) if lives and not respawn_wait else 0
-                    incoming[cursor] = (x, y + 2, path)
-                    emitted = (x, y + 2, path, wave, tick)
-                    cursor = (cursor + 1) % len(incoming)
+                    offsets = (0, -16, 16) if spread else (0,)
+                    for offset in offsets:
+                        if incoming[cursor][0] != DEAD:
+                            break
+                        bearing = (path + offset) % 256
+                        incoming[cursor] = (x, y + 2, bearing)
+                        emitted.append((x, y + 2, bearing, wave, tick))
+                        cursor = (cursor + 1) % len(incoming)
             tick = (tick + 1) % 256
         alive = lives > 0 and not respawn_wait
         visible = alive and (not invulnerable or invulnerable % 2)
@@ -418,13 +427,14 @@ def verify_rewind(emulator, replay, model):
         for first in (0, 3):
             cells = [symbols["tileMap"] + width * row + column for row in range(first, first + 3)]
             expressions.append("+".join(f"PEEK({cell:04X}H)*{256**n}" for n, cell in enumerate(cells)))
+    animation_start = len(expressions)
     for tile in (3, 12, 13, 28, 29):
         expressions.append(f"PEEKW({symbols['tilesLUT'] + 2 * tile:04X}H)")
     points = [(f"{point} AND {n}={n}", expression) for n, expression in enumerate(expressions, 1)]
     log = breakpoint_log(emulator, replay / "main.tap", model, 120, points, fast_autoload=True)
     hits = HIT.findall(log)
     windows = [n for n, row in enumerate(expected(REPLAY)) if row["restart"]]
-    span = 24
+    span = 36
     if len(hits) != log.count("Catch breakpoint:") or len(hits) // len(points) < windows[-1] + span + 1:
         raise ValueError(f"{model}: rewind trace captured only {len(hits) // len(points)} game ticks")
     groups = []
@@ -439,7 +449,17 @@ def verify_rewind(emulator, replay, model):
     scroll_period = (width - symbols["SCREEN_TILE_WIDTH"]) * symbols["TILE_SIZE"]
     if [row[0] % 256 for row in groups[:span]] != [(tick // 2 + 1) % scroll_period for tick in range(span)]:
         raise ValueError(f"{model}: scenery did not advance every other game tick")
-    return {"restarts": len(windows), "matching_scrolled_ticks_per_restart": span}
+    for column in range(animation_start, len(expressions)):
+        sequence = [row[column] for row in groups[:span]]
+        frames = sequence[::4]
+        if any(frame != frames[tick // 4] for tick, frame in enumerate(sequence)) or any(
+                first == second for first, second in zip(frames, frames[1:])):
+            raise ValueError(f"{model}: animated tile did not hold each frame for four game ticks")
+    parallax_frames = [row[animation_start] for row in groups[:span:4]]
+    if len(set(parallax_frames[:8])) != 8 or parallax_frames[8] != parallax_frames[0]:
+        raise ValueError(f"{model}: preshifted parallax tile did not cycle through eight frames")
+    return {"restarts": len(windows), "matching_scrolled_ticks_per_restart": span,
+            "parallax_frames": 8, "game_ticks_per_animation_frame": 4}
 
 
 def verify_wave_fire(emulator, replay, model):
@@ -448,13 +468,18 @@ def verify_wave_fire(emulator, replay, model):
     point = f"PC={symbols['enemyShotEmitted']:04X}H"
     # B/C are the emitted X/Y, D is the trajectory index before its first step.
     expression = f"B+C*64+D*4096+PEEK({tick:04X}H)*1048576+PEEK({wave:04X}H)*268435456"
-    shots = [row["emitted"] for row in expected(REPLAY) if row["emitted"] is not None]
+    emissions = [row["emitted"] for row in expected(REPLAY)]
+    shots = [shot for volley in emissions for shot in volley]
+    spreads = sum(len(volley) == 3 for volley in emissions)
+    if not spreads or not any(len(volley) == 1 for volley in emissions):
+        raise ValueError("Replay must exercise single shots and three-way spreads")
     wanted = [(point, str(x + 64 * y + 4096 * path + 1048576 * t + 268435456 * w)) for x, y, path, w, t in shots]
     log = breakpoint_log(emulator, replay / "main.tap", model, 65, [(point, expression)], fast_autoload=True)
     hits = HIT.findall(log)
     if hits[:len(wanted)] != wanted or len(hits) != log.count("Catch breakpoint:"):
         raise ValueError(f"{model}: wave fire trace differs from the reference, captured {len(hits)} emissions")
-    return {"emissions_verified": len(wanted), "bearing_codes_seen": sorted({path for _, _, path, _, _ in shots})}
+    return {"emissions_verified": len(wanted), "spreads_verified": spreads,
+            "bearing_codes_seen": sorted({path for _, _, path, _, _ in shots})}
 
 
 def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio):
