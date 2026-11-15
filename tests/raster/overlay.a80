@@ -6,6 +6,11 @@ YELLOW equ 6
 ENEMY_COUNT equ 32
     include "packed_plot.a80"
 
+overlayEntry:
+    ifdef OVERLAY_AUDIO
+        call soundTick
+        ld a,0                 ; sound wrapper plus 7 keeps HALT phase
+    endif
 overlayBegin:
     ld hl,(attrPointer)
     ld (viewport),hl
@@ -57,4 +62,7 @@ enemy_positions: incbin "enemy_positions.bin"
 
     ifdef SCHEDULE_COLLISION
         include "fixed_collision.a80"
+    endif
+    ifdef OVERLAY_AUDIO
+        include "engine_stream.a80"
     endif

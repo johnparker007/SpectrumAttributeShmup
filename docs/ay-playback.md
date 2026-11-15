@@ -13,7 +13,10 @@ The stream prototype stores register/value pairs followed by a per-tick terminat
 | --- | ---: | ---: | ---: |
 | First 256 song ticks | 256 | 3,627–6,555 | 211–841 |
 | Synthetic envelope, empty tick and full-update test | 4 | — | 139–1,404 |
+| Complete song through the PT3 loop marker | 5,120 | 3,627–8,218 | — |
 
 The two models produced matching instruction traces on repeated reference runs and matching stream results. The song prefix plus initialization takes 1,993 bytes of stream data. Playback emits 868 register writes instead of 3,342, counting initialization. The song prefix contains no envelope data writes after initialization. The synthetic test checks three tick-level envelope writes, including two consecutive writes of the same shape, and a 14-register update that crosses the end of the stream.
 
-The prefix establishes a CPU budget for the decoder. The complete song's stream size, storage and banking, tracker loop position, and captured-audio comparison still need verification before integration. The standalone stream loops through its initialization entry for repeatable testing.
+Run the reference benchmark with `--through-loop` to capture all 5,120 ticks before the tracker returns to its loop position. The full capture contains the same first 256 ticks and no envelope data writes after initialization. The uncompressed delta stream for the full song is 49,761 bytes. The standalone prefix benchmark loops through its initialization entry for repeatable timing.
+
+The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) uses the first 256 music ticks. It initializes once, then loops without an extra initialization frame. A captured-audio comparison and full-song banking in the renderer remain open.

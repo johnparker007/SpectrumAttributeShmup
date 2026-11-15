@@ -35,7 +35,20 @@ def encode(rows):
     return bytes(data)
 
 
-def verify_rows(actual, reference, model):
+def loop_audio(rows):
+    initial = encode(rows[:1])
+    end_state = {reg: value for row in rows for reg, value in row}
+    initial_state = dict(rows[0])
+    # The first music tick must reach the same state from initialization and
+    # from the last tick. Keep both sets of changes and skip init on loop.
+    first = [(reg, value) for reg, value in rows[1]
+             if reg == ENVELOPE_SHAPE or initial_state.get(reg) != value or end_state.get(reg) != value]
+    first_packet = bytes(value for pair in first for value in pair) + b"\xff"
+    rest = encode(rows)[len(encode(rows[:2])):]
+    return initial, first_packet + rest
+
+
+def verify_rows(actual, reference, model, expected_wire=None):
     state, reference_state = {}, {}
     for index, (writes, original) in enumerate(zip(actual, reference, strict=True)):
         state.update(writes)
@@ -45,7 +58,7 @@ def verify_rows(actual, reference, model):
         if state != reference_state or shapes != reference_shapes:
             raise ValueError(f"{model}: AY register state or retriggers differ at entry {index}")
     actual_stream = b"".join(bytes(byte for pair in row for byte in pair) + b"\xff" for row in actual)
-    if actual_stream != encode(reference):
+    if actual_stream != (encode(reference) if expected_wire is None else expected_wire):
         raise ValueError(f"{model}: retained AY writes differ in content or order")
 
 

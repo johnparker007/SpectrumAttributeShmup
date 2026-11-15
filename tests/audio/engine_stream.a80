@@ -1,0 +1,54 @@
+; The engine harness needs a constant cost modulo four to keep HALT phase.
+; Each event is 96 T-states. Pointer wrap adds 16 T-states.
+soundScroll:
+    ld a,(sound_initialized)
+    or a
+    jr nz,sound_initialized_continue
+    ld a,1
+    ld (sound_initialized),a
+    call soundTickBody          ; initialize from the first packet in Frame 1
+    ld a,0                     ; match the recurring branch modulo four
+sound_initialized_continue:
+    ld a,0
+    call soundTick
+    ld a,r                      ; complete a multiple of four with JP
+    jp doSinScroll
+
+soundTick:
+    call soundTickBody
+soundTickEnd:
+    ret
+
+soundTickBody:
+    ld hl,(sound_cursor)
+    ld c,#fd
+sound_next:
+    ld a,(hl)
+    inc hl
+    cp #ff
+    jr z,sound_complete
+    ld b,#ff
+soundSelect:
+    out (c),a
+    ld b,#bf
+    ld a,(hl)
+    inc hl
+soundWrite:
+    out (c),a
+    inc de
+    jr sound_next
+sound_complete:
+    ld de,testAudioStreamEnd
+    or a
+    push hl
+    sbc hl,de
+    pop hl
+    jp nz,sound_store
+    ld hl,testAudioLoop
+    inc de
+sound_store:
+    ld (sound_cursor),hl
+    ret
+
+sound_cursor: dw testAudioStream
+sound_initialized: db 0

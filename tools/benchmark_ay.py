@@ -1,6 +1,7 @@
 """Measure the Blokius reference player and record its ordered AY writes at 50 Hz."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
@@ -74,6 +75,10 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
             if pending is not None or register > 13:
                 raise ValueError(f"{model}: unexpected AY register selection")
             pending = (register, clock)
+        elif kind == "loop":
+            if "begin" not in current or "cost" in current:
+                raise ValueError(f"{model}: PT3 loop marker outside playback")
+            current["loop"] = value
         else:
             clock, byte = divmod(value, 256)
             if pending is None or clock <= pending[1]:
@@ -81,6 +86,10 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
             current["writes"].append({"register": pending[0], "value": byte,
                                        "select_instruction_tstate": pending[1], "data_instruction_tstate": clock})
             pending = None
+    if frames is None:
+        frames = next((index for index, tick in enumerate(ticks) if "loop" in tick), None)
+        if not frames:
+            raise ValueError(f"{model}: captured {len(ticks)} ticks without reaching the PT3 loop. Increase --seconds.")
     if len(ticks) < frames:
         raise ValueError(f"{model}: captured only {len(ticks)} ticks. Increase --seconds.")
 
@@ -96,16 +105,18 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
             "tick_cost_range": [min(costs), max(costs)], "envelope_writes": len(envelopes)}
 
 
-def record(emulator, directory, model, seconds):
+def record(emulator, directory, model, seconds, through_loop=False):
     ports = {
         "PC=DC8CH AND BC=FFFDH": ("select", "TSTATES*256+A"),
         "PC=DC97H AND BC=FFFDH": ("select", "TSTATES*256+A"),
         "PC=DC8FH AND BC=BFFDH": ("data", "TSTATES*256+PEEK(HL)"),
         "PC=DC9DH AND BC=BFFDH": ("data", "TSTATES*256+A"),
+        # The VTII player sets bit 7 of its setup byte once it wraps the play order.
+        "PC=D6FDH AND PEEKW(PC)=FECBH": ("loop", "TSTATES"),
     }
     symbols = read_symbols(directory / "reference_player.sym")
     result = capture(emulator, directory / "reference_player.sna", symbols, model, seconds, ports,
-                     FRAMES_REQUIRED, allow_select_only=True)
+                     None if through_loop else FRAMES_REQUIRED, allow_select_only=True)
     for index, tick in enumerate(result["ticks"]):
         registers = [write["register"] for write in tick["writes"]]
         if registers not in (list(range(13)), list(range(14))):
@@ -119,8 +130,11 @@ def main():
     parser.add_argument("--ay-export", type=Path, help="optional Vortex Tracker .ay export to compare")
     parser.add_argument("--assembler", type=Path, required=True)
     parser.add_argument("--emulator", type=Path, required=True)
-    parser.add_argument("--seconds", type=int, default=16, help="wall-clock capture length per model")
+    parser.add_argument("--seconds", type=int, help="wall-clock capture length per model (16, or 290 with --through-loop)")
+    parser.add_argument("--through-loop", action="store_true", help="capture the complete tune up to the PT3 loop marker")
     args = parser.parse_args()
+    if args.seconds is None:
+        args.seconds = 290 if args.through_loop else 16
     if args.seconds < 1:
         parser.error("--seconds must be positive")
     try:
@@ -134,7 +148,8 @@ def main():
             directory = Path(scratch)
             player_hash, song_hash = extract_music(args.archive, directory, args.ay_export)
             run([assembler, "--sym=reference_player.sym", PROBE], directory)
-            results = [record(emulator, directory, model, args.seconds) for model in MODELS]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda model: record(emulator, directory, model, args.seconds, args.through_loop), MODELS))
         writes = [[(write["register"], write["value"]) for write in tick["writes"]] for tick in results[0]["ticks"]]
         other = [[(write["register"], write["value"]) for write in tick["writes"]] for tick in results[1]["ticks"]]
         if other != writes:
@@ -142,7 +157,8 @@ def main():
     except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as error:
         parser.exit(1, f"AY benchmark failed: {error}\n")
     json.dump({"emulator": version, "assembler": assembler_version, "player_sha256": player_hash,
-               "song_sha256": song_hash, "results": results, "passed": True}, sys.stdout, indent=2)
+               "song_sha256": song_hash, "through_loop": args.through_loop, "results": results, "passed": True},
+              sys.stdout, indent=2)
     print()
 
 
