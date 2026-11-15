@@ -18,7 +18,7 @@ def read_symbols(symbols):
     return {name: int(value, 16) for name, value in SYMBOL.findall(symbols.read_text())}
 
 
-def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=False):
+def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=False, keyboard_spool=None):
     if len(breakpoints) > 100:
         raise ValueError("ZEsarUX supports up to 100 breakpoints")
     image = image.resolve(strict=True)
@@ -37,6 +37,9 @@ def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=F
     ]
     if fast_autoload:
         command.append("--fastautoload")
+    if keyboard_spool is not None:
+        command.extend(["--keyboardspoolfile", keyboard_spool, "--keyboardspoolfile-play",
+                        "--keyboardspoolfile-keylength", "8"])
     for index, (condition, expression) in enumerate(breakpoints, 1):
         command.extend([
             "--set-breakpoint", str(index), condition,

@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
+from benchmark_motion import STEPS
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -18,7 +19,22 @@ from verify_dot_overlay import TESTS, install_audio, verify_audio, verify_overla
 from verify_zesarux_raster import run
 
 
-def install(game, assembler, audio):
+def ship_art(rows, colour):
+    data = bytearray()
+    for shift in (0, 1):
+        for row in rows:
+            pixels = (" " * shift + row).ljust(6)
+            for offset in range(0, 6, 2):
+                mask, ink = 255, 0
+                for lane, pixel in enumerate(pixels[offset:offset + 2]):
+                    if pixel != " ":
+                        mask &= ~(7 << (3 * lane))
+                        ink |= colour << (3 * lane)
+                data.extend((mask, ink))
+    return data
+
+
+def install(game, assembler, audio, live=False, replay=None):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -29,6 +45,9 @@ def install(game, assembler, audio):
 
 startGame:
     call barrelScroll_Init
+    ifdef LIVE_SHMUP
+        call gameInit
+    endif
     call enableRender
 mainLoop:
 halt1 equ $+7
@@ -48,13 +67,23 @@ doSinScroll equ barrelScroll_Update
                          ("dots", "packed_plot"), ("collision", "fixed_collision")):
         shutil.copyfile(TESTS / folder / f"{name}.a80", game / f"{name}.a80")
     shutil.copyfile(TESTS / "raster" / "scheduled_collision.a80", game / "engine" / "spritesRenderBIG.a80")
-    prepare(game)
-    (game / "enemy_boxes.bin").write_bytes(bytes(axis for box in ENEMY_BOXES for axis in box))
-    (game / "player_box.bin").write_bytes(bytes(PLAYER_BOX))
-    (game / "collision_expected.bin").write_bytes(phases()[0].hits)
+    defines = ["OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
+               "BARREL_SCENERY"]
+    if live:
+        shutil.copyfile(TESTS.parent / "game" / "gameplay.a80", game / "gameplay.a80")
+        (game / "trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path))
+        (game / "player_art.bin").write_bytes(ship_art((" #   ", " ### ", "#####", " ### ", " #   "), 4))
+        (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))
+        defines.append("LIVE_SHMUP")
+        if replay is not None:
+            (game / "controls.bin").write_bytes(bytes([*replay, 255]))
+            defines.append("REPLAY_CONTROLS")
+    else:
+        prepare(game)
+        (game / "enemy_boxes.bin").write_bytes(bytes(axis for box in ENEMY_BOXES for axis in box))
+        (game / "player_box.bin").write_bytes(bytes(PLAYER_BOX))
+        (game / "collision_expected.bin").write_bytes(phases()[0].hits)
     install_audio(game, audio, phrases=True)
-    defines = ("OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
-               "BARREL_SCENERY")
     run([assembler, *(f"-D{name}=1" for name in defines), "--sym=main.sym", "main.asm"], game)
 
 

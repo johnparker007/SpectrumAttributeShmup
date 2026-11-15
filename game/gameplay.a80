@@ -1,0 +1,302 @@
+; One game tick in Frame 1. Frame 2 tests the resulting positions and draws
+; the same projectile list. The next tick consumes the collision results.
+    include "motion_step.a80"
+
+SHIP_LEFT equ 2             ; leave two dots against the left edge
+PLAYER_RIGHT equ 59
+PLAYER_BOTTOM equ 43
+ENEMY_START_X equ 52
+HIDDEN_BOX equ 96           ; outside the domain of every real projectile
+
+gameInit:
+    ld hl,playerArt
+    ld (sprite08+SPRITE.IMAGE),hl
+    ld hl,enemyArt
+    ld (sprite09+SPRITE.IMAGE),hl
+    jp syncActors
+
+motionStep:
+    call applyHits
+    call readControls
+    ifdef REPLAY_CONTROLS
+        ld hl,(replayCursor)
+        ld a,(hl)
+        cp #ff
+        jr z,.applied
+        inc hl
+        ld (replayCursor),hl
+        jr .ready
+.applied:
+        xor a
+.ready:
+    endif
+controlsReady:
+    ld (lastControls),a
+    ld e,a
+    ld a,(playerHealth)
+    or a
+    jr z,.moveEnemy
+    call movePlayer
+    call firePlayer
+.moveEnemy:
+    call stepEnemy
+    MOVE_VOLLEYS
+    MOVE_ENEMIES
+    call spawnIncoming
+    call syncActors
+    ld hl,gameTick
+    inc (hl)
+gameplayComplete:
+    ret
+
+; O/P and Q/A for movement, Space to fire. Active input bits are
+; right, left, up, down, fire, in that order.
+readControls:
+    ld bc,#dffe
+    in a,(c)
+    cpl
+    and 3
+    ld e,a
+    ld b,#fb
+    in a,(c)
+    rrca
+    jr c,.upReleased
+    set 2,e
+.upReleased:
+    ld b,#fd
+    in a,(c)
+    rrca
+    jr c,.downReleased
+    set 3,e
+.downReleased:
+    ld b,#7f
+    in a,(c)
+    rrca
+    jr c,.fireReleased
+    set 4,e
+.fireReleased:
+    ld a,e
+    ret
+
+movePlayer:
+    ld hl,(playerXY)
+    ld a,e
+    and 3
+    jr z,.vertical
+    cp 3
+    jr z,.vertical
+    rrca
+    jr nc,.left
+    ld a,l
+    cp PLAYER_RIGHT
+    jr z,.vertical
+    inc l
+    jr .vertical
+.left:
+    ld a,l
+    cp SHIP_LEFT
+    jr z,.vertical
+    dec l
+.vertical:
+    ld a,e
+    and 12
+    cp 4
+    jr nz,.down
+    ld a,h
+    or a
+    jr z,.save
+    dec h
+    jr .save
+.down:
+    cp 8
+    jr nz,.save
+    ld a,h
+    cp PLAYER_BOTTOM
+    jr z,.save
+    inc h
+.save:
+    ld (playerXY),hl
+    ret
+
+firePlayer:
+    ld hl,fireWait
+    ld a,(hl)
+    or a
+    jr z,.trigger
+    dec (hl)
+    ret
+.trigger:
+    bit 4,e
+    ret z
+    ld a,(playerXY)
+    cp 58
+    ret nc                      ; no room for both dots past the nose
+    add a,4                      ; the mover advances one more dot this tick
+    ld c,a
+    ld a,(playerXY+1)
+    add a,2
+    ld d,a
+    ld hl,volleys
+    ld b,3
+.find:
+    ld a,(hl)
+    inc a
+    jr z,.spawn
+    inc hl
+    inc hl
+    inc hl
+    djnz .find
+    ret                          ; keep old volleys until their slots are free
+.spawn:
+    ld (hl),c
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),#ff                 ; first MOVE_VOLLEYS increment starts age at 0
+    ld a,8
+    ld (fireWait),a
+    ret
+
+applyHits:
+    ld hl,hitWait
+    ld a,(hl)
+    or a
+    jr z,.checkPlayer
+    dec (hl)
+    jr .checkEnemy
+.checkPlayer:
+    ld a,(player_hit)
+    or a
+    jr z,.checkEnemy
+    ld hl,playerHealth
+    ld a,(hl)
+    or a
+    jr z,.checkEnemy
+    dec (hl)
+    ld a,24
+    ld (hitWait),a
+.checkEnemy:
+    ld a,(collision_actual)
+    or a
+    ret z
+    ld hl,enemyKills
+    inc (hl)
+    ld a,HIDDEN_BOX
+    ld (enemyXY),a
+    ld a,32
+    ld (enemyWait),a
+    ret
+
+stepEnemy:
+    ld hl,enemyXY
+    ld a,(hl)
+    cp HIDDEN_BOX
+    jr z,.waiting
+    ld a,(gameTick)
+    and 3
+    ret nz
+    dec (hl)
+    ld a,(hl)
+    cp 2
+    ret nc
+    ld (hl),HIDDEN_BOX
+    ld a,24
+    ld (enemyWait),a
+    ret
+.waiting:
+    ld hl,enemyWait
+    dec (hl)
+    ret nz
+    ld a,(enemyXY+1)
+    xor 8                       ; alternate the next attack lane
+    ld h,a
+    ld l,ENEMY_START_X
+    ld (enemyXY),hl
+    ret
+
+spawnIncoming:
+    ld a,(enemyXY)
+    cp HIDDEN_BOX
+    ret z
+    ld d,a
+    ld hl,(enemyWrite)
+    ld a,(hl)
+    inc a
+    ret nz                       ; a full pool keeps its existing projectiles
+    ld a,d
+    dec a
+    ld (hl),a
+    inc hl
+    ld a,(enemyXY+1)
+    add a,2
+    ld (hl),a
+    inc hl
+    ld (hl),0                    ; straight trajectory for this first opponent
+    inc hl
+    ld a,l
+    cp low enemy_end
+    jr nz,.save
+    ld hl,enemy_records
+.save:
+    ld (enemyWrite),hl
+    ret
+
+syncActors:
+    ld hl,(playerXY)
+    ld a,(playerHealth)
+    or a
+    jr nz,.playerVisible
+    ld l,HIDDEN_BOX
+.playerVisible:
+    ld (player_box),hl
+    ld de,#0c0c                ; logical origin is 12 dots inside sprite buffer
+    add hl,de
+    ld (sprite08+SPRITE.X),hl
+    ld (sprite08+SPRITE.DRAWX),hl
+    ld hl,(enemyXY)
+    ld (enemy_boxes),hl
+    add hl,de
+    ld (sprite09+SPRITE.X),hl
+    ld (sprite09+SPRITE.DRAWX),hl
+    ld a,(hitWait)
+    or a
+    jr z,.clearBorder
+    ld a,2
+.clearBorder:
+    out (#fe),a
+    ret
+
+    MOTION_WRITE_SHOT
+
+playerXY: db 8,21
+enemyXY: db ENEMY_START_X,21
+playerHealth: db 3
+enemyKills: db 0
+gameTick: db 0
+lastControls: db 0
+hitWait: db 0
+fireWait: db 0
+enemyWait: db 0
+enemyWrite: dw enemy_records
+player_box: db 8,21
+enemy_boxes: db ENEMY_START_X,21
+    dup 14 : db HIDDEN_BOX,0 : edup
+volleys:
+    dup 3 : db #ff,0,0 : edup
+player_shots:
+    dup 9 : db #ff,0 : edup
+player_positions equ player_shots
+enemy_records:
+    dup ENEMY_COUNT : db #ff,0,0 : edup
+enemy_end:
+enemy_positions equ enemy_records
+
+    align 256
+trajectories: incbin "trajectories.bin"
+playerArt: incbin "player_art.bin"
+enemyArt: incbin "enemy_art.bin"
+
+    ifdef REPLAY_CONTROLS
+replayCursor: dw replayControls
+replayControls: incbin "controls.bin"
+    endif

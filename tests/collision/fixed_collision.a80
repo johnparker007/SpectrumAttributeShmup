@@ -76,6 +76,7 @@ collisionIncomingTwo:
     ld (next_shot),de
     ret
 
+    ifndef LIVE_SHMUP
 verifyCollision:
     ld hl,collision_actual
     ld de,collision_expected
@@ -87,6 +88,7 @@ verifyCollision:
     inc de
     jp pe,.next
     ret
+    endif
 
 next_box: dw 0
 next_result: dw 0
@@ -94,6 +96,8 @@ next_shot: dw 0
 collision_actual: defs 15,0
 player_hit: db 0
 
+    ifndef LIVE_SHMUP
 enemy_boxes: incbin "enemy_boxes.bin"
 player_box: incbin "player_box.bin"
 collision_expected: incbin "collision_expected.bin"
+    endif

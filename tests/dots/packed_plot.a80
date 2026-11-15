@@ -7,10 +7,14 @@
     ld b,listCount
     endm
 
-    macro FETCH_DOT stride
+    macro FETCH_DOT stride,skipTarget
     ifdef OVERLAY_FAST_PLOT
         ld a,(de)
         inc de
+        ifdef LIVE_SHMUP
+            cp #ff
+            jp z,skipTarget
+        endif
         ex af,af'              ; preserve X while loading Y
         ld a,(de)
         inc de
@@ -33,7 +37,7 @@
     macro PLOT_PLAYERS
     PLOT_LIST player_positions,9
 .loop:
-    FETCH_DOT 2
+    FETCH_DOT 2,.inactive
     jr c,.split
 
     ; Aligned 2x1 shot. Retain BRIGHT and FLASH from the pair underneath.
@@ -59,16 +63,24 @@
     ld (hl),a
 .next:
     NEXT_DOT 2
+.advance:
     djnz .loop
+    ifdef LIVE_SHMUP
+        jr .done
+.inactive:
+        inc de
+        jr .advance
+.done:
+    endif
     endm
 
     macro PLOT_ENEMIES
     PLOT_LIST enemy_positions,ENEMY_COUNT
 .loop:
     ifdef OVERLAY_MOTION
-        FETCH_DOT 3
+        FETCH_DOT 3,.inactive
     else
-        FETCH_DOT 2
+        FETCH_DOT 2,.inactive
     endif
     jr c,.paper
     ld a,(hl)
@@ -90,7 +102,16 @@
     else
         NEXT_DOT 2
     endif
+.advance:
     djnz .loop
+    ifdef LIVE_SHMUP
+        jr .done
+.inactive:
+        inc de
+        inc de
+        jr .advance
+.done:
+    endif
     endm
 
 ; Input IX -> x,y. Return HL = active attrPointer + 38*y + floor(x/2).

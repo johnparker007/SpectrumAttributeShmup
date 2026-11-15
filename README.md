@@ -78,3 +78,5 @@ The [projectile motion benchmark](docs/projectile-motion.md) verifies integer tr
 The [Blokius timing baseline](docs/blokius-timing.md) follows the unmodified game's barrel scroll through completion and measures the HUD and game slots on both models.
 
 The [Blokius scenery test](docs/blokius-integration.md) checks the WIP's barrel scroll and animated tiles with the new projectile and AY workload.
+
+The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, three-way firing, and live ship and projectile collisions.

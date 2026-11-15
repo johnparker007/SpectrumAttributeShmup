@@ -69,7 +69,11 @@ overlayFailed:
 
 viewport: dw 0
     ifdef OVERLAY_MOTION
-        include "moving_overlay.a80"
+        ifdef LIVE_SHMUP
+            include "gameplay.a80"
+        else
+            include "moving_overlay.a80"
+        endif
     else
 player_positions: incbin "player_positions.bin"
 enemy_positions: incbin "enemy_positions.bin"
