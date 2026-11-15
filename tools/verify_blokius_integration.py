@@ -3,6 +3,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+from itertools import groupby
 import json
 from pathlib import Path
 import shutil
@@ -76,7 +77,14 @@ doSinScroll equ barrelScroll_Update
         (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))
         defines.append("LIVE_SHMUP")
         if replay is not None:
-            (game / "controls.bin").write_bytes(bytes([*replay, 255]))
+            controls = bytearray()
+            for command, group in groupby(replay):
+                count = sum(1 for _ in group)
+                while count:
+                    length = min(count, 255)
+                    controls.extend((length, command))
+                    count -= length
+            (game / "controls.bin").write_bytes(controls + b"\x00")
             defines.append("REPLAY_CONTROLS")
     else:
         prepare(game)

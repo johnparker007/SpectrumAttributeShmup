@@ -5,41 +5,41 @@
 SHIP_LEFT equ 2             ; leave two dots against the left edge
 PLAYER_RIGHT equ 59
 PLAYER_BOTTOM equ 43
-ENEMY_START_X equ 52
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
+WAVE_ENEMIES equ 3
 
 gameInit:
     ld hl,playerArt
     ld (sprite08+SPRITE.IMAGE),hl
     ld hl,enemyArt
-    ld (sprite09+SPRITE.IMAGE),hl
+    dup WAVE_ENEMIES, slot
+        ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
+    edup
+    call resetEncounter
     jp syncActors
 
 motionStep:
     call applyHits
     call readControls
     ifdef REPLAY_CONTROLS
-        ld hl,(replayCursor)
-        ld a,(hl)
-        cp #ff
-        jr z,.applied
-        inc hl
-        ld (replayCursor),hl
-        jr .ready
-.applied:
-        xor a
-.ready:
+        call readReplay
     endif
 controlsReady:
     ld (lastControls),a
     ld e,a
+    ld hl,restartHeld
+    xor (hl)
+    ld (hl),e
+    and e
+    and 32
+    jp nz,restartGame
     ld a,(playerHealth)
     or a
     jr z,.moveEnemy
     call movePlayer
     call firePlayer
 .moveEnemy:
-    call stepEnemy
+    call stepWave
     MOVE_VOLLEYS
     MOVE_ENEMIES
     call spawnIncoming
@@ -49,8 +49,7 @@ controlsReady:
 gameplayComplete:
     ret
 
-; O/P and Q/A for movement, Space to fire. Active input bits are
-; right, left, up, down, fire, in that order.
+; Active input bits are P, O, Q, A, Space and Enter.
 readControls:
     ld bc,#dffe
     in a,(c)
@@ -75,6 +74,12 @@ readControls:
     jr c,.fireReleased
     set 4,e
 .fireReleased:
+    ld b,#bf
+    in a,(c)
+    rrca
+    jr c,.restartReleased
+    set 5,e
+.restartReleased:
     ld a,e
     ret
 
@@ -163,81 +168,152 @@ applyHits:
     or a
     jr z,.checkPlayer
     dec (hl)
-    jr .checkEnemy
+    ret
 .checkPlayer:
     ld a,(player_hit)
     or a
-    jr z,.checkEnemy
+    ret z
     ld hl,playerHealth
     ld a,(hl)
     or a
-    jr z,.checkEnemy
+    ret z
     dec (hl)
     ld a,24
     ld (hitWait),a
-.checkEnemy:
-    ld a,(collision_actual)
-    or a
-    ret z
-    ld hl,enemyKills
-    inc (hl)
-    ld a,HIDDEN_BOX
-    ld (enemyXY),a
-    ld a,32
-    ld (enemyWait),a
     ret
 
-stepEnemy:
-    ld hl,enemyXY
-    ld a,(hl)
-    cp HIDDEN_BOX
+stepWave:
+    ld a,(enemiesAlive)
+    or a
     jr z,.waiting
     ld a,(gameTick)
     and 3
-    ret nz
-    dec (hl)
-    ld a,(hl)
+    ld c,a
+    ld ix,enemy_boxes
+    ld de,collision_actual
+    ld b,WAVE_ENEMIES
+.next:
+    ld a,(ix)
+    cp HIDDEN_BOX
+    jr z,.advance
+    ld a,(de)
+    or a
+    jr z,.move
+    ld hl,enemyKills
+    inc (hl)
+    jr .hide
+.move:
+    ld a,c
+    or a
+    jr nz,.advance
+    dec (ix)
+    ld a,(ix)
     cp 2
-    ret nc
-    ld (hl),HIDDEN_BOX
-    ld a,24
-    ld (enemyWait),a
+    jr nc,.advance
+.hide:
+    ld (ix),HIDDEN_BOX
+    ld hl,enemiesAlive
+    dec (hl)
+    jr nz,.advance
+    ld a,28
+    ld (waveWait),a
+.advance:
+    inc ix
+    inc ix
+    inc de
+    djnz .next
     ret
 .waiting:
-    ld hl,enemyWait
+    ld hl,waveWait
     dec (hl)
     ret nz
-    ld a,(enemyXY+1)
-    xor 8                       ; alternate the next attack lane
-    ld h,a
-    ld l,ENEMY_START_X
-    ld (enemyXY),hl
+    ld a,(waveIndex)
+    inc a
+    cp 3
+    jr c,loadWave
+    xor a
+
+loadWave:
+    ld (waveIndex),a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,waveTable
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ex de,hl
+    ld a,(hl)
+    ld (waveSlots),a
+    ld (enemiesAlive),a
+    inc hl
+    ld a,(hl)
+    ld (waveRate),a
+    inc hl
+    xor a
+    ld (waveEmitter),a
+    ld de,enemyPaths
+    ld bc,WAVE_ENEMIES*2
+    ldir
+    ld de,enemy_boxes
+    ld c,WAVE_ENEMIES*2
+    ldir
     ret
 
 spawnIncoming:
-    ld a,(enemyXY)
+    ld a,(gameTick)
+    ld c,a
+    ld a,(waveRate)
+    and c
+    ret nz
+    ld a,(waveEmitter)
+    ld e,a
+    ld d,0
+    inc a
+    ld hl,waveSlots
+    cp (hl)
+    jr c,.emitterReady
+    xor a
+.emitterReady:
+    ld (waveEmitter),a
+    ld hl,enemy_boxes
+    add hl,de
+    add hl,de
+    ld a,(hl)
     cp HIDDEN_BOX
     ret z
-    ld d,a
+    dec a
+    ld b,a
+    inc hl
+    ld a,(hl)
+    add a,2
+    ld c,a
+    ld hl,enemyPaths
+    add hl,de
+    add hl,de
+    ld a,(gameTick)
+    bit 2,a
+    jr z,.pathReady
+    inc hl
+.pathReady:
+    ld d,(hl)
     ld hl,(enemyWrite)
     ld a,(hl)
     inc a
     ret nz                       ; a full pool keeps its existing projectiles
-    ld a,d
-    dec a
-    ld (hl),a
+    ld (hl),b
     inc hl
-    ld a,(enemyXY+1)
-    add a,2
-    ld (hl),a
+    ld (hl),c
     inc hl
-    ld (hl),0                    ; straight trajectory for this first opponent
+    ld (hl),d
+enemyShotEmitted:
     inc hl
     ld a,l
     cp low enemy_end
-    jr nz,.save
+    jr nz,saveEnemyCursor
     ld hl,enemy_records
-.save:
+saveEnemyCursor:
     ld (enemyWrite),hl
     ret
 
@@ -253,11 +329,12 @@ syncActors:
     add hl,de
     ld (sprite08+SPRITE.X),hl
     ld (sprite08+SPRITE.DRAWX),hl
-    ld hl,(enemyXY)
-    ld (enemy_boxes),hl
-    add hl,de
-    ld (sprite09+SPRITE.X),hl
-    ld (sprite09+SPRITE.DRAWX),hl
+    dup WAVE_ENEMIES, slot
+        ld hl,(enemy_boxes+slot*2)
+        add hl,de
+        ld (sprite09+slot*SPRITE+SPRITE.X),hl
+        ld (sprite09+slot*SPRITE+SPRITE.DRAWX),hl
+    edup
     ld a,(hitWait)
     or a
     jr z,.clearBorder
@@ -266,30 +343,112 @@ syncActors:
     out (#fe),a
     ret
 
+restartGame:
+    call rewindBarrel
+    call resetEncounter
+    jp syncActors
+
+resetEncounter:
+    ld hl,initialPlayer
+    ld de,playerXY
+    ld bc,runEnd-playerXY
+    ldir
+    ld hl,initialPools
+    ld de,volleys
+    ld bc,enemy_end-volleys
+    ldir
+    xor a
+    ld (player_hit),a
+    ld (collision_actual+2),a
+    ld h,a
+    ld l,a
+    ld (collision_actual),hl
+    jp loadWave
+
+rewindBarrel:
+    xor a
+    ld hl,tileMap
+    ld de,tileMap+1
+    ld bc,tileMapWidth*tileMapHeight-1
+    ld (hl),a
+    ldir
+    ld h,a
+    ld l,a
+    ld (tileMapScroll),hl
+    ld (sourceTileMapReadIndex),hl
+    ld (tileMapWriteColumn),hl
+    ld (tileMapWriteRow),hl
+    ld hl,tileUpdateFrames
+    ld (doNextTileFrame+1),hl
+    ld hl,tileFrames
+    ld (barrelScroll_AnimFrame1+1),hl
+    ld hl,tileFrames2
+    ld (barrelScroll_AnimFrame2+1),hl
+    ld hl,tileFrames3
+    ld (barrelScroll_AnimFrame3+1),hl
+    ld hl,tileFrames4
+    ld (barrelScroll_AnimFrame4+1),hl
+    ld hl,tileFrames5
+    ld (barrelScroll_AnimFrame5+1),hl
+    ld hl,tileSet+3*48
+    ld (tilesLUT+3*2),hl
+    ld hl,tileSet+12*48
+    ld (tilesLUT+12*2),hl
+    ld hl,tileSet+13*48
+    ld (tilesLUT+13*2),hl
+    ld hl,tileSet+28*48
+    ld (tilesLUT+28*2),hl
+    ld hl,tileSet+29*48
+    ld (tilesLUT+29*2),hl
+    jp barrelScroll_Init
+
     MOTION_WRITE_SHOT
 
-playerXY: db 8,21
-enemyXY: db ENEMY_START_X,21
-playerHealth: db 3
+playerXY: dw 0
+playerHealth: db 0
 enemyKills: db 0
 gameTick: db 0
-lastControls: db 0
 hitWait: db 0
 fireWait: db 0
-enemyWait: db 0
-enemyWrite: dw enemy_records
-player_box: db 8,21
-enemy_boxes: db ENEMY_START_X,21
-    dup 14 : db HIDDEN_BOX,0 : edup
+waveWait: db 0
+enemyWrite: dw 0
+runEnd:
+initialPlayer: db 8,21,3,0,0,0,0,0
+    dw enemy_records
+    assert $-initialPlayer=runEnd-playerXY
+
+lastControls: db 0
+restartHeld: db 0
+waveIndex: db 0
+waveSlots: db 0
+enemiesAlive: db 0
+waveRate: db 0
+waveEmitter: db 0
+enemyPaths: defs WAVE_ENEMIES*2
+player_box: dw 0
+enemy_boxes:
+    dup 15 : db HIDDEN_BOX,0 : edup
+
+; Enemy count, tick mask, two initial path indices per ship, then positions.
+; The path indices select entries in the shared eight-step trajectory table.
+waveTable: dw streamWave, crossingWave, fanWave
+streamWave: db 1,0, 0,0, 0,0, 0,0, 52,21, HIDDEN_BOX,0, HIDDEN_BOX,0
+crossingWave: db 2,1, 16,16, 8,8, 0,0, 54,12, 57,31, HIDDEN_BOX,0
+fanWave: db 3,0, 24,16, 40,48, 32,8, 52,15, 57,23, 59,33
+
 volleys:
-    dup 3 : db #ff,0,0 : edup
+    defs 3*3
 player_shots:
-    dup 9 : db #ff,0 : edup
+    defs 9*2
 player_positions equ player_shots
 enemy_records:
-    dup ENEMY_COUNT : db #ff,0,0 : edup
+    defs ENEMY_COUNT*3
 enemy_end:
 enemy_positions equ enemy_records
+initialPools:
+    dup 3 : db #ff,0,0 : edup
+    dup 9 : db #ff,0 : edup
+    dup ENEMY_COUNT : db #ff,0,0 : edup
 
     align 256
 trajectories: incbin "trajectories.bin"
@@ -297,6 +456,28 @@ playerArt: incbin "player_art.bin"
 enemyArt: incbin "enemy_art.bin"
 
     ifdef REPLAY_CONTROLS
+readReplay:
+    ld hl,replayLeft
+    ld a,(hl)
+    or a
+    jr nz,.repeat
+    ld de,(replayCursor)
+    ld a,(de)
+    or a
+    ret z
+    ld (hl),a
+    inc de
+    ld a,(de)
+    inc de
+    ld (replayCursor),de
+    ld (replayMask),a
+.repeat:
+    dec (hl)
+    ld a,(replayMask)
+    ret
+
+replayLeft: db 0
+replayMask: db 0
 replayCursor: dw replayControls
 replayControls: incbin "controls.bin"
     endif

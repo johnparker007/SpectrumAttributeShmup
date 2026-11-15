@@ -20,10 +20,17 @@ from verify_dot_overlay import verify_audio
 from verify_zesarux_raster import HEIGHT, WIDTH, capture_video, paper_row, run
 
 
-RIGHT, LEFT, UP, DOWN, FIRE = (1, 2, 4, 8, 16)
+RIGHT, LEFT, UP, DOWN, FIRE, RESTART = (1, 2, 4, 8, 16, 32)
 REPLAY = ([0] * 6 + [FIRE] * 37 + [LEFT | UP | FIRE] * 32 + [RIGHT | DOWN | FIRE] * 64
-          + [LEFT | UP] * 18 + [LEFT | RIGHT | UP | DOWN] * 9 + [0] * 60)
+          + [LEFT | UP] * 18 + [LEFT | RIGHT | UP | DOWN] * 9 + [0] * 60
+          + [RESTART] * 4 + [0] * 535 + [RESTART | FIRE] * 4 + [FIRE] * 46)
 IDLE = [0] * 120
+WAVES = (
+    (0, ((52, 21, 0, 0),)),
+    (1, ((54, 12, 16, 16), (57, 31, 8, 8))),
+    (0, ((52, 15, 24, 16), (57, 23, 40, 48), (59, 33, 32, 8))),
+)
+HIDDEN = (96, 0)
 
 
 def box_visible(point):
@@ -35,54 +42,78 @@ def packed(values):
 
 
 def expected(inputs):
-    player, enemy = (8, 21), (52, 21)
-    health, kills, invulnerable, reload, respawn, cursor = 3, 0, 0, 0, 0, 0
-    player_hit = enemy_hit = False
-    incoming = [(DEAD, 0, 0)] * 32
-    volleys = [(DEAD, 0, 0)] * 3
+    restart_held = False
     results = []
-    for tick, command in enumerate(inputs):
-        if invulnerable:
-            invulnerable -= 1
-        elif player_hit and health:
-            health -= 1
-            invulnerable = 24
-        if enemy_hit:
-            kills += 1
-            enemy = (96, enemy[1])
-            respawn = 32
-        if health:
-            x, y = player
-            dx = bool(command & RIGHT) - bool(command & LEFT)
-            dy = bool(command & DOWN) - bool(command & UP)
-            player = (max(2, min(59, x + dx)), max(0, min(43, y + dy)))
-            if reload:
-                reload -= 1
-            elif command & FIRE and player[0] <= 57:
-                free = next((n for n, (x, _, _) in enumerate(volleys) if x == DEAD), None)
-                if free is not None:
-                    volleys[free] = (player[0] + 4, player[1] + 2, -1)
-                    reload = 8
-        ex, ey = enemy
-        if box_visible(enemy):
-            if tick % 4 == 0:
-                enemy = (ex - 1, ey) if ex > 2 else (96, ey)
-                if ex == 2:
-                    respawn = 24
-        else:
-            respawn -= 1
-            if respawn == 0:
-                enemy = (52, ey ^ 8)
-        incoming, volleys, shots = step(incoming, volleys)
-        if box_visible(enemy) and incoming[cursor][0] == DEAD:
-            incoming[cursor] = (enemy[0] - 1, enemy[1] + 2, 0)
-            cursor = (cursor + 1) % len(incoming)
+    for index, command in enumerate(inputs):
+        emitted = None
+        restart = bool(command & RESTART) and not restart_held
+        restart_held = bool(command & RESTART)
+        if index == 0 or restart:
+            player = (8, 21)
+            health, kills, invulnerable, reload, respawn, cursor = 3, 0, 0, 0, 0, 0
+            tick = wave = emitter = 0
+            enemies = [(52, 21), HIDDEN, HIDDEN]
+            enemy_hits = [False] * 3
+            player_hit = False
+            incoming = [(DEAD, 0, 0)] * 32
+            volleys = [(DEAD, 0, 0)] * 3
+            shots = [(DEAD, 0)] * 9
+        if not restart:
+            if invulnerable:
+                invulnerable -= 1
+            elif player_hit and health:
+                health -= 1
+                invulnerable = 24
+            if health:
+                x, y = player
+                dx = bool(command & RIGHT) - bool(command & LEFT)
+                dy = bool(command & DOWN) - bool(command & UP)
+                player = (max(2, min(59, x + dx)), max(0, min(43, y + dy)))
+                if reload:
+                    reload -= 1
+                elif command & FIRE and player[0] <= 57:
+                    free = next((n for n, (x, _, _) in enumerate(volleys) if x == DEAD), None)
+                    if free is not None:
+                        volleys[free] = (player[0] + 4, player[1] + 2, -1)
+                        reload = 8
+            if any(map(box_visible, enemies)):
+                for slot, (x, y) in enumerate(enemies):
+                    if x >= 64:
+                        continue
+                    if enemy_hits[slot]:
+                        kills += 1
+                        enemies[slot] = (96, y)
+                    elif tick % 4 == 0:
+                        enemies[slot] = (x - 1 if x > 2 else 96, y)
+                if not any(map(box_visible, enemies)):
+                    respawn = 28
+            else:
+                respawn -= 1
+                if respawn == 0:
+                    wave = (wave + 1) % len(WAVES)
+                    enemies = [(x, y) for x, y, _, _ in WAVES[wave][1]]
+                    enemies += [HIDDEN] * (3 - len(enemies))
+                    emitter = 0
+            incoming, volleys, shots = step(incoming, volleys)
+            cadence, ships = WAVES[wave]
+            if not (tick & cadence):
+                slot = emitter
+                emitter = (emitter + 1) % len(ships)
+                x, y = enemies[slot]
+                if x < 64 and incoming[cursor][0] == DEAD:
+                    path = ships[slot][3 if tick & 4 else 2]
+                    incoming[cursor] = (x - 1, y + 2, path)
+                    emitted = (x - 1, y + 2, path, wave, tick)
+                    cursor = (cursor + 1) % len(incoming)
+            tick = (tick + 1) % 256
         player_hit = health > 0 and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
-        enemy_hit = box_visible(enemy) and bool(hit(enemy, shots, 2))
+        enemy_hits = [box_visible(enemy) and bool(hit(enemy, shots, 2)) for enemy in enemies]
         results.append({
-            "header": packed(((tick + 1) % 256, command, health, kills)),
-            "player": packed(player), "enemy": packed(enemy),
-            "flags": packed((255 * enemy_hit, 255 * player_hit)),
+            "header": packed((tick, command, health, kills)),
+            "player": packed(player), "enemies": [packed(enemy) for enemy in enemies],
+            "wave": wave, "restart": restart, "emitted": emitted,
+            "flags": [packed(255 * flag for flag in enemy_hits[:2]),
+                      packed((255 * enemy_hits[2], 255 * player_hit))],
             "volleys": [packed(volley) for volley in volleys],
             "incoming": [packed(dot) for dot in incoming],
             "shots": [packed(shot) for shot in shots],
@@ -106,9 +137,11 @@ def verify_logic(emulator, game, model, inputs, seconds):
         ("header", "+".join(f"{peek(label)}*{256**n}" for n, label in
                             enumerate(("gameTick", "lastControls", "playerHealth", "enemyKills")))),
         ("player", peek("playerXY", 2)),
-        ("enemy", peek("enemyXY", 2)),
-        ("flags", peek("collision_actual") + "+" + peek("player_hit") + "*256"),
+        ("wave", peek("waveIndex")),
+        ("flags", peek("collision_actual", 2)),
+        ("flags", peek("collision_actual", offset=2) + "+" + peek("player_hit") + "*256"),
     ]
+    fields += [("enemies", peek("enemy_boxes", 2, 2 * slot)) for slot in range(3)]
     fields += [("volleys", peek("volleys", 3, 3 * slot)) for slot in range(3)]
     fields += [("incoming", peek("enemy_records", 3, 3 * slot)) for slot in (0, 15, 31)]
     fields += [("shots", peek("player_shots", 2, 2 * slot)) for slot in (0, 1, 2, 8)]
@@ -120,7 +153,8 @@ def verify_logic(emulator, game, model, inputs, seconds):
         raise ValueError(f"{model}: captured {len(hits) // len(points)} of {len(oracle)} gameplay ticks")
     for tick, state in enumerate(oracle):
         row = hits[tick * len(points):(tick + 1) * len(points)]
-        sample = [state[key] for key in ("header", "player", "enemy", "flags")]
+        sample = [state[key] for key in ("header", "player", "wave")]
+        sample += state["flags"] + state["enemies"]
         sample += state["volleys"]
         sample += [state["incoming"][slot] for slot in (0, 15, 31)]
         sample += [state["shots"][slot] for slot in (0, 1, 2, 8)]
@@ -130,6 +164,8 @@ def verify_logic(emulator, game, model, inputs, seconds):
     return {
         "ticks": len(oracle), "kills": max(state["header"] >> 24 for state in oracle),
         "minimum_health": min(state["header"] >> 16 & 255 for state in oracle),
+        "waves_verified": sorted({state["wave"] + 1 for state in oracle}),
+        "restarts_verified": sum(state["restart"] for state in oracle),
         "peak_enemy_dots": max(sum(dot % 256 != DEAD for dot in state["incoming"]) for state in oracle),
     }
 
@@ -145,7 +181,7 @@ def verify_gameplay_video(emulator, replay, model):
     # starts to move. The ships and bullets must appear in the same frame.
     for state in expected(REPLAY)[6:43]:
         px, py = state["player"] % 256, state["player"] // 256
-        ex, ey = state["enemy"] % 256, state["enemy"] // 256
+        ex, ey = state["enemies"][0] % 256, state["enemies"][0] // 256
         cyan_x, cyan_y = state["shots"][0] % 256, state["shots"][0] // 256
         yellow_x, yellow_y = state["incoming"][0] % 256, (state["incoming"][0] >> 8) & 255
         if ex >= 64 or cyan_x == DEAD or yellow_x == DEAD:
@@ -196,31 +232,82 @@ def verify_dense_pool(emulator, game, model):
 def verify_keyboard(emulator, game, model):
     # ZEsarUX feeds these as real matrix presses through its null driver.
     spool = game / f"keyboard-{model}.txt"
-    spool.write_bytes(b"poq a" * 22)
+    spool.write_bytes(b"poq a\r" * 22)
     symbols = read_symbols(game / "main.sym")
     point = f"PC={symbols['controlsReady']:04X}H"
-    log = breakpoint_log(emulator, game / "main.tap", model, 14, [(point, "A")],
+    reset = f"PC={symbols['restartGame']:04X}H"
+    log = breakpoint_log(emulator, game / "main.tap", model, 14, [(point, "A"), (reset, "A")],
                          fast_autoload=True, keyboard_spool=spool)
     hits = HIT.findall(log)
     seen = {int(mask) for condition, mask in hits if condition == point}
     if (len(hits) != log.count("Catch breakpoint:")
-            or not {RIGHT, LEFT, UP, DOWN, FIRE} <= seen):
+            or not {RIGHT, LEFT, UP, DOWN, FIRE, RESTART} <= seen
+            or not any(condition == reset for condition, _ in hits)):
         raise ValueError(f"{model}: keyboard matrix test observed {sorted(seen)}")
     return sorted(seen)
 
 
-def verify(emulator, stock, game, replay, model, seconds, audio):
+def verify_rewind(emulator, replay, model):
+    symbols = read_symbols(replay / "main.sym")
+    point = f"PC={symbols['halt2']:04X}H"
+    index = symbols["sourceTileMapReadIndex"]
+    scroll = symbols["tileMapScroll_H"]
+    expressions = [f"PEEKW({index:04X}H)*256+PEEK({scroll:04X}H)"]
+    width = symbols["tileMapWidth"]
+    for column in (0, width // 2):
+        for first in (0, 3):
+            cells = [symbols["tileMap"] + width * row + column for row in range(first, first + 3)]
+            expressions.append("+".join(f"PEEK({cell:04X}H)*{256**n}" for n, cell in enumerate(cells)))
+    for tile in (3, 12, 13, 28, 29):
+        expressions.append(f"PEEKW({symbols['tilesLUT'] + 2 * tile:04X}H)")
+    points = [(f"{point} AND {n}={n}", expression) for n, expression in enumerate(expressions, 1)]
+    log = breakpoint_log(emulator, replay / "main.tap", model, 120, points, fast_autoload=True)
+    hits = HIT.findall(log)
+    windows = [n for n, row in enumerate(expected(REPLAY)) if row["restart"]]
+    span = 24
+    if len(hits) != log.count("Catch breakpoint:") or len(hits) // len(points) < windows[-1] + span + 1:
+        raise ValueError(f"{model}: rewind trace captured only {len(hits) // len(points)} game ticks")
+    groups = []
+    for start in range(0, len(hits) - len(points) + 1, len(points)):
+        row = hits[start:start + len(points)]
+        if any(observed != wanted for (observed, _), (wanted, _) in zip(row, points)):
+            raise ValueError(f"{model}: rewind trace markers are out of order")
+        groups.append(tuple(int(value) for _, value in row))
+    for tick in windows:
+        if groups[tick][0] % 256 != 0 or groups[tick + 1:tick + span + 1] != groups[:span]:
+            raise ValueError(f"{model}: restart at tick {tick + 1} did not rewind the barrel scroll and tile animation")
+    return {"restarts": len(windows), "matching_scrolled_ticks_per_restart": span}
+
+
+def verify_wave_fire(emulator, replay, model):
+    symbols = read_symbols(replay / "main.sym")
+    wave, tick = symbols["waveIndex"], symbols["gameTick"]
+    point = f"PC={symbols['enemyShotEmitted']:04X}H"
+    # B/C are the emitted X/Y, D is the trajectory index before its first step.
+    expression = f"B+C*64+D*512+PEEK({wave:04X}H)*32768+PEEK({tick:04X}H)*131072"
+    shots = [row["emitted"] for row in expected(REPLAY) if row["emitted"] is not None]
+    wanted = [(point, str(x + 64 * y + 512 * path + 32768 * w + 131072 * t)) for x, y, path, w, t in shots]
+    log = breakpoint_log(emulator, replay / "main.tap", model, 65, [(point, expression)], fast_autoload=True)
+    hits = HIT.findall(log)
+    if hits[:len(wanted)] != wanted or len(hits) != log.count("Catch breakpoint:"):
+        raise ValueError(f"{model}: wave fire trace differs from the reference, captured {len(hits)} emissions")
+    return {"emissions_verified": len(wanted), "trajectories_verified": sorted({path // 8 for _, _, path, _, _ in shots})}
+
+
+def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio):
     # Bound concurrent headless runs on the user's machine.
     with ThreadPoolExecutor(max_workers=3) as pool:
         reference = pool.submit(capture, emulator, stock, model, seconds, paging=True)
-        raster = pool.submit(capture, emulator, replay, model, seconds, paging=True, scenery=True)
+        raster = pool.submit(capture, emulator, replay, model, replay_seconds, paging=True, scenery=True)
         live_raster = pool.submit(capture, emulator, game, model, seconds, paging=True, scenery=True)
-        played = pool.submit(verify_logic, emulator, replay, model, REPLAY, 48)
+        played = pool.submit(verify_logic, emulator, replay, model, REPLAY, 135)
         idle = pool.submit(verify_logic, emulator, game, model, IDLE, 32)
         art = pool.submit(verify_gameplay_video, emulator, replay, model)
         keyboard = pool.submit(verify_keyboard, emulator, game, model)
         dense_pool = pool.submit(verify_dense_pool, emulator, replay, model)
-        music = pool.submit(verify_audio, emulator, game, model, audio, True)
+        music = pool.submit(verify_audio, emulator, replay, model, audio, True)
+        scenery = pool.submit(verify_rewind, emulator, replay, model)
+        wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
         _, baseline = examine(reference.result(), model)
         report = {}
         for label, trace in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
@@ -231,11 +318,14 @@ def verify(emulator, stock, game, replay, model, seconds, audio):
                     raise ValueError(f"{model}: {label} Frame {phase} differs from the stock paging trace")
             report[label] = {"pairs": min(map(len, cases.values())),
                              "minimum_headroom": [min(margins[phase]) for phase in (1, 2)]}
+        if report["replay"]["pairs"] < len(REPLAY):
+            raise ValueError(f"{model}: replay paging trace ended before tick {len(REPLAY)}. Increase --replay-seconds.")
         report["replay"].update(played.result())
         report["replay"]["simultaneous_shots_verified"] = dense_pool.result()
         report["keyboard_idle"].update(idle.result())
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
-                "keyboard_masks": keyboard.result(), **music.result()}
+                "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
+                "wave_fire": wave_fire.result(), **music.result()}
 
 
 def main():
@@ -244,9 +334,10 @@ def main():
         parser.add_argument(f"--{arg}", required=arg != "output-tap", type=Path)
     parser.add_argument("--model", choices=MODELS)
     parser.add_argument("--seconds", type=int, default=115, help="raster capture time per build")
+    parser.add_argument("--replay-seconds", type=int, default=290, help="raster capture time for the longer replay")
     args = parser.parse_args()
-    if args.seconds < 1:
-        parser.error("--seconds must be positive")
+    if min(args.seconds, args.replay_seconds) < 1:
+        parser.error("Capture times must be positive")
     try:
         emulator, assembler = (path.resolve(strict=True) for path in (args.emulator, args.assembler))
         version = next(line for line in run([emulator, "--version"], emulator.parent).splitlines()
@@ -265,7 +356,8 @@ def main():
             install(game, assembler, audio, live=True)
             install(replay, assembler, audio, live=True, replay=REPLAY)
             models = (args.model,) if args.model else MODELS
-            results = [verify(emulator, stock, game, replay, model, args.seconds, audio) for model in models]
+            results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio)
+                       for model in models]
             tap = game / "main.tap"
             digest = hashlib.sha256(tap.read_bytes()).hexdigest()
             if args.output_tap:
