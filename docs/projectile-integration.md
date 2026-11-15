@@ -67,3 +67,5 @@ Add `--motion --fast-plot` to the banked command. Every game tick the Frame 1 sl
 | Minimum Frame 2 time remaining at `HALT` | 1,515 T-states | 1,512 T-states |
 
 The sequential plotter saves 1,038 T-states over the indexed moving plotter. Six T-states of padding preserve the phase of the next `HALT`. The moving fixture reseeds every 16 game ticks and keeps all shots within the viewport. Edge retirement and clipping remain covered by the standalone motion benchmark. The fixture uses diagnostic hitboxes and discards hit flags after checking them.
+
+Add `--whole-song` to trace all 5,120 AY ticks plus 32 after the loop restarts. On both models, the moving build matched the reference for all 5,152 ticks and restored page 0 after every banked playback call. The playback call took 265–1,549 T-states in Frame 1 and 265–1,261 T-states in Frame 2 across that capture.

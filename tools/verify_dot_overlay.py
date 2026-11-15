@@ -144,7 +144,53 @@ def verify_overlay_video(emulator, sample, model, moving=None):
     return len(last_frames)
 
 
-def check_overlay(emulator, sample, model, seconds, stock, scheduled, audio, phrases=False, moving=False, fast=False):
+def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seconds=0):
+    result = {}
+    symbols = read_symbols(sample / "main.sym")
+    symbols.update(tick_begin=symbols["soundTick"], tick_end=symbols["soundTickEnd"])
+    points = {
+        f"PC={symbols['soundSelect']:04X}H AND BC=FFFDH": ("select", "TSTATES*256+A"),
+        f"PC={symbols['soundWrite']:04X}H AND BC=BFFDH": ("data", "TSTATES*256+A"),
+    }
+    init, loop = loop_audio(audio)
+    if phrases:
+        for name in ("soundPageIn", "soundPageOut"):
+            points[f"PC={symbols[name]:04X}H AND BC=7FFDH"] = ("page", "TSTATES*256+A")
+        loop_packets = list(packets(loop))
+        if whole_song:
+            reference = [*audio, *audio[1:33]]
+            expected_wire = init + loop + b"".join(loop_packets[:32])
+        else:
+            reference = audio[:1025]
+            expected_wire = init + b"".join(loop_packets[:1024])
+    else:
+        reference = [audio[0], *audio[1:], *audio[1:]]
+        expected_wire = init + loop * 2
+    audio_seconds = max(245, seconds) if whole_song else (65 if phrases else 40)
+    capture = capture_ay(emulator, sample / "main.tap", symbols, model, audio_seconds,
+                         points, len(reference) - 1)
+    writes = [register_pairs(capture["initial_writes"])]
+    writes.extend(register_pairs(tick["writes"]) for tick in capture["ticks"])
+    verify_rows(writes, reference, model, expected_wire)
+    if phrases:
+        expected_pages = {0x11, 0x13} if model == "128k" else {0x14, 0x16}
+        visited = set()
+        for tick in capture["ticks"]:
+            (start, selected), (end, restored) = tick["pages"]
+            begin = tick["begin"] % FRAME
+            if selected not in expected_pages or restored != 0x10 or not begin < start < end < begin + tick["cost"]:
+                raise ValueError(f"{model}: AY paging escaped its game-logic tick")
+            visited.add(selected)
+        if visited != expected_pages:
+            raise ValueError(f"{model}: AY playback did not exercise both mapped banks")
+        result["audio_physical_banks"] = sorted(value & 7 for value in visited)
+    result["audio_ticks_verified"] = len(reference) - 1
+    result["audio_tick_cost_range"] = [cost + 27 for cost in capture["tick_cost_range"]]
+    return result
+
+
+def check_overlay(emulator, sample, model, seconds, stock, scheduled, audio, phrases=False, moving=False, fast=False,
+                  whole_song=False):
     markers = MARKERS + COLLISION_MARKERS if scheduled else MARKERS
     expected1 = list(AUDIO_MARKERS) if audio is not None else []
     expected2 = [*expected1, *MARKERS[:3]]
@@ -184,40 +230,9 @@ def check_overlay(emulator, sample, model, seconds, stock, scheduled, audio, phr
     result = {"profile": report, "overlay_tstates": sum(plot_costs), "player_shots": 9, "enemy_dots": 32,
               "collision_boxes": 16 if scheduled else 0, "verified_video_frames": verified_video_frames}
     if audio is not None:
-        symbols = read_symbols(sample / "main.sym")
-        symbols.update(tick_begin=symbols["soundTick"], tick_end=symbols["soundTickEnd"])
-        points = {
-            f"PC={symbols['soundSelect']:04X}H AND BC=FFFDH": ("select", "TSTATES*256+A"),
-            f"PC={symbols['soundWrite']:04X}H AND BC=BFFDH": ("data", "TSTATES*256+A"),
-        }
-        init, loop = loop_audio(audio)
-        if phrases:
-            for name in ("soundPageIn", "soundPageOut"):
-                points[f"PC={symbols[name]:04X}H AND BC=7FFDH"] = ("page", "TSTATES*256+A")
-            reference = audio[:1025]
-            expected_wire = init + b"".join(list(packets(loop))[:1024])
-        else:
-            reference = [audio[0], *audio[1:], *audio[1:]]
-            expected_wire = init + loop * 2
-        capture = capture_ay(emulator, sample / "main.tap", symbols, model, 65 if phrases else 40,
-                             points, len(reference) - 1)
-        writes = [register_pairs(capture["initial_writes"])]
-        writes.extend(register_pairs(tick["writes"]) for tick in capture["ticks"])
-        verify_rows(writes, reference, model, expected_wire)
-        if phrases:
-            expected_pages = {0x11, 0x13} if model == "128k" else {0x14, 0x16}
-            visited = set()
-            for tick in capture["ticks"]:
-                (start, selected), (end, restored) = tick["pages"]
-                begin = tick["begin"] % FRAME
-                if selected not in expected_pages or restored != 0x10 or not begin < start < end < begin + tick["cost"]:
-                    raise ValueError(f"{model}: AY paging escaped its game-logic tick")
-                visited.add(selected)
-            if visited != expected_pages:
-                raise ValueError(f"{model}: AY playback did not exercise both mapped banks")
-            result["audio_physical_banks"] = sorted(value & 7 for value in visited)
-        result["audio_ticks_verified"] = len(reference) - 1
-        result["audio_tick_cost_range"] = [min(audio_costs), max(audio_costs)]
+        result.update(verify_audio(emulator, sample, model, audio, phrases, whole_song, seconds))
+        if not whole_song:
+            result["audio_tick_cost_range"] = [min(audio_costs), max(audio_costs)]
     if moving:
         result["motion_tstate_range"] = [min(motion_costs), max(motion_costs)]
         result["projectile_motion_phases_verified"] = verify_state(emulator, sample, model, scenario)
@@ -235,6 +250,7 @@ def main():
     parser.add_argument("--collision", action="store_true", help="replace large sprites with fixed-time collision checks")
     parser.add_argument("--motion", action="store_true", help="advance a bounded moving fixture and verify its hit flags")
     parser.add_argument("--fast-plot", action="store_true", help="use the linear position iterator with --motion")
+    parser.add_argument("--whole-song", action="store_true", help="trace all banked AY ticks and 32 ticks after wrap")
     parser.add_argument("--output-tap", type=Path, help="save the verified experimental TAP")
     audio_mode = parser.add_mutually_exclusive_group()
     audio_mode.add_argument("--audio-reference", type=Path, help="play the 256-tick prefix from the AY reference benchmark")
@@ -246,6 +262,8 @@ def main():
         parser.error("--motion uses the scheduled collision checks, so it requires --collision")
     if args.fast_plot and not args.motion:
         parser.error("--fast-plot is measured with the moving fixture, so it requires --motion")
+    if args.whole_song and args.phrase_reference is None:
+        parser.error("--whole-song requires --phrase-reference")
     try:
         emulator = args.emulator.resolve(strict=True)
         assembler = args.assembler.resolve(strict=True)
@@ -262,6 +280,8 @@ def main():
                 raise ValueError("Expected a verified AY reference from this emulator version")
             case = source["results"][0]
             minimum = 1024 if phrases else 256
+            if args.whole_song and not source.get("through_loop"):
+                raise ValueError("Whole-song verification needs a reference recorded with --through-loop")
             if len(case["ticks"]) < minimum:
                 raise ValueError(f"The AY reference needs at least {minimum} ticks")
             audio = [register_pairs(case["initial_writes"])]
@@ -271,7 +291,7 @@ def main():
             sample = build_overlay(args.archive, assembler, Path(directory), scheduled=args.collision, audio=audio,
                                    phrases=phrases, moving=args.motion, fast=args.fast_plot)
             results = [check_overlay(emulator, sample, model, args.seconds, baselines[model], args.collision, audio,
-                                     phrases=phrases, moving=args.motion, fast=args.fast_plot)
+                                     phrases=phrases, moving=args.motion, fast=args.fast_plot, whole_song=args.whole_song)
                        for model in models]
             if args.output_tap is not None:
                 shutil.copyfile(sample / "main.tap", args.output_tap)
