@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 
-from benchmark_dots import CYAN, MODELS, ROW_BYTES, VIEWPORT_OFFSET, YELLOW, fixture
+from benchmark_dots import MODELS, ROW_BYTES, VIEWPORT_OFFSET, YELLOW, fixture
 from trace_zesarux import trace
 from verify_zesarux_raster import run
 
@@ -40,9 +40,8 @@ def prepare(directory, count, name):
     boxes, players, enemies = scenario(count, name)
     fixture(directory, players, enemies)
     (directory / "boxes.bin").write_bytes(bytes(axis for box in boxes for axis in box))
-    for colour, label in ((CYAN, "cyan"), (YELLOW, "yellow")):
-        table = bytes(int(pair % 8 == colour) + 2 * int(pair // 8 % 8 == colour) for pair in range(256))
-        (directory / f"{label}_lut.bin").write_bytes(table)
+    table = bytes(int(pair % 8 == YELLOW) + 2 * int(pair // 8 % 8 == YELLOW) for pair in range(256))
+    (directory / "yellow_lut.bin").write_bytes(table)
 
     def intersects(box, shots, shot_width):
         x, y = box

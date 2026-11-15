@@ -69,8 +69,39 @@ verify_results:
 probe_cyan:
     ld bc,cyan_layer+VIEWPORT_OFFSET
     call box_address
-    ld d,high cyan_lut
-    jr probe_fields
+    ld bc,ROW_BYTES-2
+    jr c,probe_cyan_odd
+
+    ; Before yellow is drawn, colour bit 2 can only come from cyan. OR the
+    ; two full attribute bytes together, then check the selected edge field.
+    dup BOX_WIDTH
+        ld a,(hl)
+        inc hl
+        or (hl)
+        and #24
+        ret nz
+        inc hl
+        ld a,(hl)
+        and #04
+        ret nz
+        add hl,bc
+    edup
+    ret
+probe_cyan_odd:
+    dup BOX_WIDTH
+        ld a,(hl)
+        and #20
+        ret nz
+        inc hl
+        ld a,(hl)
+        inc hl
+        or (hl)
+        and #24
+        ret nz
+        add hl,bc
+    edup
+    ret
+
 probe_yellow:
     ld bc,yellow_layer+VIEWPORT_OFFSET
     call box_address
@@ -169,7 +200,6 @@ row_offsets:
         dw ROW_BYTES*row
     edup
     align 256
-cyan_lut: incbin "cyan_lut.bin"
 yellow_lut: incbin "yellow_lut.bin"
 cyan_layer: incbin "expected_players.bin"
 yellow_layer: incbin "expected_enemies.bin"
