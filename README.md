@@ -59,6 +59,8 @@ python tools/profile_ringo8.py --emulator <zesarux.exe> --assembler <sjasmplus.e
 
 The profiler verifies the pinned TAP, recaptures the raster probe, and emits JSON for both models. It requires all 256 phases of the sample's built-in motion. Increase `--seconds` if the host captures too few frames. Add `--full` to retain every routine boundary and paging write, including the emulator frame T-state, scanline and T-state within that scanline. The default report includes one complete pair, routine duration ranges and the latch timing range of each paging write across the capture. See [the timing baseline](docs/timing-baseline.md) for measurements and timestamp validation.
 
+The [dot plotting benchmark](docs/dot-plotting.md) verifies the packed attribute fields and measures the cost of drawing nine player shots with 16, 24 or 32 enemy dots.
+
 ## Blokius WIP audit
 
 `Blokius - sprite manager wip 1.zip` rebuilt headlessly with SjASMPlus 1.20.2 using the archive's preconverted assets. The generated TAP and SNA matched the archived binaries byte for byte. The `game` directory contains `main.asm`, `spriteManager.asm`, `hotspotCollision.asm`, `barrelScroll.asm`, and `hud.asm`. Its `music/resources.a80` places the 1,617-byte player at 55000 and the 2,015-byte song at 57158 in bank 0. The player call in `main.asm` is commented out in this WIP. The original `meadows edge 1.vt2` was located alongside its numbered revisions.
