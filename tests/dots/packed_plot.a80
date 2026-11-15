@@ -47,7 +47,11 @@
     ; Aligned 2x1 shot. Retain BRIGHT and FLASH from the pair underneath.
     ld a,(hl)
     and #c0
-    or CYAN | (CYAN << 3)
+    ifdef LIVE_SHMUP
+        or CYAN | (7 << 3)     ; cyan left, white right
+    else
+        or CYAN | (CYAN << 3)
+    endif
     ld (hl),a
     ifdef OVERLAY_MOTION
         ld a,0
@@ -63,7 +67,11 @@
     inc hl
     ld a,(hl)
     and #f8
-    or CYAN
+    ifdef LIVE_SHMUP
+        or 7                   ; white right, in the next byte
+    else
+        or CYAN
+    endif
     ld (hl),a
 .next:
     NEXT_DOT 2

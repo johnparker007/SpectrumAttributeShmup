@@ -359,21 +359,21 @@ def verify_gameplay_video(emulator, replay, model):
     colours = {"magenta": (1, 0, 1), "cyan": (1, 1, 0), "yellow": (0, 1, 1), "white": (1, 1, 1)}
     pixels = {name: tuple(bytes(component * brightness for component in rgb) * 4 for brightness in (192, 255))
               for name, rgb in colours.items()}
-    sights = {colour: set() for colour in colours}
+    sights = {name: set() for name in ("magenta", "shot_even", "shot_odd", "yellow", "white")}
     reference = expected(REPLAY[:200])
     for state in reference:
         for xy in state["enemies"]:
             x, y = xy % 256, xy // 256
             if x <= 59:
-                sights["magenta"].add(((x + 3, y), (x + 1, y + 1)))
-        for cyan in state["shots"]:
-            x, y = cyan % 256, cyan >> 8
+                sights["magenta"].add(((x + 3, y, "magenta"), (x + 1, y + 1, "magenta")))
+        for shot in state["shots"]:
+            x, y = shot % 256, shot >> 8
             if x != DEAD:
-                sights["cyan"].add(((x, y), (x + 1, y)))
+                sights["shot_odd" if x % 2 else "shot_even"].add(((x, y, "cyan"), (x + 1, y, "white")))
         for dot in state["incoming"]:
             x, y = dot % 256, dot >> 8 & 255
             if x != DEAD:
-                sights["yellow"].add(((x, y),))
+                sights["yellow"].add(((x, y, "yellow"),))
     # At the start of an explosion its sprite holds the previous coordinates.
     for previous, state in zip(reference, reference[1:]):
         for slot, motion in enumerate(state["enemy_motion"]):
@@ -381,16 +381,17 @@ def verify_gameplay_video(emulator, replay, model):
                 xy = previous["enemies"][slot]
                 x, y = xy % 256, xy // 256
                 if x <= 59:
-                    sights["white"].add(((x, y), (x + 2, y), (x + 4, y), (x + 2, y + 4)))
+                    sights["white"].add(tuple((x + dx, y + dy, "white")
+                                              for dx, dy in ((0, 0), (2, 0), (4, 0), (2, 4))))
     observed = set()
     with video.open("rb") as recording:
         while frame := recording.read(WIDTH * HEIGHT * 3):
             if len(frame) != WIDTH * HEIGHT * 3:
                 raise ValueError(f"{model}: truncated gameplay video")
-            for colour in sights.keys() - observed:
+            for name in sights.keys() - observed:
                 if any(all(all(paper_row(frame, y * 4 + line)[x * 12:(x + 1) * 12] in pixels[colour]
-                               for line in range(4)) for x, y in witness) for witness in sights[colour]):
-                    observed.add(colour)
+                               for line in range(4)) for x, y, colour in witness) for witness in sights[name]):
+                    observed.add(name)
             if observed == sights.keys():
                 break
     if observed != sights.keys():
