@@ -255,9 +255,6 @@ enemyShotEmitted:
     include "aim_incoming.a80"
 
 checkPlayerContact:
-    ld a,(player_hit)
-    or a
-    ret nz                       ; a bullet already hit this game tick
     ld bc,(player_box)
     ld a,c
     cp HIDDEN_BOX
@@ -275,13 +272,19 @@ checkPlayerContact:
         sub b
         add a,4
         cp 9
-        jp c,.hit
+        jr nc,1f
+        ld hl,collision_actual+slot
+        jp .hit
 1:
     edup
     ret
 .hit:
     ld a,#ff
     ld (player_hit),a
+    ld a,(invincibleTicks)
+    or a
+    ret nz
+    ld (hl),#ff                  ; the first overlapping enemy shares the ram
     ret
 
 syncEnemyShips:

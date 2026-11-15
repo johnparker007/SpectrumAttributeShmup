@@ -68,8 +68,8 @@ collisionEnemy:
     inc de
     ld a,(de)
     sub h
-    add a,2                     ; the lower bullet is two rows below the upper one
-    cp 7
+    add a,PLAYER_PAIR_GAP        ; the two vertical hit ranges meet across a 5-dot box
+    cp 5+PLAYER_PAIR_GAP
     sbc a,a
     and l
     ld l,a

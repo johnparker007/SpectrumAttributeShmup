@@ -3,6 +3,7 @@
     define LIVE_SHMUP
     define OVERLAY_MOTION
 PLAYER_PAIRS equ 5
+PLAYER_PAIR_GAP equ 4
 
 start:
     di
@@ -30,9 +31,9 @@ start:
         jp nz,failed
     endm
 
-    CHECK_PAIR 13,12,6,12,#ff,0  ; Upper shot hits, lower shot cannot hit the next ship.
-    CHECK_PAIR 13,12,12,6,#ff,0  ; Lower shot hits, upper shot cannot hit the next ship.
-    CHECK_PAIR 13,12,13,7,0,#ff  ; The first ship misses the pair.
+    CHECK_PAIR 13,12,6,14,#ff,0  ; Upper shot hits, lower shot cannot hit the next ship.
+    CHECK_PAIR 13,12,14,6,#ff,0  ; Lower shot hits, upper shot cannot hit the next ship.
+    CHECK_PAIR 13,12,15,7,0,#ff  ; The first ship misses the pair.
     CHECK_PAIR #ff,0,10,10,0,0   ; A spent pair cannot wrap into a hit at the left edge.
 passed: halt
     nop

@@ -76,7 +76,7 @@ def move_dots(records):
 
 
 def pair_shots(x, y):
-    return ((x, y), (x, y + 2))
+    return ((x, y), (x, y + 4))
 
 
 def expected(inputs):
@@ -123,8 +123,8 @@ def expected(inputs):
                 elif command & FIRE and player[0] <= 57:
                     free = next((n for n, (x, _) in enumerate(pairs) if x == DEAD), None)
                     if free is not None:
-                        pairs[free] = (player[0] + 4, player[1] + 1)
-                        reload = 8
+                        pairs[free] = (player[0] + 2, player[1])
+                        reload = 3
             expired = set()
             for slot, (x, y) in enumerate(enemies):
                 if x == HIDDEN[0]:
@@ -152,7 +152,7 @@ def expected(inputs):
                 if not remaining:
                     remaining = ENEMY_SHIPS
                     wave = (wave + 1) % len(SHIP_Y)
-            pairs = [(x + 1 if x < 62 else DEAD, y) for x, y in pairs]
+            pairs = [(x + 3 if x + 3 < 63 else DEAD, y) for x, y in pairs]
             incoming = move_dots(incoming)
             if tick % 8 == 0:
                 spread_wait = max(0, spread_wait - 1)
@@ -176,8 +176,9 @@ def expected(inputs):
         visible = alive and (not invulnerable or invulnerable % 2)
         displayed = visible or player_explosion > 0
         bullet_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
-        contact = alive and any(box_visible(enemy) and abs(enemy[0] - player[0]) < 5
-                                and abs(enemy[1] - player[1]) < 5 for enemy in enemies)
+        contact_slot = next((n for n, enemy in enumerate(enemies) if alive and box_visible(enemy)
+                             and abs(enemy[0] - player[0]) < 5 and abs(enemy[1] - player[1]) < 5), None)
+        contact = contact_slot is not None
         player_hit = bullet_hit or contact
         enemy_hits = [False] * ENEMY_SHIPS
         for slot, enemy in enumerate(enemies):
@@ -186,6 +187,8 @@ def expected(inputs):
                     if x != DEAD and hit(enemy, pair_shots(x, y), 2):
                         pairs[n] = (DEAD, y)
                         enemy_hits[slot] = True
+        if contact and not invulnerable:
+            enemy_hits[contact_slot] = True
         # The observation point precedes both scanline writes in the Frame 2 slot.
         panel_delta = -1 if lives else 0 if player_explosion else 1
         results.append({
@@ -201,6 +204,7 @@ def expected(inputs):
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
             "contact": contact,
+            "contact_slot": contact_slot,
             "bullet_hit": bullet_hit,
             "pairs": [packed(pair) for pair in pairs],
             "incoming": [packed(dot) for dot in incoming],
@@ -282,9 +286,12 @@ def verify_logic(emulator, game, model, inputs, seconds):
         "peak_player_dots": max(sum(dot % 256 != DEAD for dot in state["shots"]) for state in oracle),
         "peak_visible_ships": max(sum(map(visible_enemy, state["enemies"])) for state in oracle),
         "player_explosions": sum(state["player_explosion"] == EXPLOSION_TICKS for state in oracle),
-        "contact_only_deaths": sum(previous["contact"] and not previous["bullet_hit"]
-                                   and state["player_explosion"] == EXPLOSION_TICKS
-                                   for previous, state in zip(oracle, oracle[1:])),
+        "mutual_ram_destructions": sum(
+            previous["contact"] and not previous["bullet_hit"]
+            and state["player_explosion"] == EXPLOSION_TICKS
+            and state["enemy_motion"][previous["contact_slot"]] >> 8 == EXPLOSION_TICKS
+            for previous, state in zip(oracle, oracle[1:])
+        ),
         "protected_contact_ticks": sum(state["contact"] and not state["bullet_hit"] and state["invincible"] > 0
                                        for state in oracle),
     }
@@ -581,8 +588,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         report["replay"].update(played.result())
         if report["replay"]["peak_player_dots"] != PLAYER_PAIRS * 2:
             raise ValueError(f"{model}: replay did not exercise all five player pairs")
-        if not report["replay"]["contact_only_deaths"] or not report["replay"]["protected_contact_ticks"]:
-            raise ValueError(f"{model}: replay did not exercise lethal and protected ship contact")
+        if not report["replay"]["mutual_ram_destructions"] or not report["replay"]["protected_contact_ticks"]:
+            raise ValueError(f"{model}: replay did not exercise mutual destruction and protected ship contact")
         report["keyboard_idle"]["simultaneous_enemy_ships_verified"] = formation.result()
         report["keyboard_idle"]["left_exit_positions_verified"] = left_exit.result()
         report["keyboard_idle"].update(idle.result())

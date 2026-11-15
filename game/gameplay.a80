@@ -7,6 +7,7 @@ HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 12
 EXPLOSION_TICKS equ 6
 PLAYER_PAIRS equ 5
+PLAYER_PAIR_GAP equ 4
 PROJECTILE_POOL_BYTES equ PLAYER_PAIRS*2+ENEMY_COUNT*3
 PLAYER_START equ 8+21*256
 STARTING_LIVES equ 3
@@ -153,10 +154,9 @@ firePlayer:
     ld a,(playerXY)
     cp 58
     ret nc                      ; no room for both dots past the nose
-    add a,4                      ; the mover advances one more dot this tick
+    add a,2                      ; the three-dot step starts the pair at the nose
     ld c,a
     ld a,(playerXY+1)
-    add a,2
     ld d,a
     ld hl,player_pairs
     ld b,PLAYER_PAIRS
@@ -167,13 +167,12 @@ firePlayer:
     inc hl
     inc hl
     djnz .find
-    ret                          ; keep old volleys until their slots are free
+    ret                          ; keep existing pairs until their slots are free
 .spawn:
     ld (hl),c
     inc hl
-    dec d                       ; upper shot is one dot above the centreline
     ld (hl),d
-    ld a,8
+    ld a,3                      ; four game ticks between launches
     ld (fireWait),a
     ret
 
@@ -183,6 +182,7 @@ movePlayerPairs:
         ld a,(hl)
         inc a
         jr z,1f
+        add a,2
         cp 63
         jr c,2f
         ld a,#ff
@@ -197,8 +197,7 @@ expandPlayerPairs:
     dup PLAYER_PAIRS, slot
         ld hl,(player_pairs+slot*2)
         ld (player_shots+slot*4),hl
-        inc h
-        inc h
+        dup PLAYER_PAIR_GAP : inc h : edup
         ld (player_shots+slot*4+2),hl
     edup
     ret
