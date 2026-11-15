@@ -79,6 +79,10 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
             if "begin" not in current or "cost" in current:
                 raise ValueError(f"{model}: PT3 loop marker outside playback")
             current["loop"] = value
+        elif kind == "page":
+            if pending is not None:
+                raise ValueError(f"{model}: paging during an AY register write")
+            current.setdefault("pages", []).append(divmod(value, 256))
         else:
             clock, byte = divmod(value, 256)
             if pending is None or clock <= pending[1]:

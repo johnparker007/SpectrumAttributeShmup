@@ -34,3 +34,36 @@ Add `--audio-reference <reference.json>` to the same command. The verifier uses 
 | Minimum Frame 2 time remaining at `HALT` | 275 T-states | 272 T-states |
 
 The minima include the test's attribute and hit-flag checks. The Frame 1 minimum also includes one-time AY initialization. Both models passed the video checks with music running. The music prefix cannot by itself establish whole-song storage or worst-case performance. The separate [projectile motion benchmark](projectile-motion.md) gives the update cost for a moving pool.
+
+### Banked whole-song data
+
+Use `--phrase-reference <full-reference.json>` in place of `--audio-reference` to assemble the complete tune. Add `--output-tap <file.tap>` to keep the verified experimental image. Generate the full reference with `benchmark_ay.py --through-loop`.
+
+The repeatable experimental build is 122,732 bytes with SHA-256 `80671c6d51f230a71202289c839cb7953b382e2de4e440f2853fdac90783e991`.
+
+The renderer variant keeps the 4,770-byte recipe in bank 0, above the sprite data. It puts the two literal pools, 4,086 and 14,193 bytes, in logical banks 1 and 3. Stock loader remapping puts them in physical banks 1 and 3 on 128K, and banks 4 and 6 on +2A. Each 50 Hz tick pages the literal bank in and restores page 0 before returning. These two extra writes take place inside the game-logic slot with the normal screen selected. Render-time paging retains the stock timestamps. The hit-flag check moves to Frame 1 to leave space for the more expensive banked playback in Frame 2.
+
+| Banked combined result | 128K | +2A |
+| --- | ---: | ---: |
+| Complete frame pairs with stock render-time paging signatures | 700 | 699 |
+| AY ticks compared in the engine, spanning both banks | 1,024 | 1,024 |
+| AY playback call duration | 265–1,549 T-states | 265–1,549 T-states |
+| Minimum Frame 1 time remaining at `HALT` | 6,984 T-states | 6,937 T-states |
+| Minimum Frame 2 time remaining at `HALT` | 623 T-states | 620 T-states |
+
+The [standalone player](ay-playback.md#banked-whole-song-playback) verifies all 5,120 song ticks. The combined experiment verifies the first 1,024, including the bank transition, and the visible bullet checks.
+
+### Moving shots
+
+Add `--motion --fast-plot` to the banked command. Every game tick the Frame 1 slot advances the projectile pool, updates the plotting coordinates and clears the collision flags for Frame 2. The schedule checks all 16 fixture phases against a separate reference, including the shot coordinates and hit flags. The video check uses the corresponding moving positions for eight captured frames.
+
+| Moving result | 128K | +2A |
+| --- | ---: | ---: |
+| Complete frame pairs with stock render-time paging signatures | 752 | 758 |
+| AY ticks compared in the engine, spanning both banks | 1,024 | 1,024 |
+| Frame 1 projectile update | 2,692–6,744 T-states | 2,692–6,744 T-states |
+| Frame 2 overlay plotting | 9,552 T-states | 9,552 T-states |
+| Minimum Frame 1 time remaining at `HALT` | 2,088 T-states | 2,041 T-states |
+| Minimum Frame 2 time remaining at `HALT` | 1,515 T-states | 1,512 T-states |
+
+The sequential plotter saves 1,038 T-states over the indexed moving plotter. Six T-states of padding preserve the phase of the next `HALT`. The moving fixture reseeds every 16 game ticks and keeps all shots within the viewport. Edge retirement and clipping remain covered by the standalone motion benchmark. The fixture uses diagnostic hitboxes and discards hit flags after checking them.

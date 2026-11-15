@@ -1,0 +1,82 @@
+; Bank 0 holds the recipe. The literal banks are logical pages 1 and 3.
+; Ringo-8 loads them into physical 1/3 on 128K and 4/6 on +2A. All
+; executable code and paging state stay in the fixed second RAM slot.
+soundTickBody:
+    ld a,(phrase_left)
+    or a
+    jp z,sound_phrase_header
+    jp sound_packet_ready
+
+sound_phrase_header:
+    ld hl,(phrase_next)
+    ld de,testAudioRecipeEnd
+    or a
+    sbc hl,de
+    jp z,sound_phrase_wrap
+    add hl,de
+    jp sound_phrase_read
+sound_phrase_wrap:
+    ld hl,testAudioRecipe+3     ; skip one-tick initialization descriptor
+    ld a,0
+    nop                         ; same 21 T-states as ADD HL,DE / JP
+sound_phrase_read:
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld a,(hl)
+    inc hl
+    ld (phrase_left),a
+    ld (phrase_next),hl
+    ld a,d
+    rlca
+    rlca
+    and 3
+    add a,a
+    inc a
+    ld l,a
+    ld h,high pageTable
+    ld a,(hl)
+    ld (phrase_page),a
+    set 6,d
+    set 7,d
+    ld (phrase_packet),de
+
+sound_packet_ready:
+    ld a,(phrase_left)
+    dec a
+    ld (phrase_left),a
+    ld bc,#7ffd
+    ld a,(phrase_page)
+soundPageIn:
+    out (c),a
+    ld hl,(phrase_packet)
+    ld c,#fd
+sound_packet_next:
+    ld a,(hl)
+    inc hl
+    cp #ff
+    jr z,sound_packet_end
+    ld b,#ff
+soundSelect:
+    out (c),a
+    ld b,#bf
+    ld a,(hl)
+    inc hl
+soundWrite:
+    out (c),a
+    inc de                      ; 96 Ts per register, independent of the value
+    jr sound_packet_next
+sound_packet_end:
+    ld (phrase_packet),hl
+    ld bc,#7ffd
+    ld a,#10
+soundPageOut:
+    out (c),a
+    ld a,r                     ; same cost modulo four as the unbanked body
+    ret
+
+phrase_next: dw testAudioRecipe
+phrase_packet: dw 0
+phrase_page: db #10
+phrase_left: db 0

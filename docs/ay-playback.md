@@ -29,4 +29,4 @@ Repeated runs of complete tick packets share one literal copy. Each three-byte r
 
 On both models, the verifier compared every write of the 5,120-tick song and the first 32 ticks after the reconstructed loop against the corresponding captured reference register states and envelope sequence. The loop starts at the first music tick and restores its state without consuming an initialization frame. Native tracker writes after its first loop boundary were outside the reference capture. The complete recipe and literal data take 23,049 bytes versus 49,769 for the loop-ready unpacked stream. The stand-alone banked player took 221–1,424 T-states per tick.
 
-The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) uses the first 256 music ticks. It initializes once, then loops without an extra initialization frame. A captured-audio comparison remains open.
+The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) verifies both a looping 256-tick prefix and banked playback with the complete track loaded. A captured-audio comparison remains open.

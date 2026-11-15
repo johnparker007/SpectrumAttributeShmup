@@ -8,7 +8,20 @@ soundScroll:
     ld (sound_initialized),a
     call soundTickBody          ; initialize from the first packet in Frame 1
     ld a,0                     ; match the recurring branch modulo four
+    ifdef OVERLAY_PHRASES
+        inc de
+        jp sound_initialized_tick
+    endif
 sound_initialized_continue:
+    ifdef OVERLAY_PHRASES
+        ifndef OVERLAY_MOTION
+            ifdef SCHEDULE_COLLISION
+                call verifyCollision
+                ld a,0         ; 841-T-state passing check plus 7 keeps HALT phase
+            endif
+        endif
+    endif
+sound_initialized_tick:
     ld a,0
     call soundTick
     ld a,r                      ; complete a multiple of four with JP
@@ -19,6 +32,9 @@ soundTick:
 soundTickEnd:
     ret
 
+    ifdef OVERLAY_PHRASES
+    include "engine_phrases.a80"
+    else
 soundTickBody:
     ld hl,(sound_cursor)
     ld c,#fd
@@ -51,4 +67,5 @@ sound_store:
     ret
 
 sound_cursor: dw testAudioStream
+    endif
 sound_initialized: db 0

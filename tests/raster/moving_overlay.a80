@@ -1,0 +1,39 @@
+; Move all projectiles in the existing Frame 1 game slot. A 16-tick fixture
+; repeats bounded active positions; the scope of the clip path is tested
+; separately by benchmark_motion.py.
+    include "motion_step.a80"
+
+motionStep:
+    call moveSprites
+motionBegin:
+    ld a,(motion_phase)
+    inc a
+    and 15
+    ld (motion_phase),a
+    jp z,motion_reset
+    MOVE_VOLLEYS
+motionEnemies:
+    MOVE_ENEMIES
+    ld a,r                     ; preserve the next HALT's four-T-state phase
+motionEnd:
+    ret
+motion_reset:
+    ld hl,motion_seed
+    ld de,enemy_records
+    ld bc,motion_seed_end-motion_seed
+    ldir
+    jp motionEnd
+
+    MOTION_WRITE_SHOT
+
+motion_phase: db 15
+motion_seed: incbin "motion_seed.bin"
+motion_seed_end:
+enemy_records: defs 32*3
+volleys: defs 3*3
+player_positions: defs 9*2
+enemy_positions equ enemy_records
+player_shots equ player_positions
+
+    align 256
+trajectories: incbin "trajectories.bin"

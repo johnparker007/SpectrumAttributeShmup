@@ -13,11 +13,16 @@ overlayEntry:
     endif
 overlayBegin:
     ld hl,(attrPointer)
-    ld (viewport),hl
+    ifdef OVERLAY_FAST_PLOT
+        ld (dotViewport+1),hl
+    else
+        ld (viewport),hl
+    endif
     PLOT_PLAYERS
 overlayEnemies:
     PLOT_ENEMIES
 overlayEnd:
+    ifndef OVERLAY_MOTION
     ; Confirm untouched lane selection at two opposite viewport edges.
     ld hl,(viewport)
     ld a,(hl)
@@ -43,10 +48,16 @@ overlayEnd:
     jp nz,overlayFailed
 
     ifdef SCHEDULE_COLLISION
-        call verifyCollision
-        ld a,0                 ; 841-T-state passing check plus 7 keeps HALT phase
+        ifndef OVERLAY_PHRASES
+            call verifyCollision
+            ld a,0             ; 841-T-state passing check plus 7 keeps HALT phase
+        endif
     endif
     ld a,0                     ; preserve the stock four-T-state HALT phase
+    endif
+    ifdef OVERLAY_FAST_PLOT
+        inc de                 ; 1,038 T-states saved, plus 6 preserves HALT phase
+    endif
     jp mainLoop
 
 overlayFailed:
@@ -57,8 +68,12 @@ overlayFailed:
     DOT_ROW_OFFSETS
 
 viewport: dw 0
+    ifdef OVERLAY_MOTION
+        include "moving_overlay.a80"
+    else
 player_positions: incbin "player_positions.bin"
 enemy_positions: incbin "enemy_positions.bin"
+    endif
 
     ifdef SCHEDULE_COLLISION
         include "fixed_collision.a80"

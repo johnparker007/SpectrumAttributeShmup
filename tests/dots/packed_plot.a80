@@ -1,8 +1,39 @@
-    macro PLOT_PLAYERS
-    ld ix,player_positions
-    ld b,9
-.loop:
+    macro PLOT_LIST listBase,listCount
+    ifdef OVERLAY_FAST_PLOT
+        ld de,listBase
+    else
+        ld ix,listBase
+    endif
+    ld b,listCount
+    endm
+
+    macro FETCH_DOT stride
+    ifdef OVERLAY_FAST_PLOT
+        ld a,(de)
+        inc de
+        ex af,af'              ; preserve X while loading Y
+        ld a,(de)
+        inc de
+        if stride=3
+            inc de
+        endif
+        exx                    ; preserve the list cursor and loop count
+    endif
     call dot_address
+    endm
+
+    macro NEXT_DOT stride
+    ifdef OVERLAY_FAST_PLOT
+        exx
+    else
+        dup stride : inc ix : edup
+    endif
+    endm
+
+    macro PLOT_PLAYERS
+    PLOT_LIST player_positions,9
+.loop:
+    FETCH_DOT 2
     jr c,.split
 
     ; Aligned 2x1 shot. Retain BRIGHT and FLASH from the pair underneath.
@@ -10,6 +41,10 @@
     and #c0
     or CYAN | (CYAN << 3)
     ld (hl),a
+    ifdef OVERLAY_MOTION
+        ld a,0
+        dup 5 : nop : edup     ; 27 Ts, matching the split shot
+    endif
     jr .next
 .split:
     ; Odd starting X spans the paper field and the next byte's ink field.
@@ -23,16 +58,18 @@
     or CYAN
     ld (hl),a
 .next:
-    inc ix
-    inc ix
+    NEXT_DOT 2
     djnz .loop
     endm
 
     macro PLOT_ENEMIES
-    ld ix,enemy_positions
-    ld b,ENEMY_COUNT
+    PLOT_LIST enemy_positions,ENEMY_COUNT
 .loop:
-    call dot_address
+    ifdef OVERLAY_MOTION
+        FETCH_DOT 3
+    else
+        FETCH_DOT 2
+    endif
     jr c,.paper
     ld a,(hl)
     and #f8
@@ -44,9 +81,15 @@
     and #c7
     or YELLOW << 3
     ld (hl),a
+    ifdef OVERLAY_MOTION
+        ld a,0                 ; match the even-X branch's jump cost
+    endif
 .next:
-    inc ix
-    inc ix
+    ifdef OVERLAY_MOTION
+        NEXT_DOT 3
+    else
+        NEXT_DOT 2
+    endif
     djnz .loop
     endm
 
@@ -54,16 +97,26 @@
 ; Carry is set for paper (odd X). Keep B for the outer loop's count.
     macro DOT_ADDRESS
 dot_address:
+    ifndef OVERLAY_FAST_PLOT
     ld a,(ix+1)
+    endif
     add a,a
     ld l,a
     ld h,high row_offsets
     ld e,(hl)
     inc l
     ld d,(hl)
+    ifdef OVERLAY_FAST_PLOT
+dotViewport: ld hl,0
+    else
     ld hl,(viewport)
+    endif
     add hl,de
-    ld a,(ix)
+    ifdef OVERLAY_FAST_PLOT
+        ex af,af'
+    else
+        ld a,(ix)
+    endif
     srl a
     ld e,a
     ld d,0

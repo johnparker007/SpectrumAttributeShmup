@@ -18,6 +18,11 @@
     sbc a,a
     and l
     ld l,a
+    ifdef OVERLAY_MOTION
+        if width=1
+            inc de             ; incoming record's trajectory byte
+        endif
+    endif
     ex af,af'
     or l
     ex af,af'

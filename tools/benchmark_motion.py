@@ -20,15 +20,7 @@ STEPS = ((0,) * 8, (0, -1) * 4, (0, 1) * 4, (0, 0, 0, -1) * 2, (0, 0, 0, 1) * 2,
 DEAD = 255
 
 
-def fixture(directory, count, edges):
-    enemies = [(12 + (i * 7) % 52, 10 + (i * 11) % 28, 8 * (i % len(STEPS)) + (3 * i + i // 8) % 8)
-               for i in range(count)]
-    volleys = [(12, 19, 4), (29, 27, 8), (47, 34, 12)]
-    if edges:
-        enemies[:4] = [(0, 20, 0), (11, 0, 5 * 8), (12, 47, 6 * 8), (DEAD, 10, 0)]
-        volleys = [(61, 0, 4), (51, 47, 3), (62, 20, 3)]
-    original = [*enemies, *volleys, *([(0, 0)] * 9)]
-    (directory / "initial.bin").write_bytes(bytes(value for record in original for value in record))
+def step(enemies, volleys):
     moved = []
     for x, y, index in enemies:
         if x in (0, DEAD):
@@ -50,6 +42,19 @@ def fixture(directory, count, edges):
         spread = age // 2
         next_volleys.append((x, y, age))
         shots.extend((x, py) if 0 <= py < 48 else (DEAD, 0) for py in (y - spread, y, y + spread))
+    return moved, next_volleys, shots
+
+
+def fixture(directory, count, edges):
+    enemies = [(12 + (i * 7) % 52, 10 + (i * 11) % 28, 8 * (i % len(STEPS)) + (3 * i + i // 8) % 8)
+               for i in range(count)]
+    volleys = [(12, 19, 4), (29, 27, 8), (47, 34, 12)]
+    if edges:
+        enemies[:4] = [(0, 20, 0), (11, 0, 5 * 8), (12, 47, 6 * 8), (DEAD, 10, 0)]
+        volleys = [(61, 0, 4), (51, 47, 3), (62, 20, 3)]
+    original = [*enemies, *volleys, *([(0, 0)] * 9)]
+    (directory / "initial.bin").write_bytes(bytes(value for record in original for value in record))
+    moved, next_volleys, shots = step(enemies, volleys)
     expected = [*moved, *next_volleys, *shots]
     (directory / "expected.bin").write_bytes(bytes(value for record in expected for value in record))
     (directory / "trajectories.bin").write_bytes(bytes(step % 256 for path in STEPS for step in path))

@@ -13,4 +13,4 @@ The test compares all state bytes and expanded shot coordinates against a separa
 | Full pool, including the three volleys | 4,085 | 5,373 | 6,661 |
 | Edge and inactive fixture, including the three volleys | 3,826 | 5,114 | 6,402 |
 
-The three volleys take 1,478 T-states in the full case. The 32-dot pool now takes 5,183, down from 7,834 with an indexed four-byte record. The full motion workload leaves 3,728 T-states against the narrower stock Frame 1 headroom before adding audio or game events. The mover remains a standalone fixture. Connecting its inactive slots and live positions to the fixed-time renderer and collision schedule needs an integrated test.
+The three volleys take 1,478 T-states in the full case. The 32-dot pool now takes 5,183, down from 7,834 with an indexed four-byte record. The full motion workload leaves 3,728 T-states against the narrower stock Frame 1 headroom before adding audio or game events. The [moving renderer fixture](projectile-integration.md#moving-shots) verifies active slots and their collision flags with 50 Hz playback running. This standalone test also exercises clipping, retirement and inactive slots.

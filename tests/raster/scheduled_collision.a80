@@ -4,7 +4,11 @@
 attrBufferCorrection: ld hl,0
     ld sp,collision_stack_top
     call collisionInit         ; initialize and scan the first two enemy dots
-    ld bc,833
+    ifdef OVERLAY_MOTION
+        ld bc,821
+    else
+        ld bc,833
+    endif
     call DELAY
     exx
     jp collision_shadow
@@ -16,7 +20,11 @@ collision_shadow:
     out (c),h
     exx
     call collisionPair         ; one enemy box and two dots against the player
-    ld bc,366
+    ifdef OVERLAY_MOTION
+        ld bc,354
+    else
+        ld bc,366
+    endif
     call DELAY
     exx
     jp collision_normal
@@ -30,7 +38,11 @@ collision_normal:
     dec iyl
     jr z,collision_last
     call collisionPair
-    ld bc,415
+    ifdef OVERLAY_MOTION
+        ld bc,403
+    else
+        ld bc,415
+    endif
     call DELAY
     exx
     jp collision_shadow
