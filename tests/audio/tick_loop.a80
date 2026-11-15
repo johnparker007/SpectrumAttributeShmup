@@ -1,0 +1,29 @@
+; Call playback_init once and playback_tick once per video interrupt.
+    org #8000
+
+start:
+    di
+    ld sp,#bd00
+    call playback_init
+    ld hl,#be00
+    ld de,#be01
+    ld bc,256
+    ld (hl),#bd
+    ldir
+    ld a,#be
+    ld i,a
+    im 2
+    ei
+
+next_frame:
+    halt
+    nop                         ; trace the call after the HALT has released
+tick_begin:
+    call playback_tick
+tick_end:
+    jr next_frame
+
+    org #bdbd
+interrupt:
+    ei
+    ret
