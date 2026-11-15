@@ -2,7 +2,7 @@
 
 Use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. Press **Enter** to restart at any time. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. Hold Space to fire up to three simultaneous volleys, each expanding into three cyan shots. Shots retire at the edge of the 64×48 viewport.
 
-The waves cycle once the last opponent is destroyed or flies off the left edge. A cyan hit destroys an opponent. Incoming hits take one of the player's three health points and turn the border red during a 24-tick grace period. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
+The waves cycle once the last opponent is destroyed or flies off the left edge. A cyan hit destroys an opponent. Incoming hits take one of the player's three health points. The ship flashes white and green during the 24-tick grace period, just under a second at 25 Hz. Further contact during that period leaves health unchanged. Both sides use 5×5 hitboxes and projectiles stay in flight after a hit.
 
 | Wave | Formation | Yellow fire |
 | --- | --- | --- |
@@ -26,14 +26,16 @@ Generate the song reference with `benchmark_ay.py --through-loop`. The verifier 
 
 The HUD tests compare each bitmap update and its page restore against the replay's score, check decimal carries and saturation, and verify `000000` and `000100` in headless video. Across 1,630 video frames, the score changed three glyphs and wrote 24 bitmap scanlines to each screen bank. Both models measured 235 T-states for an active row, 72 for an idle call, up to 313 for a digit selection in the replay, and 392 for the attribute strip. These measurements include the calls. In the archived WIP, the sampled complete-glyph phases took 557 T-states and the decimal conversion phase took 760, excluding the phase dispatch and return.
 
+A separate replay crosses the opening wave's horizontal stream in all four movement directions. Each fresh crossing must set the collision flag and reduce health from three to two. The original HUD build at `67b2868` recorded damage in all four cases. Its border cue was cleared by the renderer at the start of each video frame. The current trace also checks the grace counter and sprite image through repeated overlaps. The video test detects the white ship silhouette in the playfield and rejects the original footage.
+
 | ZEsarUX 10.3 measurement | 128K | +2A |
 | --- | ---: | ---: |
-| Replay frame pairs with stock paging timestamps | 1,248 | 1,254 |
-| Keyboard-build frame pairs with stock paging timestamps | 423 | 420 |
-| Minimum Frame 1 replay margin at `HALT` | 1,057 T-states | 1,010 T-states |
+| Replay frame pairs with stock paging timestamps | 1,191 | 1,192 |
+| Keyboard-build frame pairs with stock paging timestamps | 401 | 397 |
+| Minimum Frame 1 replay margin at `HALT` | 1,042 T-states | 995 T-states |
 | Minimum Frame 2 replay margin at `HALT` | 473 T-states | 474 T-states |
 | Active projectile records checked in one frame | 41 | 41 |
 | Enemy shots checked at emission | 464 | 464 |
 | AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
 
-Both models agreed with the reference over 815 replayed game ticks and all seven trajectories used by the waves. Headless video showed both ship colours and both projectile colours together. Independently built TAPs matched SHA-256 `a97ed416849c92b4a11cab230b2a6e6ead8b14be75a0c382eaa47a21444af8cc`.
+Both models agreed with the reference over 815 replayed game ticks and all seven trajectories used by the waves. Headless video showed both ship colours and both projectile colours together. Independently built TAPs matched SHA-256 `dfba0dc3cde8cf5b682f841c6ed70f85a209e78d05c1ec147d0e75c895123a16`.

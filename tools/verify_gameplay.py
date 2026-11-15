@@ -26,6 +26,15 @@ REPLAY = ([0] * 6 + [FIRE] * 37 + [LEFT | UP | FIRE] * 32 + [RIGHT | DOWN | FIRE
           + [LEFT | UP] * 18 + [LEFT | RIGHT | UP | DOWN] * 9 + [0] * 60
           + [RESTART] * 4 + [0] * 535 + [RESTART | FIRE] * 4 + [FIRE] * 46)
 IDLE = [0] * 120
+APPROACH_STREAM = [RIGHT] * 16 + [DOWN] * 8
+CROSSING_CASES = {
+    "up": [UP] * 18,
+    "down": [0] * 26 + [UP] * 9 + [DOWN] * 18,
+    "left": [0] * 79 + [UP] * 6 + [LEFT] * 18,
+    "right": [0] * 22 + [UP] * 6 + [RIGHT] * 18,
+}
+CROSSINGS = [command for approach in CROSSING_CASES.values()
+             for command in [RESTART, *APPROACH_STREAM, *approach]]
 WAVES = (
     (0, ((52, 21, 0, 0),)),
     (1, ((54, 12, 16, 16), (57, 31, 8, 8))),
@@ -113,6 +122,7 @@ def expected(inputs):
             "header": packed((tick, command, health, kills)),
             "player": packed(player), "enemies": [packed(enemy) for enemy in enemies],
             "wave": wave, "restart": restart, "emitted": emitted,
+            "hit_wait": invulnerable,
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
             "volleys": [packed(volley) for volley in volleys],
@@ -140,6 +150,8 @@ def verify_logic(emulator, game, model, inputs, seconds):
         ("player", peek("playerXY", 2)),
         ("wave", peek("waveIndex")),
         ("score", peek("hudScore", 2)),
+        ("hit_wait", peek("hitWait")),
+        ("player_art", peek("sprite08", 2)),
         ("flags", peek("collision_actual", 2)),
         ("flags", peek("collision_actual", offset=2) + "+" + peek("player_hit") + "*256"),
     ]
@@ -156,7 +168,9 @@ def verify_logic(emulator, game, model, inputs, seconds):
     for tick, state in enumerate(oracle):
         row = hits[tick * len(points):(tick + 1) * len(points)]
         sample = [state[key] for key in ("header", "player", "wave")]
-        sample.append(int(str(state["header"] >> 24), 16))
+        wait = state["hit_wait"]
+        art = "playerHitArt" if wait and not wait & 4 else "playerArt"
+        sample += [int(str(state["header"] >> 24), 16), wait, symbols[art]]
         sample += state["flags"] + state["enemies"]
         sample += state["volleys"]
         sample += [state["incoming"][slot] for slot in (0, 15, 31)]
@@ -171,6 +185,50 @@ def verify_logic(emulator, game, model, inputs, seconds):
         "restarts_verified": sum(state["restart"] for state in oracle),
         "peak_enemy_dots": max(sum(dot % 256 != DEAD for dot in state["incoming"]) for state in oracle),
     }
+
+
+def verify_crossings(emulator, game, model):
+    verify_logic(emulator, game, model, CROSSINGS, 64)
+    reference = expected(CROSSINGS)
+    cursor = 0
+    directions = {"up": (UP, -256), "down": (DOWN, 256), "left": (LEFT, -1), "right": (RIGHT, 1)}
+    for name, approach in CROSSING_CASES.items():
+        end = cursor + 1 + len(APPROACH_STREAM) + len(approach)
+        rows = reference[cursor:end]
+        contact = next((index for index, row in enumerate(rows) if row["flags"][1] >> 8), None)
+        if contact is None or not 0 < contact < len(rows) - 1:
+            raise ValueError(f"{name}: replay does not capture a complete crossing")
+        command, delta = directions[name]
+        hit, damaged = rows[contact:contact + 2]
+        if (hit["wave"] != 0 or hit["header"] >> 8 & 255 != command
+                or hit["player"] - rows[contact - 1]["player"] != delta
+                or hit["header"] >> 16 & 255 != 3 or damaged["header"] >> 16 & 255 != 2
+                or damaged["hit_wait"] != 24):
+            raise ValueError(f"{name}: replay did not test a fresh hit while crossing the straight stream")
+        cursor = end
+    return list(CROSSING_CASES)
+
+
+def verify_damage_video(emulator, game, model):
+    video = game / f"damage-{model}.raw"
+    capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 20)
+    # Check the wing silhouette, including the transparent corners. Skip
+    # the centre row because a bullet can cover it during a hit.
+    shape = {0: " #   ", 1: " ### ", 3: " ### ", 4: " #   "}
+    positions = {(row["player"] % 256, row["player"] // 256)
+                 for row in expected(CROSSINGS) if row["hit_wait"] and not row["hit_wait"] & 4}
+    white = {bytes([level]) * 12 for level in (192, 255)}
+    size = WIDTH * HEIGHT * 3
+    with video.open("rb") as recording:
+        while frame := recording.read(size):
+            if len(frame) != size:
+                raise ValueError(f"{model}: truncated collision video")
+            for x, y in positions:
+                if all(all(paper_row(frame, (y + row) * 4 + line)[(x + col) * 12:(x + col + 1) * 12] in white
+                           for line in range(4)) == (pixel == "#")
+                       for row, pattern in shape.items() for col, pixel in enumerate(pattern)):
+                    return True
+    raise ValueError(f"{model}: player did not visibly flash after crossing the stream")
 
 
 def verify_gameplay_video(emulator, replay, model):
@@ -297,7 +355,7 @@ def verify_wave_fire(emulator, replay, model):
     return {"emissions_verified": len(wanted), "trajectories_verified": sorted({path // 8 for _, _, path, _, _ in shots})}
 
 
-def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio):
+def verify(emulator, stock, game, replay, crossing, model, seconds, replay_seconds, audio):
     # Bound concurrent headless runs on the user's machine.
     with ThreadPoolExecutor(max_workers=3) as pool:
         reference = pool.submit(capture, emulator, stock, model, seconds, paging=True)
@@ -314,6 +372,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         scores = [state["header"] >> 24 for state in expected(REPLAY)]
         hud_updates = pool.submit(check_hud_updates, emulator, replay, model, scores)
         hud_video = pool.submit(check_hud_video, emulator, replay, model)
+        hits = pool.submit(verify_crossings, emulator, crossing, model)
+        flash = pool.submit(verify_damage_video, emulator, crossing, model)
         _, baseline = examine(reference.result(), model)
         report = {}
         for label, trace in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
@@ -333,7 +393,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         hud = {**hud_updates.result(), "scores_seen_in_video": hud_video.result()}
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
-                "wave_fire": wave_fire.result(), "score_hud": hud, **music.result()}
+                "wave_fire": wave_fire.result(), "score_hud": hud,
+                "straight_stream_crossings": hits.result(), "damage_flash_seen": flash.result(), **music.result()}
 
 
 def main():
@@ -361,11 +422,13 @@ def main():
             stock = build(args.archive, assembler, root / "stock")
             game = Path(shutil.copytree(stock, root / "game"))
             replay = Path(shutil.copytree(stock, root / "replay"))
+            crossing = Path(shutil.copytree(stock, root / "crossing"))
             install(game, assembler, audio, live=True)
             install(replay, assembler, audio, live=True, replay=REPLAY)
+            install(crossing, assembler, audio, live=True, replay=CROSSINGS)
             assemble_arithmetic_probe(assembler, replay)
             models = (args.model,) if args.model else MODELS
-            results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio)
+            results = [verify(emulator, stock, game, replay, crossing, model, args.seconds, args.replay_seconds, audio)
                        for model in models]
             tap = game / "main.tap"
             digest = hashlib.sha256(tap.read_bytes()).hexdigest()

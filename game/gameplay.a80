@@ -9,8 +9,6 @@ HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 3
 
 gameInit:
-    ld hl,playerArt
-    ld (sprite08+SPRITE.IMAGE),hl
     ld hl,enemyArt
     dup WAVE_ENEMIES, slot
         ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
@@ -320,6 +318,16 @@ saveEnemyCursor:
     ret
 
 syncActors:
+    ; Show a hit in the playfield. The renderer owns the border colour.
+    ld hl,playerArt
+    ld a,(hitWait)
+    or a
+    jr z,.playerArtReady
+    bit 2,a
+    jr nz,.playerArtReady
+    ld hl,playerHitArt
+.playerArtReady:
+    ld (sprite08+SPRITE.IMAGE),hl
     ld hl,(playerXY)
     ld a,(playerHealth)
     or a
@@ -337,12 +345,6 @@ syncActors:
         ld (sprite09+slot*SPRITE+SPRITE.X),hl
         ld (sprite09+slot*SPRITE+SPRITE.DRAWX),hl
     edup
-    ld a,(hitWait)
-    or a
-    jr z,.clearBorder
-    ld a,2
-.clearBorder:
-    out (#fe),a
     ret
 
 restartGame:
@@ -461,6 +463,7 @@ initialPools:
     align 256
 trajectories: incbin "trajectories.bin"
 playerArt: incbin "player_art.bin"
+playerHitArt: incbin "player_hit_art.bin"
 enemyArt: incbin "enemy_art.bin"
 
     ifdef REPLAY_CONTROLS
