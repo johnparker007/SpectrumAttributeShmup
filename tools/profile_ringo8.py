@@ -41,7 +41,7 @@ FRAME_MARKERS = (
 )
 
 
-def collect(emulator, tap, symbols, model, seconds):
+def collect(emulator, tap, symbols, model, seconds, extra_markers=()):
     sym = read_symbols(symbols)
     markers = {
         "irq": sym["mainInterrupt"],
@@ -69,6 +69,7 @@ def collect(emulator, tap, symbols, model, seconds):
         "resume2": sym["mainLoop"] + 14,
         "logic2_begin": sym["mainLoop"] + 20,
     }
+    markers.update({name: sym[name] for name in extra_markers})
 
     breakpoints = {}
     for name, address in markers.items():

@@ -63,6 +63,8 @@ The [dot plotting benchmark](docs/dot-plotting.md) verifies the packed attribute
 
 The [collision benchmark](docs/bullet-collision.md) checks both bullet colours against 5×5 hitboxes and compares buffer probes with coordinate checks.
 
+The [large-sprite timing experiment](docs/large-sprite-slots.md) measures work that can fit between the stock paging writes when large-sprite drawing is removed.
+
 ## Blokius WIP audit
 
 `Blokius - sprite manager wip 1.zip` rebuilt headlessly with SjASMPlus 1.20.2 using the archive's preconverted assets. The generated TAP and SNA matched the archived binaries byte for byte. The `game` directory contains `main.asm`, `spriteManager.asm`, `hotspotCollision.asm`, `barrelScroll.asm`, and `hud.asm`. Its `music/resources.a80` places the 1,617-byte player at 55000 and the 2,015-byte song at 57158 in bank 0. The player call in `main.asm` is commented out in this WIP. The original `meadows edge 1.vt2` was located alongside its numbered revisions.

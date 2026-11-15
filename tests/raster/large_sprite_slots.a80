@@ -1,0 +1,60 @@
+; Experimental replacement for the SPRITE_MODE=2 large-sprite include in the
+; pinned all-sprites sample. The original OUT addresses and fall-through
+; address are kept so the baseline trace can compare exact paging signatures.
+
+    assert $=#c3c2
+    ld iyl,8
+attrBufferCorrection: ld hl,0  ; patched by doSprites, unused by this probe
+    ld sp,slot_stack_top       ; bank 0 stays mapped throughout this routine
+
+    ld b,77
+    call rasterWork
+    ld bc,217
+    call DELAY
+    exx
+    jp large_shadow
+
+; B is a stand-in for bounded work. Marker duration is 13*B-5 T-states.
+rasterWork:
+    djnz rasterWork
+rasterWorkEnd:
+    ret
+
+deltaFrame: ld bc,0            ; large animation patch target, never executed
+
+    defs #c431-$
+large_shadow:
+    out (c),h
+    exx
+    ld b,113
+    call rasterWork
+    ld bc,254
+    call DELAY
+    exx
+    jp large_normal
+
+    defs #c4e2-32-$
+    defs 32,0
+slot_stack_top:
+large_normal:
+    out (c),l
+    exx
+    dec iyl
+    jr z,large_last_slice
+    ld b,113
+    call rasterWork
+    ld bc,303
+    call DELAY
+    exx
+    jp large_shadow
+
+large_last_slice:
+    ld b,22
+    call rasterWork
+    ld bc,184
+    call DELAY
+    ld bc,0                    ; the subsequent small-sprite code expects B=0
+    jp large_end
+
+    defs #c53f-$
+large_end:
