@@ -33,7 +33,7 @@ For the all-sprites sample, the local symbol map places `mainInterrupt` at `#801
 | --- | --- |
 | [zx_go](https://github.com/conorarmstrong/zx_go) | The Windows v1.13.0 binary passed a 48K headless smoke test. Its headless startup lacks model selection for the two target families. The classic frame renderer takes `ScreenPage` once for the entire picture, and the paging-port trace carries no T-state timestamp. This release cannot verify the Ringo-8 raster. |
 | [Fuse](https://fuse-emulator.sourceforge.net/) | Independent comparison candidate with both model families. The installed Win32 build is graphical. Use a headless or instrumented build for automated comparison. |
-| [ZEsarUX](https://github.com/chernandezba/zesarux) | Windows v10.3 passed the headless mid-scanline probe on `128k` and `P2A41`. Use it for raster bring-up. Exact timestamp and instrumentation coverage still need verification. |
+| [ZEsarUX](https://github.com/chernandezba/zesarux) | Windows v10.3 passed the headless mid-scanline probe and the two-frame all-sprites profile on `128k` and `P2A41`. |
 | [ZX Spectrum MCP](https://github.com/retro-vault/zx-spectrum-mcp) | The documented emulator targets the 48K model. This milestone requires the two 128K model families and shadow-screen banking. |
 
 ## Headless raster probe
@@ -49,7 +49,15 @@ The probe uses an IM 2 interrupt to start each frame, displays red paper from ba
 | `128k` | 60 | 192 | 248 |
 | `P2A41` | 60 | 192 or 200 | 248 |
 
-The upstream `05_EXAMPLE_ALL_SPRITES` TAP also loaded all seven machine-code payload blocks on each model and produced six colours in the final sampled paper region. This was a load-and-render smoke test. The raw output was sampled at 5 FPS, so exact `#7FFD` timestamps, a complete two-frame schedule and contention-adjusted routine profiles remain pending.
+The upstream `05_EXAMPLE_ALL_SPRITES` TAP also loaded all seven machine-code payload blocks on each model and produced six colours in the final sampled paper region.
+
+## Original-engine timing baseline
+
+```powershell
+python tools/profile_ringo8.py --emulator <zesarux.exe> --assembler <sjasmplus.exe> --sample <output-directory>/05_EXAMPLE_ALL_SPRITES
+```
+
+The profiler verifies the pinned TAP, recaptures the raster probe, and emits JSON for both models. It requires all 256 phases of the sample's built-in motion. Increase `--seconds` if the host captures too few frames. Add `--full` to retain every routine boundary and paging write, including the emulator frame T-state, scanline and T-state within that scanline. The default report includes one complete pair, routine duration ranges and the latch timing range of each paging write across the capture. See [the timing baseline](docs/timing-baseline.md) for measurements and timestamp validation.
 
 ## Blokius WIP audit
 

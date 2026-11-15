@@ -39,7 +39,9 @@ next_frame:
     halt
     ld bc,#7ffd
     ld a,#10                   ; display bank 5
+show_normal:
     out (c),a
+normal_shown:
     ld bc,DELAY_LOOPS          ; 26 T-states per iteration, 5 fewer on exit
 delay:
     dec bc
@@ -48,7 +50,9 @@ delay:
     jr nz,delay
     ld bc,#7ffd
     ld a,#18                   ; display bank 7
+show_shadow:
     out (c),a
+shadow_shown:
     jr next_frame
 
 fill_attrs:

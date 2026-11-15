@@ -14,17 +14,13 @@ SYMBOL = re.compile(r"^(\S+): EQU 0x([0-9A-Fa-f]+)$", re.MULTILINE)
 HIT = re.compile(r"Catch breakpoint: PC=([0-9A-F]{4})H\n(\d+)\n")
 
 
-def trace(emulator, image, symbols, labels, model, seconds):
-    addresses = {name: int(value, 16) for name, value in SYMBOL.findall(symbols.read_text())}
-    points = {}
-    for label in labels:
-        address = addresses.get(label)
-        if address is None or not 0 <= address <= 0xFFFF:
-            raise ValueError(f"Expected a 16-bit address for {label}")
-        points.setdefault(f"{address:04X}", []).append(label)
-    if len(points) > 100:
-        raise ValueError("ZEsarUX supports up to 100 breakpoint addresses")
+def read_symbols(symbols):
+    return {name: int(value, 16) for name, value in SYMBOL.findall(symbols.read_text())}
 
+
+def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=False):
+    if len(breakpoints) > 100:
+        raise ValueError("ZEsarUX supports up to 100 breakpoints")
     image = image.resolve(strict=True)
     if image.suffix.lower() == ".tap":
         load = ["--tape", image]
@@ -39,12 +35,26 @@ def trace(emulator, image, symbols, labels, model, seconds):
         "--machine", model, "--realvideo", *load, "--enable-breakpoints",
         "--exit-after", str(seconds), "--quickexit", "--verbose", "2",
     ]
-    for index, address in enumerate(points, 1):
+    if fast_autoload:
+        command.append("--fastautoload")
+    for index, (condition, expression) in enumerate(breakpoints, 1):
         command.extend([
-            "--set-breakpoint", str(index), f"PC={address}H",
-            "--set-breakpointaction", str(index), "printe TSTATES",
+            "--set-breakpoint", str(index), condition,
+            "--set-breakpointaction", str(index), f"printe {expression}",
         ])
-    log = run(command, emulator.parent)
+    return run(command, emulator.parent, timeout=max(25, seconds + 25))
+
+
+def trace(emulator, image, symbols, labels, model, seconds):
+    addresses = read_symbols(symbols)
+    points = {}
+    for label in labels:
+        address = addresses.get(label)
+        if address is None or not 0 <= address <= 0xFFFF:
+            raise ValueError(f"Expected a 16-bit address for {label}")
+        points.setdefault(f"{address:04X}", []).append(label)
+    breakpoints = [(f"PC={address}H", "TSTATES") for address in points]
+    log = breakpoint_log(emulator, image, model, seconds, breakpoints)
     events = [
         {"pc": int(address, 16), "labels": points[address], "frame_tstate": int(tstate)}
         for address, tstate in HIT.findall(log)

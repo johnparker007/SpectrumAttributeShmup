@@ -16,10 +16,10 @@ RED, CYAN = b"\x00\x00\xff", b"\xff\xff\x00"  # BGR24
 PAPER_SCANLINE = 60
 
 
-def run(command, cwd):
+def run(command, cwd, timeout=25):
     completed = subprocess.run(
         command, cwd=cwd, capture_output=True, text=True, errors="replace",
-        timeout=25, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     log = completed.stdout + completed.stderr
     if completed.returncode:
