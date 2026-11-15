@@ -10,7 +10,7 @@ import tempfile
 from zipfile import ZipFile
 
 from build_ringo8 import LAUNCH
-from profile_ringo8 import FRAME, HIT, MODELS
+from profile_ringo8 import FRAME, HIT, MODELS, OUT_OPCODE, PORTS
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_zesarux_raster import run
 
@@ -41,7 +41,7 @@ def build(archive_path, assembler, directory):
     return game
 
 
-def capture(emulator, game, model, seconds):
+def capture(emulator, game, model, seconds, paging=False, scenery=False):
     symbols = read_symbols(game / "main.sym")
     main = symbols["mainLoop"]
     # Byte offsets come from the assembled SET_RENDER_FRAME and game loop
@@ -52,9 +52,22 @@ def capture(emulator, game, model, seconds):
                "player": main + 0x15, "sprite_manager": main + 0x18, "score_copy": main + 0x1B,
                "halt2": main + 0x2C, "logic2": main + 0x33, "hud": main + 0x37,
                "after_hud": main + 0x3A}
+    if scenery:
+        markers = {name: markers[name] for name in ("irq", "frame1", "frame2", "render_return")}
+        markers.update({name: symbols[name] for name in ("halt1", "halt2")})
     conditions = {f"PC={address:04X}H": name for name, address in markers.items()}
     scroll_complete = f"PEEK({symbols['barrelScrollComplete']:04X}H)"
     expressions = {"irq": "TSTATESP", "halt2": f"TSTATES*256+{scroll_complete}"}
+    if paging:
+        # The pinned WIP relocates the fixed-bank renderer by #900.
+        for address, register in PORTS.items():
+            pc = address + (0x900 if address < 0xC000 else 0)
+            condition = f"PC={pc:04X}H AND BC=7FFDH AND PEEKW(PC)={OUT_OPCODE[register]:02X}EDH"
+            conditions[condition] = condition
+            expressions[condition] = f"TSTATES*256+{register}"
+            after = f"PC={pc + 2:04X}H AND BC=7FFDH"
+            conditions[after] = after
+            expressions[after] = "TSTATES"
     log = breakpoint_log(emulator, game / "main.tap", model, seconds,
                          [(condition, expressions.get(name, "TSTATES")) for condition, name in conditions.items()],
                          fast_autoload=True)
@@ -65,8 +78,11 @@ def capture(emulator, game, model, seconds):
     for condition, raw in events:
         name, value = conditions[condition], int(raw)
         if name == "irq":
-            frames.append({"start": value // FRAME, "irq": value % FRAME})
+            frames.append({"start": value // FRAME, "irq": value % FRAME, "paging": []})
         elif frames:
+            if name.startswith("PC="):
+                frames[-1]["paging"].append((name, value))
+                continue
             if name == "halt2":
                 value, frames[-1]["scroll_complete"] = divmod(value, 256)
             frames[-1][name] = value

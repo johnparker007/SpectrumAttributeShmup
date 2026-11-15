@@ -31,7 +31,7 @@ For the all-sprites sample, the local symbol map places `mainInterrupt` at `#801
 
 | Candidate | Documented capabilities and next check |
 | --- | --- |
-| [zx_go](https://github.com/conorarmstrong/zx_go) | The v1.13.0 source harness can select both machine families and timestamp `#7FFD` directly. See the [independent timing comparison](docs/independent-emulator.md) for the remaining +2A difference. The classic renderer takes `ScreenPage` once per frame. |
+| [zx_go](https://github.com/conorarmstrong/zx_go) | The v1.13.0 source harness can select both machine families and timestamp `#7FFD` directly. The [independent timing comparison](docs/independent-emulator.md) details the +2A contention-origin adjustment. The classic renderer takes `ScreenPage` once per frame. |
 | [Fuse](https://fuse-emulator.sourceforge.net/) | Independent comparison candidate with both model families. The installed Win32 build is graphical. Use a headless or instrumented build for automated comparison. |
 | [ZEsarUX](https://github.com/chernandezba/zesarux) | Windows v10.3 passed the headless mid-scanline probe and the two-frame all-sprites profile on `128k` and `P2A41`. |
 | [ZX Spectrum MCP](https://github.com/retro-vault/zx-spectrum-mcp) | The documented emulator targets the 48K model. This milestone requires the two 128K model families and shadow-screen banking. |
@@ -76,3 +76,5 @@ The [projectile motion benchmark](docs/projectile-motion.md) verifies integer tr
 `Blokius - sprite manager wip 1.zip` rebuilt headlessly with SjASMPlus 1.20.2 using the archive's preconverted assets. The generated TAP and SNA matched the archived binaries byte for byte. The `game` directory contains `main.asm`, `spriteManager.asm`, `hotspotCollision.asm`, `barrelScroll.asm`, and `hud.asm`. Its `music/resources.a80` places the 1,617-byte player at 55000 and the 2,015-byte song at 57158 in bank 0. The player call in `main.asm` is commented out in this WIP. The original `meadows edge 1.vt2` was located alongside its numbered revisions.
 
 The [Blokius timing baseline](docs/blokius-timing.md) follows the unmodified game's barrel scroll through completion and measures the HUD and game slots on both models.
+
+The [Blokius scenery test](docs/blokius-integration.md) checks the WIP's barrel scroll and animated tiles with the new projectile and AY workload.

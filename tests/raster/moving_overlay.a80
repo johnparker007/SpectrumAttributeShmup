@@ -4,7 +4,9 @@
     include "motion_step.a80"
 
 motionStep:
+    ifndef BARREL_SCENERY
     call moveSprites
+    endif
 motionBegin:
     ld a,(motion_phase)
     inc a

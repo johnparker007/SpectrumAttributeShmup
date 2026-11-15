@@ -29,16 +29,16 @@ MOTION_MARKERS = ("motionBegin", "motionEnd")
 YELLOW = b"\x00\xff\xff"  # BGR24
 
 
-def install_audio(sample, audio, phrases, origin=0xCB00, preceding_end="testSmallSprite+60"):
+def install_audio(sample, audio, phrases):
     shutil.copyfile(TESTS / "audio" / "engine_stream.a80", sample / "engine_stream.a80")
     initial, loop = loop_audio(audio)
     gfx = sample / "gfx"
     resources = gfx / "resources.a80"
-    added = f'''
+    added = b'''
     page 0
-    assert {preceding_end} <= #{origin:04x}
-    org #{origin:04x}
-'''.encode("ascii")
+    assert testSmallSprite+60 <= #cb00
+    org #cb00
+'''
     if phrases:
         shutil.copyfile(TESTS / "audio" / "engine_phrases.a80", sample / "engine_phrases.a80")
         # Split early so the integrated trace exercises both banks in its first 1024 ticks.
