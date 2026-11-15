@@ -1,0 +1,273 @@
+; Game logic runs with bank 0 mapped. This code and the sprites live above AY data.
+stepWave:
+    exx
+    ld h,high shipTrajectories
+    ld de,enemyMotion
+    exx
+    ld hl,enemy_boxes
+    ld de,collision_actual
+    ld b,WAVE_ENEMIES
+.next:
+    ld a,(hl)
+    cp HIDDEN_BOX
+    jr z,.exploding
+    ld a,(de)
+    or a
+    jr nz,.hit
+    dec (hl)
+    jr z,.hide
+    ld a,(hl)
+    and 63
+    exx
+    ld l,a
+    ld a,(de)
+    or l
+    ld l,a
+    ld a,(hl)
+    exx
+    inc hl
+    ld (hl),a
+    jr .advance
+.hit:
+    exx
+    inc de
+    ld a,EXPLOSION_TICKS
+    ld (de),a
+    dec de
+    exx
+    ld a,(playerLives)
+    or a
+    jr z,.hide
+    push hl
+    ld hl,enemyKills
+    inc (hl)
+    call hudAward
+    pop hl
+.hide:
+    ld (hl),HIDDEN_BOX
+    jr .skipY
+.exploding:
+    exx
+    inc de
+    ld a,(de)
+    or a
+    jr z,.blastReady
+    dec a
+    jr nz,.saveBlast
+    dec a                        ; restore normal art in the sprite update
+.saveBlast:
+    ld (de),a
+.blastReady:
+    dec de
+    exx
+.skipY:
+    inc hl
+.advance:
+    inc hl
+    inc de
+    exx
+    inc de
+    inc de
+    exx
+    djnz .next
+
+    ld hl,spawnWait
+    ld a,(hl)
+    or a
+    jr z,.findSlot
+    dec (hl)
+    ret
+.findSlot:
+    ld a,(spawnSlot)
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,enemy_boxes
+    add hl,de
+    ld ix,enemyMotion
+    add ix,de
+    ld a,(hl)
+    cp HIDDEN_BOX
+    ret nz
+    ld a,(ix+1)
+    or a
+    ret nz
+    ld (hl),67                   ; four steps before the top left enters at X=63
+    inc hl
+    ld (hl),21
+    ld a,(waveIndex)
+    rrca
+    rrca
+    ld (ix),a
+    ld a,4
+    ld (spawnWait),a             ; at least five game ticks between spawns
+    ld a,(spawnSlot)
+    inc a
+    cp WAVE_ENEMIES
+    jr c,.saveSlot
+    xor a
+.saveSlot:
+    ld (spawnSlot),a
+    ld hl,waveRemaining
+    dec (hl)
+    ret nz
+    ld (hl),WAVE_ENEMIES
+    ld a,(waveIndex)
+    inc a
+    and 3
+    ld (waveIndex),a
+    ret
+
+; Packed trajectory bits 7/6 hold stationary/right X flags. Bits 0–2 remain
+; the sub-step counter, and the Y lookup repeats for each X mode.
+moveIncoming:
+    ld d,high liveTrajectories
+    ; Sparse fire leaves most slots empty. An untaken call costs less than
+    ; advancing the three-byte pointer and counting each empty slot.
+    dup ENEMY_COUNT, slot
+        ld hl,enemy_records+slot*3
+        ld a,(hl)
+        inc a
+        call nz,moveDot
+    edup
+    ret
+
+moveDot:
+    ld c,a                       ; X+1 already computed while checking for #ff
+    inc hl
+    inc hl
+    ld a,(hl)
+    bit 7,a
+    jr nz,.stationary
+    bit 6,a
+    jr nz,.xReady
+    dec c
+.stationary:
+    dec c
+.xReady:
+    ld a,c
+    cp 64
+    jr nc,.retire
+    ld a,(hl)
+    inc a
+    xor (hl)
+    and 7
+    xor (hl)
+    ld (hl),a
+    ld e,a
+    dec hl
+    ld a,(de)
+    add a,(hl)
+    cp 48
+    jr nc,.retireY
+    ld (hl),a
+    dec hl
+    ld (hl),c
+    ret
+.retire:
+    dec hl
+.retireY:
+    dec hl
+    ld (hl),#ff
+    ret
+
+spawnIncoming:
+    ld a,(gameTick)
+    and 7
+    ret nz                       ; at most one shot per eight ticks across the formation
+    ld a,(fireSlot)
+    ld e,a
+    inc a
+    cp WAVE_ENEMIES
+    jr c,.nextSlot
+    xor a
+.nextSlot:
+    ld (fireSlot),a
+    ld d,0
+    ld hl,enemy_boxes
+    add hl,de
+    add hl,de
+    ld a,(hl)
+    cp 64
+    ret nc                        ; the selected ship is offscreen or exploding
+    ld b,a
+    inc hl
+    ld a,(hl)
+    add a,2
+    ld c,a
+    ld d,0
+    ld a,(playerLives)
+    or a
+    jr z,.emit
+    ld a,(respawnWait)
+    or a
+    call z,aimIncoming
+.emit:
+    ld hl,(enemyWrite)
+    ld a,(hl)
+    inc a
+    ret nz
+    ld (hl),b
+    inc hl
+    ld (hl),c
+    inc hl
+    ld (hl),d
+enemyShotEmitted:
+    inc hl
+    ld a,l
+    cp low enemy_end
+    jr nz,.save
+    ld hl,enemy_records
+.save:
+    ld (enemyWrite),hl
+    ret
+
+    include "aim_incoming.a80"
+
+syncEnemyShips:
+    ; DE is the display offset. An explosion retains the last drawn position.
+    dup WAVE_ENEMIES, slot
+        ld a,(enemyMotion+slot*2+1)
+        or a
+        jr z,1f
+        cp #ff
+        jr nz,2f
+        xor a
+        ld (enemyMotion+slot*2+1),a
+        ld hl,enemyArt
+        ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
+1:
+        ld hl,(enemy_boxes+slot*2)
+        add hl,de
+        ld (sprite09+slot*SPRITE+SPRITE.X),hl
+        jr 3f
+2:
+        call explosionArt
+        ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
+3:
+    edup
+    ret
+
+explosionArt:
+    add a,a
+    add a,low explosionFrames
+    ld l,a
+    ld h,high explosionFrames
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    ret
+
+    align 16
+explosionFrames:
+    dw explosion3,explosion3,explosion3,explosion2,explosion2,explosion1,explosion1
+explosion1: incbin "explosion_1.bin"
+explosion2: incbin "explosion_2.bin"
+explosion3: incbin "explosion_3.bin"
+enemyArt: incbin "enemy_art.bin"
+playerArt: incbin "player_art.bin"
+
+    align 256
+shipTrajectories: incbin "ship_trajectories.bin"
+liveTrajectories: incbin "live_trajectories.bin"

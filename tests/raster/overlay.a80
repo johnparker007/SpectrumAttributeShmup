@@ -34,6 +34,7 @@ hudAttributesDone:
 hudFrame2Done:
         call gameOverAttributes
         call gameOverStep
+        call gameOverStep
     endif
     ifndef OVERLAY_MOTION
     ; Confirm untouched lane selection at two opposite viewport edges.

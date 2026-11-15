@@ -167,12 +167,12 @@ def bitmap_region(frame, col, row, width, rows):
     return b"".join(paper_row(frame, y)[start:end] for y in range(row * 8, row * 8 + rows))
 
 
-def check_hud_video(emulator, replay, model):
+def check_hud_video(emulator, replay, model, targets):
     video = replay / f"score-{model}.raw"
     capture_video(emulator, model, ["--tape", replay / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 15)
     symbols = read_symbols(replay / "main.sym")
     wanted = {hud_bitmap(replay, symbols, score, lives): (f"{score * 100:06d}", lives)
-              for lives in range(4) for score in (0, 1)}
+              for score, lives in set(targets)}
     observed = set()
     frame_size = WIDTH * HEIGHT * 3
     with video.open("rb") as recording:
@@ -182,8 +182,8 @@ def check_hud_video(emulator, replay, model):
             region = bitmap_region(frame, symbols["HUD_X"], 0, symbols["HUD_WIDTH"], 8)
             if region in wanted:
                 observed.add(wanted[region])
-    if not {("000000", 3), ("000100", 2)} <= observed:
-        raise ValueError(f"{model}: video missed the opening HUD or its first score and life changes")
+    if ("000000", 3) not in observed or not any(score != "000000" for score, _ in observed):
+        raise ValueError(f"{model}: video missed the opening HUD or a nonzero score")
     return {"scores_seen_in_video": sorted({score for score, _ in observed}),
             "life_icon_counts_seen_in_video": sorted({lives for _, lives in observed})}
 

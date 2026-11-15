@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from itertools import groupby
 import json
+from math import sin, tau
 from pathlib import Path
 import shutil
 import subprocess
@@ -21,6 +22,9 @@ from verify_zesarux_raster import run
 
 
 GAME_OVER_TEXT = ("GAME OVER".center(16), "ENTER TO RESTART")
+SHIP_PATTERNS = ((21, 0, 64), (13, 5, 64), (29, 7, 32), (22, 11, 64))
+SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in range(64))
+               for centre, amplitude, period in SHIP_PATTERNS)
 
 
 def ship_art(rows, colour):
@@ -51,17 +55,25 @@ startGame:
     call barrelScroll_Init
     ifdef LIVE_SHMUP
         call gameInit
+        di
+        call enableRender
+        ei
+        halt
+        ld hl,renderFrame2
+        ld (intProc+1),hl
+        jr firstFrameLogic
+    else
+        call enableRender
     endif
-    call enableRender
 mainLoop:
 halt1 equ $+7
     SET_RENDER_FRAME renderFrame2
+firstFrameLogic:
     call soundScroll
     call motionStep
     ifdef LIVE_SHMUP
         call hudStep
 hudFrame1Done:
-        call gameOverStep
     endif
 halt2 equ $+7
     SET_RENDER_FRAME renderFrame1
@@ -79,7 +91,15 @@ doSinScroll equ barrelScroll_Update
     defines = ["OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
                "BARREL_SCENERY"]
     if live:
-        for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80"):
+        # Read the freshly updated positions directly in the small-sprite
+        # renderer. Both IX offsets have the same instruction timing.
+        macros = game / "engine" / "macros.a80"
+        code = macros.read_bytes()
+        before, marker, small = code.partition(b"MACRO CALC_DISPLACEMENT_SMALL")
+        if not marker or small.count(b"SPRITE.DRAWX") != 1 or small.count(b"SPRITE.DRAWY") != 1:
+            raise ValueError("Unexpected small-sprite position loader")
+        macros.write_bytes(before + marker + small.replace(b"SPRITE.DRAWX", b"SPRITE.X").replace(b"SPRITE.DRAWY", b"SPRITE.Y"))
+        for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80", "enemy_runtime.a80", "aim_incoming.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         font = (game / "font" / "n13.bin").read_bytes()
         digits = "0123456789"
@@ -94,10 +114,16 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
-        (game / "trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path))
+        (game / "live_trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path) * 4)
+        (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))
         (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))
+        explosions = (("  #  ", " ### ", "#####", " ### ", "  #  "),
+                      ("# # #", " ### ", "## ##", " ### ", "# # #"),
+                      ("#   #", "     ", "  #  ", "     ", "#   #"))
+        for stage, (shape, colour) in enumerate(zip(explosions, (6, 7, 2)), 1):
+            (game / f"explosion_{stage}.bin").write_bytes(ship_art(shape, colour))
         defines.append("LIVE_SHMUP")
         if replay is not None:
             controls = bytearray()
@@ -115,6 +141,15 @@ doSinScroll equ barrelScroll_Update
         (game / "player_box.bin").write_bytes(bytes(PLAYER_BOX))
         (game / "collision_expected.bin").write_bytes(phases()[0].hits)
     install_audio(game, audio, phrases=True)
+    if live:
+        resources = game / "gfx" / "resources.a80"
+        resources.write_bytes(resources.read_bytes() + b'''
+    page 0
+    assert testAudioRecipeEnd <= #e000
+    org #e000
+    include "enemy_runtime.a80"
+    assert $ <= #10000
+''')
     run([assembler, *(f"-D{name}=1" for name in defines), "--sym=main.sym", "main.asm"], game)
 
 
@@ -123,10 +158,10 @@ def examine(frames, model):
     signatures = {1: [], 2: []}
     for index, (frame, following) in enumerate(zip(frames, frames[1:])):
         phase = index % 2 + 1
-        halt = frame[f"halt{3 - phase}"]
+        halt = frame.get(f"halt{3 - phase}", FRAME)
         if (following["start"] != frame["start"] + 1
-                or not frame["irq"] < frame[f"frame{phase}"] < frame["render_return"] < halt < FRAME):
-            raise ValueError(f"{model}: irregular frame or game-slot overrun at {index}")
+                or not frame["irq"] < frame.get(f"frame{phase}", FRAME) < frame.get("render_return", FRAME) < halt < FRAME):
+            raise ValueError(f"{model}: irregular frame or game-slot overrun at frame {index} (phase {phase})")
         writes = []
         pending = None
         for condition, value in frame["paging"]:

@@ -1,0 +1,42 @@
+; B/C are the shot origin. Quantize the bearing into eight directions
+; using a 2:1 ratio to select the horizontal or vertical axis.
+aimIncoming:
+    push bc
+    ld hl,(playerXY)
+    ld e,#40
+    ld a,l
+    add a,2
+    sub b
+    jr nc,.dx
+    neg
+    ld e,0
+.dx:
+    ld b,a
+    ld d,48
+    ld a,h
+    add a,2
+    sub c
+    jr nc,.dy
+    neg
+    ld d,40
+.dy:
+    ld c,a
+    add a,a
+    cp b
+    jr c,.horizontal
+    jr z,.horizontal
+    ld a,b
+    add a,a
+    cp c
+    jr c,.vertical
+    jr nz,.angled
+.vertical:
+    ld e,#80
+.angled:
+    ld a,d
+    or e
+    ld e,a
+.horizontal:
+    ld d,e
+    pop bc
+    ret
