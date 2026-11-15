@@ -12,8 +12,10 @@ All 18 fixtures passed on ZEsarUX 10.3 with SjASMPlus 1.20.2. Both models return
 
 | Workload | Packed-buffer probe | Coordinate probe, 16 / 24 / 32 enemy shots |
 | --- | ---: | ---: |
-| All miss after horizontal overlap | 10,540 | 20,493 / 21,429 / 22,365 |
-| All hit late in the scan | 10,279 | 20,189 / 21,125 / 22,061 |
-| Overlap and selective hits | 10,089 | 11,649 / 11,649 / 11,649 |
+| All miss after horizontal overlap | 10,540 | 14,759 / 15,359 / 15,959 |
+| All hit late in the scan | 10,279 | 14,647 / 15,247 / 15,847 |
+| Overlap and selective hits | 10,089 | 10,208 / 10,208 / 10,208 |
 
-The original lookup scan for both colours peaked at 12,850 T-states. The cyan-only bit test cuts the measured maximum by 2,310 T-states and saves one 256-byte lookup table. The packed probe's measured maximum is independent of the enemy shot count. The coordinate probe can win when horizontal tests reject shots quickly. At 32 enemy dots, plotting and the optimized probe together cost up to 20,778 T-states in these tests. That is before motion, clipping or audio. The estimate does not yet account for the placement of raster switches or the first eight small sprites, which the stock renderer draws before the large-sprite phase.
+The original lookup scan for both colours peaked at 12,850 T-states. The cyan-only bit test cuts the measured maximum by 2,310 T-states and saves one 256-byte lookup table. The packed probe's measured maximum is independent of the enemy shot count. Caching each hitbox origin in registers and advancing along the shot list once cuts the coordinate probe's 32-dot maximum from 22,365 to 15,959 T-states. The coordinate probe can run before any plotting because it has no dependency on buffer contents or palette.
+
+At 32 enemy dots, plotting and the packed probe together cost up to 20,778 T-states in these tests, before motion, clipping or audio. The estimate does not yet account for the placement of raster switches or the first eight small sprites, which the stock renderer draws before the large-sprite phase.

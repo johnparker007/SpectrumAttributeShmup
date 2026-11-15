@@ -160,22 +160,22 @@ box_address:
     ret
 
     macro CHECK_COORDINATES width
+    ld c,(ix)
+    ld h,(ix+1)
 .loop:
     ld a,(de)
-    sub (ix)
+    inc de
+    sub c
     if width=2
         inc a                   ; width two can also start one dot left
     endif
     cp BOX_WIDTH+width-1
     jr nc,.next
-    inc de
     ld a,(de)
-    sub (ix+1)
+    sub h
     cp BOX_WIDTH
     jr c,.hit
-    dec de
 .next:
-    inc de
     inc de
     djnz .loop
     xor a
