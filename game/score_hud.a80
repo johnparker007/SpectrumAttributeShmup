@@ -1,8 +1,10 @@
 ; Top-right fixed bitmap over the two logical attribute rows of character row 0.
-HUD_X equ 20
-HUD_WIDTH equ 12
-HUD_DIGIT_RIGHT equ HUD_X+9      ; two trailing zeroes make each kill worth 100
+HUD_WIDTH equ STARTING_LIVES+1+6
+HUD_X equ 32-HUD_WIDTH
+HUD_DIGIT_RIGHT equ 29          ; columns 30 and 31 are startup-only zeroes
 HUD_ATTR equ #47                 ; bright white on black
+HUD_SCORE_DIRTY equ 0
+HUD_LIVES_DIRTY equ 1
 
 hudInit:
     ld d,#40
@@ -43,11 +45,11 @@ hudAward:
     ret c
     ld h,a
     ld (hudScore),hl
-    ld a,1
-    ld (hudPending),a
+    ld hl,hudPending
+    set HUD_SCORE_DIRTY,(hl)
     ret
 
-; One video frame either selects a changed digit or copies one row of the
+; One video frame either selects a changed cell or copies one row of the
 ; selected glyph to both bitmap banks. A digit in progress keeps its glyph.
 hudStep:
     ld a,(hudRow)
@@ -56,7 +58,9 @@ hudStep:
     ld a,(hudPending)
     or a
     ret z
-    jp hudSelectDigit
+    bit HUD_LIVES_DIRTY,a
+    jp z,hudSelectDigit
+    jp hudSelectLife
 .draw:
     ld d,a
     inc a
@@ -100,7 +104,8 @@ hudSelectDigit:
     ld a,(hl)
     xor e
     jr nz,.changed
-    ld (hudPending),a
+    ld hl,hudPending
+    res HUD_SCORE_DIRTY,(hl)
     ret
 .changed:
     and 15
@@ -128,6 +133,8 @@ hudSelectDigit:
     ld h,0
     ld de,hudDigits
     add hl,de
+
+hudQueueGlyph:
     ld (hudGlyph),hl
     ld a,b
     ld (hudColumn),a
@@ -135,8 +142,32 @@ hudSelectDigit:
     ld (hudRow),a
     ret
 
+hudSelectLife:
+    ld a,(playerLives)
+    ld hl,hudLivesDrawn
+    cp (hl)
+    jr z,.settled
+    ld de,hudLifeIcon
+    jr nc,.restore
+    dec (hl)
+    ld a,(hl)
+    ld de,hudLifeBlank
+    jr .queue
+.restore:
+    ld a,(hl)
+    inc (hl)
+.queue:
+    add a,HUD_X
+    ld b,a
+    ex de,hl
+    jr hudQueueGlyph
+.settled:
+    ld hl,hudPending
+    res HUD_LIVES_DIRTY,(hl)
+    ret
+
 ; Tiles/sprites replace the attribute buffer each game tick, so repaint
-; just the strip's 24 attribute bytes after composition.
+; just the strip's two rows of attributes after composition.
 hudAttributes:
     ld hl,(attrPointer)
     ld de,HUD_X
@@ -152,9 +183,13 @@ hudAttributes:
 
 hudScore: dw 0
 hudDrawn: dw 0                  ; last glyph selected for each digit
+hudLivesDrawn: db STARTING_LIVES
 hudPending: db 0
 hudRow: db 8
 hudColumn: db HUD_DIGIT_RIGHT
 hudGlyph: dw hudDigits
 hudDigits: incbin "score_digits.bin"
-hudInitialRows: incbin "score_initial.bin"
+hudLifeIcon: incbin "hud_life_icon.bin"
+hudLifeBlank: defs 8,0
+hudInitialRows: incbin "hud_initial.bin"
+    assert $-hudInitialRows=8*HUD_WIDTH

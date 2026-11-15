@@ -415,8 +415,8 @@ def verify(emulator, stock, game, replay, crossing, model, seconds, replay_secon
         music = pool.submit(verify_audio, emulator, replay, model, audio, True)
         scenery = pool.submit(verify_rewind, emulator, replay, model)
         wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
-        scores = [state["header"] >> 24 for state in expected(REPLAY)]
-        hud_updates = pool.submit(check_hud_updates, emulator, replay, model, scores)
+        targets = [(state["header"] >> 24, state["header"] >> 16 & 255) for state in expected(REPLAY)]
+        hud_updates = pool.submit(check_hud_updates, emulator, replay, model, targets)
         hud_video = pool.submit(check_hud_video, emulator, replay, model)
         hits = pool.submit(verify_crossings, emulator, crossing, model)
         blink = pool.submit(verify_respawn_video, emulator, game, model)
@@ -436,7 +436,7 @@ def verify(emulator, stock, game, replay, crossing, model, seconds, replay_secon
         report["replay"]["simultaneous_shots_verified"] = dense_pool.result()
         report["keyboard_idle"].update(idle.result())
         check_arithmetic(emulator, replay, model)
-        hud = {**hud_updates.result(), "scores_seen_in_video": hud_video.result()}
+        hud = {**hud_updates.result(), **hud_video.result()}
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
                 "wave_fire": wave_fire.result(), "score_hud": hud,

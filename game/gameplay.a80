@@ -193,6 +193,8 @@ updatePlayerLife:
     ret z
     ld hl,playerLives
     dec (hl)
+    ld hl,hudPending
+    set HUD_LIVES_DIRTY,(hl)     ; SET preserves the zero flag from DEC
     ret z                       ; game over
     ld a,RESPAWN_TICKS
     ld (respawnWait),a
@@ -382,6 +384,12 @@ restartGame:
     jp syncActors
 
 resetEncounter:
+    ld a,(playerLives)
+    cp STARTING_LIVES
+    jr z,.livesReady
+    ld hl,hudPending
+    set HUD_LIVES_DIRTY,(hl)
+.livesReady:
     ld hl,initialPlayer
     ld de,playerXY
     ld bc,runEnd-playerXY
@@ -396,9 +404,14 @@ resetEncounter:
     ld h,a
     ld l,a
     ld (collision_actual),hl
+    ld de,(hudScore)
+    ld a,d
+    or e
+    jr z,.scoreReady
     ld (hudScore),hl
-    ld a,1
-    ld (hudPending),a
+    ld hl,hudPending
+    set HUD_SCORE_DIRTY,(hl)
+.scoreReady:
     xor a
     jp loadWave
 
@@ -444,7 +457,7 @@ rewindBarrel:
     MOTION_WRITE_SHOT
 
 playerXY: dw 0
-playerLives: db 0
+playerLives: db STARTING_LIVES
 enemyKills: db 0
 gameTick: db 0
 respawnWait: db 0

@@ -1,6 +1,7 @@
     device ZXSPECTRUM128
     include "macros.asm"
 ROW_BYTES equ 38
+STARTING_LIVES equ 3
 
     org #8000
 start:
@@ -45,5 +46,6 @@ passed: halt
 failed: halt
 
 attrPointer: dw #9000
+playerLives: db STARTING_LIVES
     include "score_hud.a80"
     savesna "score_arithmetic.sna", start

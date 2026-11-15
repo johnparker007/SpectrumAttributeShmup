@@ -78,12 +78,14 @@ doSinScroll equ barrelScroll_Update
         for source_name in ("gameplay.a80", "score_hud.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         font = (game / "font" / "n13.bin").read_bytes()
-        glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)] for char in "0123456789SCORE "}
+        glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)] for char in "0123456789"}
         if any(len(glyph) != 8 for glyph in glyphs.values()):
             raise ValueError("The archived score font is incomplete")
         (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in "0123456789"))
-        (game / "score_initial.bin").write_bytes(bytes(glyphs[char][row] for row in range(8)
-                                                       for char in "SCORE 000000"))
+        icon = bytes((0, 0x20, 0x38, 0x7C, 0x38, 0x20, 0, 0))
+        (game / "hud_life_icon.bin").write_bytes(icon)
+        (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
+                                                       for ship, digit in zip(icon, glyphs["0"])))
         (game / "trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))
