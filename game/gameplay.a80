@@ -19,6 +19,17 @@ gameInit:
     call hudInit
     jp syncActors
 
+scrollScenery:
+    call barrelScroll_DoAnimations
+    ld a,(gameTick)
+    rrca
+    ret c
+    ld a,(barrelScrollComplete)
+    or a
+    ret nz
+    call barrelScroll_UpdateDoNextTile
+    jp barrelScroll_UpdateAdvanceScroll
+
 motionStep:
     call updatePlayerLife
     call readControls

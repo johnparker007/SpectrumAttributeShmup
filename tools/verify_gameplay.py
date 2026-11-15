@@ -60,12 +60,13 @@ def move_dots(records):
         if x == DEAD:
             moved.append((x, y, path))
             continue
-        dx = 0 if path & 128 else 1 if path & 64 else -1
+        dx = 0 if path & 128 else 2 if path & 64 else -2
         if not 0 <= x + dx < 64:
             moved.append((DEAD, y, path))
             continue
-        path = path & ~7 | ((path + 1) & 7)
-        next_y = y + STEPS[path >> 3 & 7][path & 7]
+        steps = STEPS[path >> 3 & 7]
+        next_y = y + steps[(path + 1) & 7] + steps[(path + 2) & 7]
+        path = path & ~7 | ((path + 2) & 7)
         moved.append((x + dx, next_y, path) if 0 <= next_y < 48 else (DEAD, y, path))
     return moved
 
@@ -354,15 +355,14 @@ def verify_gameplay_video(emulator, replay, model):
 
 
 def verify_formation(emulator, game, model):
-    # Check every slot while the original formation is fully visible, and
-    # again after game over so density does not depend on player input.
+    # Check every slot during the idle run and again after game over.
     reference = expected(IDLE)
     symbols = read_symbols(game / "main.sym")
     point = f"PC={symbols['overlayEnd']:04X}H"
     tick_address = symbols['gameTick']
     lives_address = symbols['playerLives']
     candidates = []
-    for current_lives in (3, 0):
+    for current_lives in (2, 0):
         state = next(row for row in reference if (row["header"] >> 16 & 255) == current_lives
                      and all(x % 256 < 64 for x in row["enemies"]))
         tick = state['header'] & 255
@@ -435,6 +435,9 @@ def verify_rewind(emulator, replay, model):
     for tick in windows:
         if groups[tick][0] % 256 != 0 or groups[tick + 1:tick + span + 1] != groups[:span]:
             raise ValueError(f"{model}: restart at tick {tick + 1} did not rewind the barrel scroll and tile animation")
+    scroll_period = (width - symbols["SCREEN_TILE_WIDTH"]) * symbols["TILE_SIZE"]
+    if [row[0] % 256 for row in groups[:span]] != [(tick // 2 + 1) % scroll_period for tick in range(span)]:
+        raise ValueError(f"{model}: scenery did not advance every other game tick")
     return {"restarts": len(windows), "matching_scrolled_ticks_per_restart": span}
 
 
@@ -478,8 +481,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         blink = pool.submit(verify_respawn_video, emulator, game, model)
         _, baseline = examine(reference.result(), model)
         report = {}
-        for label, trace in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
-            margins, cases = examine(trace, model)
+        for label, frames in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
+            margins, cases = examine(frames, model)
             for phase, signatures in cases.items():
                 match = set(baseline[phase])
                 if any(signature not in match for signature in signatures):

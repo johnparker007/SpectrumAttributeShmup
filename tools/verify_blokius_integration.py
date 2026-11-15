@@ -79,7 +79,11 @@ halt2 equ $+7
     SET_RENDER_FRAME renderFrame1
     jp overlayEntry
 
+    ifdef LIVE_SHMUP
+doSinScroll equ scrollScenery
+    else
 doSinScroll equ barrelScroll_Update
+    endif
     include "overlay.a80"
 ''' + tail_start + tail.replace(b'\tinclude "music/resources.a80"', b''))
     defines_source = game / "defines.asm"
@@ -114,7 +118,8 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
-        (game / "live_trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path) * 4)
+        doubled_steps = bytes((path[phase - 1] + path[phase]) % 256 for path in STEPS for phase in range(8))
+        (game / "live_trajectories.bin").write_bytes(doubled_steps * 4)
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
         (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))

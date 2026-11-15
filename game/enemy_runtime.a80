@@ -119,7 +119,7 @@ stepWave:
     ret
 
 ; Packed trajectory bits 7/6 hold stationary/right X flags. Bits 0–2 remain
-; the sub-step counter, and the Y lookup repeats for each X mode.
+; the sub-step counter, and the Y lookup combines two steps for each X mode.
 moveIncoming:
     ld d,high liveTrajectories
     ; Sparse fire leaves most slots empty. An untaken call costs less than
@@ -133,23 +133,26 @@ moveIncoming:
     ret
 
 moveDot:
-    ld c,a                       ; X+1 already computed while checking for #ff
+    inc a                        ; X+1 already computed while checking for #ff
+    ld c,a
     inc hl
     inc hl
     ld a,(hl)
     bit 7,a
-    jr nz,.stationary
+    jr nz,.subtractTwo
     bit 6,a
     jr nz,.xReady
     dec c
-.stationary:
+    dec c
+.subtractTwo:
+    dec c
     dec c
 .xReady:
     ld a,c
     cp 64
     jr nc,.retire
     ld a,(hl)
-    inc a
+    add a,2
     xor (hl)
     and 7
     xor (hl)
