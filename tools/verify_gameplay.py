@@ -17,6 +17,7 @@ from trace_zesarux import breakpoint_log, read_symbols
 from verify_ay_stream import register_pairs
 from verify_blokius_integration import examine, install
 from verify_dot_overlay import verify_audio
+from verify_score_hud import assemble_arithmetic_probe, check_arithmetic, check_hud_updates, check_hud_video
 from verify_zesarux_raster import HEIGHT, WIDTH, capture_video, paper_row, run
 
 
@@ -138,6 +139,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
                             enumerate(("gameTick", "lastControls", "playerHealth", "enemyKills")))),
         ("player", peek("playerXY", 2)),
         ("wave", peek("waveIndex")),
+        ("score", peek("hudScore", 2)),
         ("flags", peek("collision_actual", 2)),
         ("flags", peek("collision_actual", offset=2) + "+" + peek("player_hit") + "*256"),
     ]
@@ -154,6 +156,7 @@ def verify_logic(emulator, game, model, inputs, seconds):
     for tick, state in enumerate(oracle):
         row = hits[tick * len(points):(tick + 1) * len(points)]
         sample = [state[key] for key in ("header", "player", "wave")]
+        sample.append(int(str(state["header"] >> 24), 16))
         sample += state["flags"] + state["enemies"]
         sample += state["volleys"]
         sample += [state["incoming"][slot] for slot in (0, 15, 31)]
@@ -308,6 +311,9 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         music = pool.submit(verify_audio, emulator, replay, model, audio, True)
         scenery = pool.submit(verify_rewind, emulator, replay, model)
         wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
+        scores = [state["header"] >> 24 for state in expected(REPLAY)]
+        hud_updates = pool.submit(check_hud_updates, emulator, replay, model, scores)
+        hud_video = pool.submit(check_hud_video, emulator, replay, model)
         _, baseline = examine(reference.result(), model)
         report = {}
         for label, trace in (("replay", raster.result()), ("keyboard_idle", live_raster.result())):
@@ -323,9 +329,11 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         report["replay"].update(played.result())
         report["replay"]["simultaneous_shots_verified"] = dense_pool.result()
         report["keyboard_idle"].update(idle.result())
+        check_arithmetic(emulator, replay, model)
+        hud = {**hud_updates.result(), "scores_seen_in_video": hud_video.result()}
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),
-                "wave_fire": wave_fire.result(), **music.result()}
+                "wave_fire": wave_fire.result(), "score_hud": hud, **music.result()}
 
 
 def main():
@@ -355,6 +363,7 @@ def main():
             replay = Path(shutil.copytree(stock, root / "replay"))
             install(game, assembler, audio, live=True)
             install(replay, assembler, audio, live=True, replay=REPLAY)
+            assemble_arithmetic_probe(assembler, replay)
             models = (args.model,) if args.model else MODELS
             results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio)
                        for model in models]

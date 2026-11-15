@@ -79,4 +79,4 @@ The [Blokius timing baseline](docs/blokius-timing.md) follows the unmodified gam
 
 The [Blokius scenery test](docs/blokius-integration.md) checks the WIP's barrel scroll and animated tiles with the new projectile and AY workload.
 
-The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, three-way firing, and live ship and projectile collisions.
+The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, three-way firing, enemy waves, and an incremental score HUD.

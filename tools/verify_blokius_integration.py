@@ -55,6 +55,10 @@ halt1 equ $+7
     SET_RENDER_FRAME renderFrame2
     call soundScroll
     call motionStep
+    ifdef LIVE_SHMUP
+        call hudStep
+hudFrame1Done:
+    endif
 halt2 equ $+7
     SET_RENDER_FRAME renderFrame1
     jp overlayEntry
@@ -71,7 +75,15 @@ doSinScroll equ barrelScroll_Update
     defines = ["OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
                "BARREL_SCENERY"]
     if live:
-        shutil.copyfile(TESTS.parent / "game" / "gameplay.a80", game / "gameplay.a80")
+        for source_name in ("gameplay.a80", "score_hud.a80"):
+            shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
+        font = (game / "font" / "n13.bin").read_bytes()
+        glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)] for char in "0123456789SCORE "}
+        if any(len(glyph) != 8 for glyph in glyphs.values()):
+            raise ValueError("The archived score font is incomplete")
+        (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in "0123456789"))
+        (game / "score_initial.bin").write_bytes(bytes(glyphs[char][row] for row in range(8)
+                                                       for char in "SCORE 000000"))
         (game / "trajectories.bin").write_bytes(bytes(delta % 256 for path in STEPS for delta in path))
         (game / "player_art.bin").write_bytes(ship_art((" #   ", " ### ", "#####", " ### ", " #   "), 4))
         (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))

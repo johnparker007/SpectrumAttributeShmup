@@ -22,6 +22,12 @@ overlayBegin:
 overlayEnemies:
     PLOT_ENEMIES
 overlayEnd:
+    ifdef LIVE_SHMUP
+        call hudAttributes
+hudAttributesDone:
+        call hudStep
+hudFrame2Done:
+    endif
     ifndef OVERLAY_MOTION
     ; Confirm untouched lane selection at two opposite viewport edges.
     ld hl,(viewport)

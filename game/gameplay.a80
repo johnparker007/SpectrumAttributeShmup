@@ -16,6 +16,7 @@ gameInit:
         ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
     edup
     call resetEncounter
+    call hudInit
     jp syncActors
 
 motionStep:
@@ -201,6 +202,7 @@ stepWave:
     jr z,.move
     ld hl,enemyKills
     inc (hl)
+    call hudAward
     jr .hide
 .move:
     ld a,c
@@ -363,7 +365,13 @@ resetEncounter:
     ld h,a
     ld l,a
     ld (collision_actual),hl
+    ld (hudScore),hl
+    ld a,1
+    ld (hudPending),a
+    xor a
     jp loadWave
+
+    include "score_hud.a80"
 
 rewindBarrel:
     xor a
