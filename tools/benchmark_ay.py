@@ -23,7 +23,7 @@ PLAYER = "player_55000.bin"
 SONG = "song_57158.bin"
 
 
-def extract_music(archive_path, directory, ay_export):
+def extract_music(archive_path, directory, ay_export, pt3=None):
     with ZipFile(archive_path) as archive:
         player, song = [archive.read(next(item for item in archive.namelist() if item.endswith(f"/game/music/{name}")))
                         for name in (PLAYER, SONG)]
@@ -34,6 +34,10 @@ def extract_music(archive_path, directory, ay_export):
         raise ValueError("The compiled player has an unrecognized AY output loop")
     if ay_export is not None and song not in ay_export.read_bytes():
         raise ValueError("The archived PT3 song does not match the requested AY export")
+    if pt3 is not None:
+        song = pt3.read_bytes()
+        if not 202 <= len(song) <= 65536 - 57158 or not song.startswith((b"ProTracker 3.", b"Vortex Tracker II")):
+            raise ValueError("Expected a PT3 module that fits at 57158")
     (directory / PLAYER).write_bytes(player)
     (directory / SONG).write_bytes(song)
     return hashlib.sha256(player).hexdigest(), hashlib.sha256(song).hexdigest()
@@ -131,7 +135,9 @@ def record(emulator, directory, model, seconds, through_loop=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, required=True, help="Blokius sprite-manager WIP ZIP")
-    parser.add_argument("--ay-export", type=Path, help="optional Vortex Tracker .ay export to compare")
+    music = parser.add_mutually_exclusive_group()
+    music.add_argument("--ay-export", type=Path, help="optional Vortex Tracker .ay export to compare")
+    music.add_argument("--pt3", type=Path, help="capture this PT3 module using the archived player")
     parser.add_argument("--assembler", type=Path, required=True)
     parser.add_argument("--emulator", type=Path, required=True)
     parser.add_argument("--seconds", type=int, help="wall-clock capture length per model (16, or 290 with --through-loop)")
@@ -150,7 +156,7 @@ def main():
                                  if line.startswith("SjASMPlus"))
         with tempfile.TemporaryDirectory(prefix="ringo8-ay-") as scratch:
             directory = Path(scratch)
-            player_hash, song_hash = extract_music(args.archive, directory, args.ay_export)
+            player_hash, song_hash = extract_music(args.archive, directory, args.ay_export, args.pt3)
             run([assembler, "--sym=reference_player.sym", PROBE], directory)
             with ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(lambda model: record(emulator, directory, model, args.seconds, args.through_loop), MODELS))

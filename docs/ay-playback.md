@@ -19,6 +19,8 @@ The two models produced matching instruction traces on repeated reference runs a
 
 Run the reference benchmark with `--through-loop` to capture all 5,120 ticks before the tracker returns to its loop position. The full capture contains the same first 256 ticks and no envelope data writes after initialization. The uncompressed delta stream for the full song is 49,761 bytes. The standalone prefix benchmark loops through its initialization entry for repeatable timing.
 
+Pass `--pt3 <export.pt3>` to `benchmark_ay.py --through-loop` to capture a Vortex Tracker export with the same reference player. The archive supplies the player. The resulting JSON is the input to the phrase packer below.
+
 ## Banked whole-song playback
 
 ```powershell
