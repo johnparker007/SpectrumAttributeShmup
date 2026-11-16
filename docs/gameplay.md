@@ -14,15 +14,15 @@ After the last ship is destroyed, **GAME OVER** and **ENTER TO RESTART** appear 
 
 The HUD at the top right shows the remaining lives as small ships to the left of a six-digit score. It awards 100 points per destroyed ship and stores the four significant digits in packed decimal. The trailing `00` is loaded into both bitmap banks at startup and stays outside the update queue. A life change adds or erases only the affected icons. The queue updates at most one scanline of one glyph per 50 Hz frame and copies it to both banks. The bitmap stays untouched when the HUD has caught up. Tile and sprite composition rebuilds the attribute buffer, so the ten-column HUD strip gets its colours reapplied once per game tick.
 
-The first game slot reads the keyboard, resolves the previous collision flags, moves the ships and advances the projectiles. The large-sprite intervals check the projectile positions against ship hitboxes and retire spent pairs using the stock paging schedule. After sprite composition, the second game slot checks for ship contact and expands each paired record into two shots for plotting. Collision checks use coordinates. The attribute buffer holds the colours for drawing. Inactive shots skip the buffer write. The game uses the archived barrel-scroll scenery and the banked 50 Hz AY player.
+The first game slot reads the keyboard, resolves the previous collision flags, moves the ships and advances the projectiles. The large-sprite intervals check the projectile positions against ship hitboxes and retire spent pairs using the stock paging schedule. After sprite composition, the second game slot checks for ship contact and expands each paired record into two shots for plotting. Collision checks use coordinates. The attribute buffer holds the colours for drawing. Inactive shots skip the buffer write. The banked 50 Hz AY player plays the 25.6-second Star Force loop on A and B.
 
 ## Reproduce
 
 ```powershell
-python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --phrase-reference <full-reference.json> --output-tap <playable.tap>
+python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>
 ```
 
-Generate the song reference with `benchmark_ay.py --through-loop`. The verifier builds a keyboard-controlled TAP and a separate deterministic replay build. Only the keyboard-controlled TAP is exported. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 36 game ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
+The default build uses the packed Star Force assets in `game/music`. To audition an alternate tune, pass `--phrase-reference <full-reference.json>` with a full-song capture from `benchmark_ay.py --through-loop`. The verifier builds a keyboard-controlled TAP and a separate deterministic replay build. Only the keyboard-controlled TAP is exported. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 36 game ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
 
 The HUD tests compare each bitmap update and its page restore against score and life changes, including resets. They reject writes to the two trailing zeroes and check decimal carries and saturation. Headless video checks `000000` with three ships at startup and the first score update.
 
@@ -36,12 +36,12 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | --- | ---: | ---: |
 | Replay frame pairs checked against stock paging | ≥815 | ≥815 |
 | Keyboard-build frame pairs checked against stock paging | ≥256 | ≥256 |
-| Minimum Frame 1 margin across the 815-tick replay | 1,485 T-states | 1,438 T-states |
-| Minimum Frame 2 margin across the 815-tick replay | 3,260 T-states | 3,261 T-states |
+| Minimum Frame 1 margin across the 815-tick replay | 1,965 T-states | 1,918 T-states |
+| Minimum Frame 2 margin across the 815-tick replay | 3,515 T-states | 3,512 T-states |
 | Visible enemy ships checked together | 12 | 12 |
 | Player shots verified in flight together | 10 | 10 |
 | Enemy shots checked at emission | 78 | 78 |
 | Aimed three-way spreads checked | 17 | 17 |
-| AY ticks compared with the reference, spanning the first restart | 1,024 | 1,024 |
+| AY ticks checked through the full tune, loop and first restart | 1,312 | 1,312 |
 
-The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites. The keyboard TAP has SHA-256 `5e83681a7fbaa110805903a0ea00908e31dd9beba217889b19814d676d5b690a`.
+The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites. The keyboard TAP has SHA-256 `de734f0d5970cb0a6412dfdc9e00432aa27875c4cc47e3dd81eaa8924cd453ea`.

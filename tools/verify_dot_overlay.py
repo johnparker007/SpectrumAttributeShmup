@@ -29,9 +29,8 @@ MOTION_MARKERS = ("motionBegin", "motionEnd")
 YELLOW = b"\x00\xff\xff"  # BGR24
 
 
-def install_audio(sample, audio, phrases):
+def install_audio(sample, audio, phrases, packed_audio=None):
     shutil.copyfile(TESTS / "audio" / "engine_stream.a80", sample / "engine_stream.a80")
-    initial, loop = loop_audio(audio)
     gfx = sample / "gfx"
     resources = gfx / "resources.a80"
     added = b'''
@@ -41,8 +40,11 @@ def install_audio(sample, audio, phrases):
 '''
     if phrases:
         shutil.copyfile(TESTS / "audio" / "engine_phrases.a80", sample / "engine_phrases.a80")
-        # Split early so the integrated trace exercises both banks in its first 1024 ticks.
-        recipe, bank_a, bank_b = pack([initial, *packets(loop)], first_bank_limit=4096)
+        if packed_audio is None:
+            # Split the longer diagnostic tracks early to exercise both banks.
+            initial, loop = loop_audio(audio)
+            packed_audio = pack([initial, *packets(loop)], first_bank_limit=4096)
+        recipe, bank_a, bank_b = packed_audio
         for name, blob in (("recipe.bin", recipe), ("literal0.bin", bank_a), ("literal1.bin", bank_b)):
             (gfx / name).write_bytes(blob)
         added += b'''
@@ -57,6 +59,7 @@ testAudioRecipeEnd:
     incbin "gfx/literal1.bin"
 '''
     else:
+        initial, loop = loop_audio(audio)
         (gfx / "sound_stream.bin").write_bytes(initial + loop)
         added += b'''
 testAudioStream: incbin "gfx/sound_stream.bin"
@@ -166,23 +169,25 @@ def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seco
     else:
         reference = [audio[0], *audio[1:], *audio[1:]]
         expected_wire = init + loop * 2
-    audio_seconds = max(245, seconds) if whole_song else (65 if phrases else 40)
+    audio_seconds = max(80, seconds, (len(reference) + 20) // 21) if whole_song else (65 if phrases else 40)
     capture = capture_ay(emulator, sample / "main.tap", symbols, model, audio_seconds,
                          points, len(reference) - 1)
     writes = [register_pairs(capture["initial_writes"])]
     writes.extend(register_pairs(tick["writes"]) for tick in capture["ticks"])
     verify_rows(writes, reference, model, expected_wire)
     if phrases:
-        expected_pages = {0x11, 0x13} if model == "128k" else {0x14, 0x16}
+        page_map = (0x11, 0x13) if model == "128k" else (0x14, 0x16)
+        recipe = (sample / "gfx" / "recipe.bin").read_bytes()
+        loop_pages = [page_map[high >> 6] for high, count in zip(recipe[4::3], recipe[5::3], strict=True)
+                      for _ in range(count)]
         visited = set()
-        for tick in capture["ticks"]:
+        for index, tick in enumerate(capture["ticks"]):
             (start, selected), (end, restored) = tick["pages"]
             begin = tick["begin"] % FRAME
-            if selected not in expected_pages or restored != 0x10 or not begin < start < end < begin + tick["cost"]:
+            if (selected != loop_pages[index % len(loop_pages)] or restored != 0x10
+                    or not begin < start < end < begin + tick["cost"]):
                 raise ValueError(f"{model}: AY paging escaped its game-logic tick")
             visited.add(selected)
-        if visited != expected_pages:
-            raise ValueError(f"{model}: AY playback did not exercise both mapped banks")
         result["audio_physical_banks"] = sorted(value & 7 for value in visited)
     result["audio_ticks_verified"] = len(reference) - 1
     result["audio_tick_cost_range"] = [cost + 27 for cost in capture["tick_cost_range"]]

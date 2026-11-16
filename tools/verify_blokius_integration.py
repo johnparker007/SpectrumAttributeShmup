@@ -21,6 +21,7 @@ from verify_zesarux_raster import run
 
 
 GAME_OVER_TEXT = ("GAME OVER".center(16), "ENTER TO RESTART")
+MUSIC = TESTS.parent / "game" / "music"
 SHIP_PATTERNS = ((21, 0, 64), (13, 5, 64), (29, 7, 32), (22, 11, 64))
 SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in range(64))
                for centre, amplitude, period in SHIP_PATTERNS)
@@ -57,7 +58,12 @@ def ship_art(rows, colour):
     return data
 
 
-def install(game, assembler, audio, live=False, replay=None):
+def star_force_music():
+    return (MUSIC.joinpath("star-force-recipe.bin").read_bytes(),
+            MUSIC.joinpath("star-force-literal.bin").read_bytes(), b"")
+
+
+def install(game, assembler, audio=None, live=False, replay=None):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -165,7 +171,7 @@ doSinScroll equ barrelScroll_Update
         (game / "enemy_boxes.bin").write_bytes(bytes(axis for box in ENEMY_BOXES for axis in box))
         (game / "player_box.bin").write_bytes(bytes(PLAYER_BOX))
         (game / "collision_expected.bin").write_bytes(phases()[0].hits)
-    install_audio(game, audio, phrases=True)
+    install_audio(game, audio, phrases=True, packed_audio=star_force_music() if audio is None else None)
     if live:
         resources = game / "gfx" / "resources.a80"
         resources.write_bytes(resources.read_bytes() + b'''

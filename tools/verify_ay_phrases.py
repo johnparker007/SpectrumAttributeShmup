@@ -34,6 +34,24 @@ def packets(stream):
         raise ValueError("Unterminated AY packet")
 
 
+def unpack(recipe, banks):
+    if len(recipe) < 6 or len(recipe) % 3 or recipe[2] != 1:
+        raise ValueError("Invalid AY recipe")
+    for low, high, count in zip(recipe[::3], recipe[1::3], recipe[2::3], strict=True):
+        bank, cursor = divmod(low | high << 8, BANK_SIZE)
+        if bank >= len(banks) or not count:
+            raise ValueError("Invalid AY phrase descriptor")
+        data = banks[bank]
+        for _ in range(count):
+            start = cursor
+            while cursor < len(data) and data[cursor] != 255:
+                cursor += 2
+            if cursor >= len(data):
+                raise ValueError("AY phrase runs outside its literal bank")
+            cursor += 1
+            yield bytes(data[start:cursor])
+
+
 def pack(rows, first_bank_limit=BANK_SIZE):
     literals, runs = [], []
     offsets_by_packet = defaultdict(list)
@@ -85,17 +103,7 @@ def pack(rows, first_bank_limit=BANK_SIZE):
             recipe.append(following - start)
             start = following
 
-    restored = []
-    for index in range(0, len(recipe), 3):
-        offset = int.from_bytes(recipe[index:index + 2], "little")
-        bank, start = divmod(offset, BANK_SIZE)
-        cursor = start
-        for _ in range(recipe[index + 2]):
-            while banks[bank][cursor] != 255:
-                cursor += 2
-            cursor += 1
-        restored.extend(packets(bytes(banks[bank][start:cursor])))
-    if restored != rows or recipe[2] != 1:
+    if list(unpack(recipe, banks)) != rows:
         raise ValueError("AY recipe failed its round-trip check")
     return (bytes(recipe), *map(bytes, banks))
 

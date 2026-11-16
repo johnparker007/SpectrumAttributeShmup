@@ -16,7 +16,10 @@ from profile_blokius import build, capture
 from profile_ringo8 import HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols, trace
 from verify_ay_stream import register_pairs
-from verify_blokius_integration import SHIP_Y, SHOT_DIRECTIONS, SHOT_PERIOD, SHOT_VECTORS, examine, install
+from verify_ay_phrases import unpack
+from verify_blokius_integration import (
+    SHIP_Y, SHOT_DIRECTIONS, SHOT_PERIOD, SHOT_VECTORS, examine, install, star_force_music,
+)
 from verify_dot_overlay import verify_audio
 from verify_score_hud import (
     assemble_arithmetic_probe, check_arithmetic, check_game_over_video, check_hud_updates, check_hud_video,
@@ -549,7 +552,7 @@ def verify_wave_fire(emulator, replay, model):
             "bearing_codes_seen": sorted({path for _, _, path, _, _ in shots})}
 
 
-def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio):
+def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio, whole_song_audio=False):
     # Bound concurrent headless runs on the user's machine.
     with ThreadPoolExecutor(max_workers=3) as pool:
         reference = pool.submit(capture, emulator, stock, model, seconds, paging=True)
@@ -561,7 +564,7 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
         keyboard = pool.submit(verify_keyboard, emulator, game, model)
         formation = pool.submit(verify_formation, emulator, game, model)
         left_exit = pool.submit(verify_left_exit, emulator, game, model)
-        music = pool.submit(verify_audio, emulator, replay, model, audio, True)
+        music = pool.submit(verify_audio, emulator, replay, model, audio, True, whole_song=whole_song_audio)
         scenery = pool.submit(verify_rewind, emulator, replay, model)
         wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
         targets = [(state["header"] >> 24, state["header"] >> 16 & 255) for state in expected(REPLAY)]
@@ -609,8 +612,9 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for arg in ("archive", "assembler", "emulator", "phrase-reference", "output-tap"):
+    for arg in ("archive", "assembler", "emulator", "output-tap"):
         parser.add_argument(f"--{arg}", required=arg != "output-tap", type=Path)
+    parser.add_argument("--phrase-reference", type=Path, help="use an alternate full-song capture instead of Star Force")
     parser.add_argument("--model", choices=MODELS)
     parser.add_argument("--seconds", type=int, default=155, help="raster capture time per build")
     parser.add_argument("--replay-seconds", type=int, default=290, help="raster capture time for the longer replay")
@@ -621,26 +625,33 @@ def main():
         emulator, assembler = (path.resolve(strict=True) for path in (args.emulator, args.assembler))
         version = next(line for line in run([emulator, "--version"], emulator.parent).splitlines()
                        if line.startswith("ZEsarUX v"))
-        reference = json.loads(args.phrase_reference.read_text(encoding="utf-8-sig"))
-        if not reference["passed"] or not reference.get("through_loop") or reference["emulator"] != version:
-            raise ValueError("Expected the verified full-song AY reference")
-        tune = reference["results"][0]
-        audio = [register_pairs(tune["initial_writes"]), *(register_pairs(tick["writes"]) for tick in tune["ticks"])]
+        if args.phrase_reference:
+            reference = json.loads(args.phrase_reference.read_text(encoding="utf-8-sig"))
+            if not reference["passed"] or not reference.get("through_loop") or reference["emulator"] != version:
+                raise ValueError("Expected the verified full-song AY reference")
+            tune = reference["results"][0]
+            audio = [register_pairs(tune["initial_writes"]), *(register_pairs(tick["writes"]) for tick in tune["ticks"])]
+            build_audio = audio
+        else:
+            recipe, *banks = star_force_music()
+            audio = [list(zip(packet[:-1:2], packet[1:-1:2], strict=True)) for packet in unpack(recipe, banks)]
+            build_audio = None
         with tempfile.TemporaryDirectory(prefix="blokius-gameplay-") as scratch:
             root = Path(scratch)
             (root / "stock").mkdir()
             stock = build(args.archive, assembler, root / "stock")
             game = Path(shutil.copytree(stock, root / "game"))
             replay = Path(shutil.copytree(stock, root / "replay"))
-            install(game, assembler, audio, live=True)
-            install(replay, assembler, audio, live=True, replay=REPLAY)
+            install(game, assembler, build_audio, live=True)
+            install(replay, assembler, build_audio, live=True, replay=REPLAY)
             assemble_arithmetic_probe(assembler, replay)
             aim_probe = Path(__file__).resolve().parents[1] / "tests" / "enemies" / "aim.asm"
             run([assembler, "--sym=aim.sym", aim_probe], replay)
             pair_probe = Path(__file__).resolve().parents[1] / "tests" / "collision" / "player_pairs.asm"
             run([assembler, "--sym=player_pairs.sym", pair_probe], replay)
             models = (args.model,) if args.model else MODELS
-            results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio)
+            results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio,
+                              whole_song_audio=build_audio is None)
                        for model in models]
             tap = game / "main.tap"
             digest = hashlib.sha256(tap.read_bytes()).hexdigest()

@@ -32,3 +32,7 @@ Repeated runs of complete tick packets share one literal copy. Each three-byte r
 On both models, the verifier compared every write of the 5,120-tick song and the first 32 ticks after the reconstructed loop against the corresponding captured reference register states and envelope sequence. The loop starts at the first music tick and restores its state without consuming an initialization frame. Native tracker writes after its first loop boundary were outside the reference capture. The complete recipe and literal data take 23,049 bytes versus 49,769 for the loop-ready unpacked stream. The stand-alone banked player took 221–1,424 T-states per tick.
 
 The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) verifies both a looping 256-tick prefix and banked playback with the complete track loaded. A captured-audio comparison remains open.
+
+## Star Force gameplay music
+
+The gameplay build uses the packed Star Force cover in `game/music`. It plays on channels A and B and loops after 1,280 AY ticks. The 759-byte recipe and 695-byte literal pool were generated from `MainLoop.pt3` (SHA-256 `2e4d488e6070f127f911adbe4f5707043c9145a1c78f681dc154b62a187daa97`). Capture the export with `benchmark_ay.py --pt3 MainLoop.pt3 --through-loop` and pack the resulting JSON with `verify_ay_phrases.py`. The recipe and first literal bank are the gameplay assets.
