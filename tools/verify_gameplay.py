@@ -558,13 +558,14 @@ def verify_wave_fire(emulator, replay, model):
 
 def mix_replay_effects(wire, gameplay):
     shot = (MUSIC / "shot-sound.bin").read_bytes()
-    noise = (MUSIC / "explosion-noise.bin").read_bytes()[:-1]
+    noise = (MUSIC / "explosion-noise.bin").read_bytes()
     shot_end = len(shot) // 3
+    noise_end = len(noise) // 2
     stream = iter(packets(wire))
     initial = next(stream)
     output = bytearray(initial)
     music_mixer = written_mixer = dict(zip(initial[:-1:2], initial[1:-1:2]))[7]
-    noise_index, shot_index = len(noise), shot_end - 1
+    noise_index, shot_index = noise_end, shot_end
     for tick, packet in enumerate(stream):
         output.extend(packet[:-1])
         changes = dict(zip(packet[:-1:2], packet[1:-1:2]))
@@ -573,20 +574,26 @@ def mix_replay_effects(wire, gameplay):
         if tick % 2:
             state = gameplay[tick // 2]
             if state["restart"]:
-                noise_index, shot_index = len(noise), shot_end - 1
+                noise_index, shot_index = noise_end, shot_end
             if state["shot_started"]:
                 shot_index = 0
             if state["explosion_started"]:
                 noise_index = 0
+        shot_volume = noise_volume = 0
         if shot_index < shot_end:
-            low, high, volume = shot[shot_index * 3:shot_index * 3 + 3]
-            output.extend((4, low, 5, high, 10, volume))
+            low, high, shot_volume = shot[shot_index * 3:shot_index * 3 + 3]
+            output.extend((4, low, 5, high))
             shot_index += 1
-        mixer = (music_mixer | 32) & ~4
-        if noise_index < len(noise):
-            output.extend((6, noise[noise_index]))
+        if noise_index < noise_end:
+            period, noise_volume = noise[noise_index * 2:noise_index * 2 + 2]
+            output.extend((6, period))
             noise_index += 1
-            mixer &= ~16
+        output.extend((10, max(shot_volume, noise_volume)))
+        mixer = music_mixer | 36
+        if shot_volume:
+            mixer &= ~4
+        if noise_volume:
+            mixer &= ~32
         if mixer != written_mixer:
             output.extend((7, mixer))
             written_mixer = mixer

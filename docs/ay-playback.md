@@ -39,6 +39,6 @@ The gameplay build uses the packed Star Force cover in `game/music`. It plays on
 
 ## Gameplay sound effects
 
-Capture `SoundEffects.pt3` with `benchmark_ay.py --pt3 SoundEffects.pt3 --through-loop`, then run `python tools/extract_ay_effects.py SoundEffects.vt2 <reference.json> game/music`. The extractor uses the sample 3 notes to cut pattern 0 (enemy explosion) and pattern 1 (player fire). The effects occupy 67 bytes in total.
+Capture `SoundEffects.pt3` with `benchmark_ay.py --pt3 SoundEffects.pt3 --through-loop`, then run `python tools/extract_ay_effects.py SoundEffects.vt2 <reference.json> game/music`. The extractor uses the sample 3 notes to cut pattern 0 (enemy explosion) and pattern 1 (player fire). The effects occupy 90 bytes in total.
 
-A launched shot pair starts the tone sweep on channel C with its original volume changes. An enemy entering its explosion animation starts the 27-tick noise sequence. The AY mixer combines the noise generator with B's arpeggio tone, so the explosion shares the arpeggio's current volume. The effects can play together. A new event of the same kind restarts its effect, and a game restart clears both effects while the music continues.
+A launched shot pair starts the tone sweep on channel C. An enemy entering its explosion animation starts the 27-tick noise sequence on C. Each effect follows its captured volume when it plays alone. While both play, the AY noise gates the shot tone and channel C uses the higher of the two volumes for that tick. The music stays on A and B. A new event of the same kind restarts its effect, and a game restart clears both effects while the music continues.

@@ -14,7 +14,7 @@ After the last ship is destroyed, **GAME OVER** and **ENTER TO RESTART** appear 
 
 The HUD at the top right shows the remaining lives as small ships to the left of a six-digit score. It awards 100 points per destroyed ship and stores the four significant digits in packed decimal. The trailing `00` is loaded into both bitmap banks at startup and stays outside the update queue. A life change adds or erases only the affected icons. The queue updates at most one scanline of one glyph per 50 Hz frame and copies it to both banks. The bitmap stays untouched when the HUD has caught up. Tile and sprite composition rebuilds the attribute buffer, so the ten-column HUD strip gets its colours reapplied once per game tick.
 
-The first game slot reads the keyboard, resolves the previous collision flags, moves the ships and advances the projectiles. The large-sprite intervals check the projectile positions against ship hitboxes and retire spent pairs using the stock paging schedule. After sprite composition, the second game slot checks for ship contact and expands each paired record into two shots for plotting. Collision checks use coordinates. The attribute buffer holds the colours for drawing. Inactive shots skip the buffer write. The banked 50 Hz AY player plays the 25.6-second Star Force loop on A and B. Player shots play a tone on C, and enemy explosions add noise to B so both effects can play together.
+The first game slot reads the keyboard, resolves the previous collision flags, moves the ships and advances the projectiles. The large-sprite intervals check the projectile positions against ship hitboxes and retire spent pairs using the stock paging schedule. After sprite composition, the second game slot checks for ship contact and expands each paired record into two shots for plotting. Collision checks use coordinates. The attribute buffer holds the colours for drawing. Inactive shots skip the buffer write. The banked 50 Hz AY player plays the 25.6-second Star Force loop on A and B. Channel C plays the player-shot tone and enemy-explosion noise.
 
 ## Reproduce
 
@@ -36,8 +36,8 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | --- | ---: | ---: |
 | Replay frame pairs checked against stock paging | ≥815 | ≥815 |
 | Keyboard-build frame pairs checked against stock paging | ≥256 | ≥256 |
-| Minimum Frame 1 margin across the 815-tick replay | 1,380 T-states | 1,333 T-states |
-| Minimum Frame 2 margin across the 815-tick replay | 3,025 T-states | 3,026 T-states |
+| Minimum Frame 1 margin across the 815-tick replay | 1,526 T-states | 1,479 T-states |
+| Minimum Frame 2 margin across the 815-tick replay | 2,933 T-states | 2,934 T-states |
 | Visible enemy ships checked together | 12 | 12 |
 | Player shots verified in flight together | 10 | 10 |
 | Enemy shots checked at emission | 78 | 78 |
@@ -45,4 +45,4 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | AY ticks checked through the full tune, loop and first restart | 1,312 | 1,312 |
 | AY ticks with both sound effects active | 202 | 202 |
 
-The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites. The keyboard TAP has SHA-256 `1e4d62f97672d89d00e22b8b16b1f116516529655170e774955fc6c00141bff9`.
+The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites. The keyboard TAP has SHA-256 `acfdc8d1cc19427f55c35ca9820c81e1e08d9dff8278e53558df3e29addc50e4`.

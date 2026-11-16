@@ -187,7 +187,7 @@ def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seco
         overlap = 0
         for tick in writes:
             state.update(tick)
-            overlap += bool(state[10] and not (state[7] & 16))
+            overlap += bool(state[10] and not (state[7] & 36))
         if not overlap:
             raise ValueError(f"{model}: shot and explosion were never active together")
         result["audio_overlapping_effect_ticks"] = overlap

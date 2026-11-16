@@ -41,12 +41,12 @@ def extract(module, capture):
         raise ValueError("The module and capture disagree on the total duration")
 
     noise, _ = effects[0]
-    shot, mute = effects[1]
+    shot, _ = effects[1]
     if any(frame[7] & 9 != 1 for frame in noise) or any(frame[7] & 9 != 8 for frame in shot if frame[8]):
         raise ValueError("Expected noise-only explosion and tone-only shot on A")
     return {
-        "explosion-noise.bin": bytes([*(frame[6] & 31 for frame in noise), 255]),
-        "shot-sound.bin": bytes(value for frame in (*shot, mute)
+        "explosion-noise.bin": bytes(value for frame in noise for value in (frame[6] & 31, frame[8])),
+        "shot-sound.bin": bytes(value for frame in shot
                                for value in (frame[0], frame[1] & 15, frame[8])),
     }
 

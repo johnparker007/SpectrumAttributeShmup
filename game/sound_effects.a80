@@ -14,35 +14,33 @@ startExplosionSound:
 resetSoundEffects:
     ld hl,0
     ld (explosionNoiseCursor),hl
-    ld hl,shotSoundEnd-3        ; play the silent final frame on the next AY tick
     ld (shotSoundCursor),hl
     ret
 
 soundEffectsTick:
     call advanceShotSound
-    ld hl,(explosionNoiseCursor)
-    ld a,h
-    or a
-    jr z,.musicMixer
-    ld e,(hl)
-    inc hl
+    ld d,e                      ; shot volume
+    call advanceExplosionSound ; explosion volume in E
+    ld a,(soundMusicMixer)
+    or #24                      ; disable both generators on C when idle
+    inc d
+    dec d
+    jr z,.noise
+    and #fb                     ; enable the shot tone
+.noise:
+    ld h,a
     ld a,e
-    inc a
-    jr z,.endExplosion
-    ld (explosionNoiseCursor),hl
-    ld a,6
+    or a
+    jr z,.volume
+    res 5,h                     ; enable the explosion noise
+.volume:
+    cp d
+    jr nc,.writeVolume
+    ld e,d                      ; use the louder effect's volume on C
+.writeVolume:
+    ld a,10
     call writeSoundEffect
-    ld a,(soundMusicMixer)
-    and #ef                   ; enable noise on B and keep its music tone
-    jr .mix
-.endExplosion:
-    ld hl,0
-    ld (explosionNoiseCursor),hl
-.musicMixer:
-    ld a,(soundMusicMixer)
-.mix:
-    or #20                    ; keep noise off on C
-    and #fb                   ; enable tone on C
+    ld a,h
     ld hl,soundMixerWritten
     cp (hl)
     ret z
@@ -51,8 +49,29 @@ soundEffectsTick:
     ld a,7
     jp writeSoundEffect
 
+advanceExplosionSound:
+    ld hl,(explosionNoiseCursor)
+    ld e,0
+    ld a,h
+    or a
+    ret z
+    ld e,(hl)
+    inc hl
+    ld a,6
+    call writeSoundEffect
+    ld e,(hl)
+    inc hl
+    ld a,l
+    cp low explosionNoiseEnd
+    jr nz,.save
+    ld hl,0
+.save:
+    ld (explosionNoiseCursor),hl
+    ret
+
 advanceShotSound:
     ld hl,(shotSoundCursor)
+    ld e,0
     ld a,h
     or a
     ret z
@@ -66,8 +85,6 @@ advanceShotSound:
     call writeSoundEffect
     ld e,(hl)
     inc hl
-    ld a,10
-    call writeSoundEffect
     ld a,l
     cp low shotSoundEnd
     jr nz,.save
@@ -91,3 +108,5 @@ shotSound: incbin "gfx/shot-sound.bin"
 shotSoundEnd:
     assert shotSoundEnd-shotSound < 256
 explosionNoise: incbin "gfx/explosion-noise.bin"
+explosionNoiseEnd:
+    assert explosionNoiseEnd-explosionNoise < 256
