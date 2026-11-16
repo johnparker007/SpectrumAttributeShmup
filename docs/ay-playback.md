@@ -36,3 +36,9 @@ The [combined renderer experiment](projectile-integration.md#with-50-hz-playback
 ## Star Force gameplay music
 
 The gameplay build uses the packed Star Force cover in `game/music`. It plays on channels A and B and loops after 1,280 AY ticks. The 759-byte recipe and 695-byte literal pool were generated from `MainLoop.pt3` (SHA-256 `2e4d488e6070f127f911adbe4f5707043c9145a1c78f681dc154b62a187daa97`). Capture the export with `benchmark_ay.py --pt3 MainLoop.pt3 --through-loop` and pack the resulting JSON with `verify_ay_phrases.py`. The recipe and first literal bank are the gameplay assets.
+
+## Gameplay sound effects
+
+Capture `SoundEffects.pt3` with `benchmark_ay.py --pt3 SoundEffects.pt3 --through-loop`, then run `python tools/extract_ay_effects.py SoundEffects.vt2 <reference.json> game/music`. The extractor uses the sample 3 notes to cut pattern 0 (enemy explosion) and pattern 1 (player fire). The effects occupy 67 bytes in total.
+
+A launched shot pair starts the tone sweep on channel C with its original volume changes. An enemy entering its explosion animation starts the 27-tick noise sequence. The AY mixer combines the noise generator with B's arpeggio tone, so the explosion shares the arpeggio's current volume. The effects can play together. A new event of the same kind restarts its effect, and a game restart clears both effects while the music continues.

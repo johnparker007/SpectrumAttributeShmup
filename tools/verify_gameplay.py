@@ -16,9 +16,9 @@ from profile_blokius import build, capture
 from profile_ringo8 import HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols, trace
 from verify_ay_stream import register_pairs
-from verify_ay_phrases import unpack
+from verify_ay_phrases import packets, unpack
 from verify_blokius_integration import (
-    SHIP_Y, SHOT_DIRECTIONS, SHOT_PERIOD, SHOT_VECTORS, examine, install, star_force_music,
+    MUSIC, SHIP_Y, SHOT_DIRECTIONS, SHOT_PERIOD, SHOT_VECTORS, examine, install, star_force_music,
 )
 from verify_dot_overlay import verify_audio
 from verify_score_hud import (
@@ -88,6 +88,7 @@ def expected(inputs):
     results = []
     for index, command in enumerate(inputs):
         emitted = []
+        shot_started = explosion_started = False
         restart = bool(command & RESTART) and not restart_held
         restart_held = bool(command & RESTART)
         if index == 0 or restart:
@@ -128,6 +129,7 @@ def expected(inputs):
                     if free is not None:
                         pairs[free] = (player[0] + 2, player[1])
                         reload = 3
+                        shot_started = True
             expired = set()
             for slot, (x, y) in enumerate(enemies):
                 if x == HIDDEN[0]:
@@ -137,6 +139,7 @@ def expected(inputs):
                 elif enemy_hits[slot]:
                     kills += bool(lives)
                     explosions[slot] = EXPLOSION_TICKS
+                    explosion_started = True
                     enemies[slot] = (HIDDEN[0], y)
                 elif tick % 2:
                     continue
@@ -200,6 +203,7 @@ def expected(inputs):
             "enemy_motion": [packed((profile * 64, blast)) for profile, blast in zip(profiles, explosions)],
             "enemy_hits": enemy_hits, "player_explosion": player_explosion,
             "wave": wave, "restart": restart, "emitted": emitted,
+            "shot_started": shot_started, "explosion_started": explosion_started,
             "respawn_wait": respawn_wait, "invincible": invulnerable, "visible": bool(visible),
             "message_rows": message_rows,
             "player_box": packed((player[0] if alive else HIDDEN[0], player[1])),
@@ -552,6 +556,44 @@ def verify_wave_fire(emulator, replay, model):
             "bearing_codes_seen": sorted({path for _, _, path, _, _ in shots})}
 
 
+def mix_replay_effects(wire, gameplay):
+    shot = (MUSIC / "shot-sound.bin").read_bytes()
+    noise = (MUSIC / "explosion-noise.bin").read_bytes()[:-1]
+    shot_end = len(shot) // 3
+    stream = iter(packets(wire))
+    initial = next(stream)
+    output = bytearray(initial)
+    music_mixer = written_mixer = dict(zip(initial[:-1:2], initial[1:-1:2]))[7]
+    noise_index, shot_index = len(noise), shot_end - 1
+    for tick, packet in enumerate(stream):
+        output.extend(packet[:-1])
+        changes = dict(zip(packet[:-1:2], packet[1:-1:2]))
+        if 7 in changes:
+            music_mixer = written_mixer = changes[7]
+        if tick % 2:
+            state = gameplay[tick // 2]
+            if state["restart"]:
+                noise_index, shot_index = len(noise), shot_end - 1
+            if state["shot_started"]:
+                shot_index = 0
+            if state["explosion_started"]:
+                noise_index = 0
+        if shot_index < shot_end:
+            low, high, volume = shot[shot_index * 3:shot_index * 3 + 3]
+            output.extend((4, low, 5, high, 10, volume))
+            shot_index += 1
+        mixer = (music_mixer | 32) & ~4
+        if noise_index < len(noise):
+            output.extend((6, noise[noise_index]))
+            noise_index += 1
+            mixer &= ~16
+        if mixer != written_mixer:
+            output.extend((7, mixer))
+            written_mixer = mixer
+        output.append(255)
+    return bytes(output)
+
+
 def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio, whole_song_audio=False):
     # Bound concurrent headless runs on the user's machine.
     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -564,13 +606,15 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio,
         keyboard = pool.submit(verify_keyboard, emulator, game, model)
         formation = pool.submit(verify_formation, emulator, game, model)
         left_exit = pool.submit(verify_left_exit, emulator, game, model)
-        music = pool.submit(verify_audio, emulator, replay, model, audio, True, whole_song=whole_song_audio)
+        gameplay = expected(REPLAY)
+        mix = (lambda wire: mix_replay_effects(wire, gameplay)) if whole_song_audio else None
+        music = pool.submit(verify_audio, emulator, replay, model, audio, True, whole_song=whole_song_audio, mix=mix)
         scenery = pool.submit(verify_rewind, emulator, replay, model)
         wave_fire = pool.submit(verify_wave_fire, emulator, replay, model)
-        targets = [(state["header"] >> 24, state["header"] >> 16 & 255) for state in expected(REPLAY)]
+        targets = [(state["header"] >> 24, state["header"] >> 16 & 255) for state in gameplay]
         hud_updates = pool.submit(check_hud_updates, emulator, replay, model, targets)
         hud_video = pool.submit(check_hud_video, emulator, replay, model, targets[:200])
-        final_run = [state for state in expected(REPLAY) if state["header"] >> 16 & 255 == 0]
+        final_run = [state for state in gameplay if state["header"] >> 16 & 255 == 0]
         final_score = final_run[0]["header"] >> 24
         if not final_score or any(state["header"] >> 24 != final_score for state in final_run):
             raise ValueError("Replay needs a nonzero final score which stays fixed after game over")

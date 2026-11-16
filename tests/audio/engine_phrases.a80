@@ -57,6 +57,15 @@ sound_packet_next:
     inc hl
     cp #ff
     jr z,sound_packet_end
+    ifdef LIVE_SFX
+        cp 7
+        jr nz,sound_music_select
+        ld a,(hl)
+        ld (soundMusicMixer),a
+        ld (soundMixerWritten),a
+        ld a,7
+sound_music_select:
+    endif
     ld b,#ff
 soundSelect:
     out (c),a
@@ -80,3 +89,7 @@ phrase_next: dw testAudioRecipe
 phrase_packet: dw 0
 phrase_page: db #10
 phrase_left: db 0
+    ifdef LIVE_SFX
+soundMusicMixer: db 0
+soundMixerWritten: db 0
+    endif

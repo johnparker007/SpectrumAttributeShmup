@@ -156,6 +156,11 @@ doSinScroll equ barrelScroll_Update
         for stage, (shape, colour) in enumerate(zip(explosions, (6, 7, 2)), 1):
             (game / f"explosion_{stage}.bin").write_bytes(ship_art(shape, colour))
         defines.append("LIVE_SHMUP")
+        if audio is None:
+            defines.append("LIVE_SFX")
+            shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
+            for effect in ("shot-sound.bin", "explosion-noise.bin"):
+                shutil.copyfile(MUSIC / effect, game / "gfx" / effect)
         if replay is not None:
             controls = bytearray()
             for command, group in groupby(replay):
@@ -179,6 +184,9 @@ doSinScroll equ barrelScroll_Update
     assert testAudioRecipeEnd <= #e000
     org #e000
     include "enemy_runtime.a80"
+    ifdef LIVE_SFX
+        include "sound_effects.a80"
+    endif
     assert $ <= #10000
 ''')
     run([assembler, *(f"-D{name}=1" for name in defines), "--sym=main.sym", "main.asm"], game)

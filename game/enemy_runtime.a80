@@ -40,6 +40,9 @@ stepWave:
     ld (de),a
     dec de
     exx
+    ifdef LIVE_SFX
+        call startExplosionSound
+    endif
     ld a,(playerLives)
     or a
     jr z,.hide

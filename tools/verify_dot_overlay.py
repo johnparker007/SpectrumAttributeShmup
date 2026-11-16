@@ -147,7 +147,7 @@ def verify_overlay_video(emulator, sample, model, moving=None):
     return len(last_frames)
 
 
-def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seconds=0):
+def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seconds=0, mix=None):
     result = {}
     symbols = read_symbols(sample / "main.sym")
     symbols.update(tick_begin=symbols["soundTick"], tick_end=symbols["soundTickEnd"])
@@ -169,12 +169,28 @@ def verify_audio(emulator, sample, model, audio, phrases, whole_song=False, seco
     else:
         reference = [audio[0], *audio[1:], *audio[1:]]
         expected_wire = init + loop * 2
+    if mix is not None:
+        expected_wire = mix(expected_wire)
+        reference = [list(zip(packet[:-1:2], packet[1:-1:2], strict=True)) for packet in packets(expected_wire)]
+        points.update({
+            f"PC={symbols['soundEffectSelect']:04X}H AND BC=FFFDH": ("select", "TSTATES*256+A"),
+            f"PC={symbols['soundEffectWrite']:04X}H AND BC=BFFDH": ("data", "TSTATES*256+E"),
+        })
     audio_seconds = max(80, seconds, (len(reference) + 20) // 21) if whole_song else (65 if phrases else 40)
     capture = capture_ay(emulator, sample / "main.tap", symbols, model, audio_seconds,
                          points, len(reference) - 1)
     writes = [register_pairs(capture["initial_writes"])]
     writes.extend(register_pairs(tick["writes"]) for tick in capture["ticks"])
     verify_rows(writes, reference, model, expected_wire)
+    if mix is not None:
+        state = {}
+        overlap = 0
+        for tick in writes:
+            state.update(tick)
+            overlap += bool(state[10] and not (state[7] & 16))
+        if not overlap:
+            raise ValueError(f"{model}: shot and explosion were never active together")
+        result["audio_overlapping_effect_ticks"] = overlap
     if phrases:
         page_map = (0x11, 0x13) if model == "128k" else (0x14, 0x16)
         recipe = (sample / "gfx" / "recipe.bin").read_bytes()

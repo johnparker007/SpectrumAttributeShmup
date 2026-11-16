@@ -172,6 +172,9 @@ firePlayer:
     ld (hl),c
     inc hl
     ld (hl),d
+    ifdef LIVE_SFX
+        call startShotSound
+    endif
     ld a,3                      ; four game ticks between launches
     ld (fireWait),a
     ret
@@ -332,7 +335,11 @@ resetEncounter:
     ld (fireSlot),a
     ld (spreadWait),a
     ld (spawnSlot),a
-    ret
+    ifdef LIVE_SFX
+        jp resetSoundEffects
+    else
+        ret
+    endif
 
     include "score_hud.a80"
     include "game_over_hud.a80"

@@ -1,0 +1,93 @@
+; The banked music player restores page 0 before ticking these effects.
+startShotSound:
+    ld hl,shotSound
+    ld (shotSoundCursor),hl
+    ret
+
+startExplosionSound:
+    push hl
+    ld hl,explosionNoise
+    ld (explosionNoiseCursor),hl
+    pop hl
+    ret
+
+resetSoundEffects:
+    ld hl,0
+    ld (explosionNoiseCursor),hl
+    ld hl,shotSoundEnd-3        ; play the silent final frame on the next AY tick
+    ld (shotSoundCursor),hl
+    ret
+
+soundEffectsTick:
+    call advanceShotSound
+    ld hl,(explosionNoiseCursor)
+    ld a,h
+    or a
+    jr z,.musicMixer
+    ld e,(hl)
+    inc hl
+    ld a,e
+    inc a
+    jr z,.endExplosion
+    ld (explosionNoiseCursor),hl
+    ld a,6
+    call writeSoundEffect
+    ld a,(soundMusicMixer)
+    and #ef                   ; enable noise on B and keep its music tone
+    jr .mix
+.endExplosion:
+    ld hl,0
+    ld (explosionNoiseCursor),hl
+.musicMixer:
+    ld a,(soundMusicMixer)
+.mix:
+    or #20                    ; keep noise off on C
+    and #fb                   ; enable tone on C
+    ld hl,soundMixerWritten
+    cp (hl)
+    ret z
+    ld (hl),a
+    ld e,a
+    ld a,7
+    jp writeSoundEffect
+
+advanceShotSound:
+    ld hl,(shotSoundCursor)
+    ld a,h
+    or a
+    ret z
+    ld e,(hl)
+    inc hl
+    ld a,4
+    call writeSoundEffect
+    ld e,(hl)
+    inc hl
+    ld a,5
+    call writeSoundEffect
+    ld e,(hl)
+    inc hl
+    ld a,10
+    call writeSoundEffect
+    ld a,l
+    cp low shotSoundEnd
+    jr nz,.save
+    ld hl,0
+.save:
+    ld (shotSoundCursor),hl
+    ret
+
+writeSoundEffect:
+    ld bc,#fffd
+soundEffectSelect:
+    out (c),a
+    ld b,#bf
+soundEffectWrite:
+    out (c),e
+    ret
+
+shotSoundCursor: dw 0
+explosionNoiseCursor: dw 0
+shotSound: incbin "gfx/shot-sound.bin"
+shotSoundEnd:
+    assert shotSoundEnd-shotSound < 256
+explosionNoise: incbin "gfx/explosion-noise.bin"

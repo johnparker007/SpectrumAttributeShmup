@@ -29,6 +29,9 @@ sound_initialized_tick:
 
 soundTick:
     call soundTickBody
+    ifdef LIVE_SFX
+        call soundEffectsTick
+    endif
 soundTickEnd:
     ret
 
