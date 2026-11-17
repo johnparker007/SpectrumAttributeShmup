@@ -23,9 +23,9 @@ levelUnpackEnd:
     xor a
     call swapPage
 levelPageRestored:
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
         ld a,(selectedLevel)
-        call configureGreenWave
+        call configureLevelWaves
     endif
     ei
     ret

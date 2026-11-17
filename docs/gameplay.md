@@ -15,6 +15,16 @@ The level loader selects the firing column and baked bullet speed during **GET R
 | 4 | One slow shot on entry |
 | 6–8 | One shot on entry at the original speed |
 
+Levels 4–8 put four yellow fliers into each twelve-ship formation. They enter at four different heights and travel straight left. Around 60% of the way across the playfield, each yellow ship retreats right for 12 game ticks at twice its entry speed, moving vertically towards the player's Y position by up to four dots per tick. It then resumes its original leftward speed. The next formation mirrors the entrance heights.
+
+| Level | Yellow flier firing |
+| --- | --- |
+| 4–5 | Unarmed |
+| 6 | One aimed shot at the end of the retreat |
+| 7–8 | An aimed shot halfway through the retreat and another at its end |
+
+All enemies on a level share the same 32 prebaked bullet directions and speed. Yellow shots first appear on level 6, which uses the faster paths.
+
 Either player shot destroys an opponent in one hit and retires its whole pair before the next enemy is checked. A pair also retires at the right edge. A bullet destroys a vulnerable player ship, and a ram destroys both the vulnerable player and the enemy it hits. Both sides use 5×5 hitboxes and play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Protected contact is harmless to both ships. Movement and firing work on both blink phases after the spawn frame.
 
 After the last ship is destroyed, **GAME OVER** and **ENTER TO RESTART** appear in a centred panel. The top-right HUD keeps the final score visible. The score freezes even if a shot already in flight reaches an opponent. Enter clears the panel, projectile pools, hit flags and score, restores three lives and the opening formation, and rewinds the scenery and tile animations. Holding Enter triggers one restart. Music continues through the reset.
@@ -38,7 +48,7 @@ The title screen uses the normal Spectrum bitmap. Press **1–8** to start a tes
 | 7 | 466 | 142,336 | 147,389 |
 | 8 | 465 | 143,157 | 148,265 |
 
-`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all eight keys on both models, screen text, sample map data, bank restoration, renderer startup, opposite wave entrances, firing columns, aiming and bullet speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
+`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all eight keys on both models, screen text, sample map data, bank restoration, renderer startup, wave entrances, the yellow retreat and firing stages, and green shot aiming and speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 
 ```powershell
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>

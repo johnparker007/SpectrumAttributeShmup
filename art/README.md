@@ -8,6 +8,7 @@ The playable build reads these files on every build.
 | `gfx/tileSet.xcf` | Imported GIMP master, export changes to `tileSet.png` |
 | `sprites/player.png` | Player ship, 5 by 5 dots |
 | `sprites/enemy_green_sine.png` | Green sine flier, 5 by 5 dots |
+| `sprites/enemy_yellow_z.png` | Yellow retreating flier, 5 by 5 dots |
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` | Test map 1 for Tiled, 256 by 6 tiles |
 | `maps/level-2.tmx` | Test map 2 for Tiled, 256 by 6 tiles |

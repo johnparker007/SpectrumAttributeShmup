@@ -16,6 +16,13 @@ stepWave:
     ld a,(de)
     or a
     jr nz,.hit
+    ifdef LEVEL_WAVES
+        exx
+        ld a,(de)
+        exx
+        or a
+        jp m,.yellow
+    endif
     bit 0,c                       ; resolve hits every tick, move on even ticks
     jr nz,.skipY
     dec (hl)
@@ -32,7 +39,7 @@ stepWave:
     exx
     inc hl
     ld (hl),a
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
         dec hl
         ld a,(hl)
 .fireAtColumn:
@@ -85,7 +92,12 @@ stepWave:
     inc de
     inc de
     exx
-    djnz .next
+    ifdef LEVEL_WAVES
+        dec b
+        jp nz,.next
+    else
+        djnz .next
+    endif
 
     ld hl,spawnWait
     ld a,(hl)
@@ -112,13 +124,14 @@ stepWave:
     inc hl
     ld (hl),21
     ld a,(waveIndex)
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
         ld (ix),a
         or 3                     ; spawn X=67 indexes sample 3
         ld e,a
         ld d,high shipTrajectories
         ld a,(de)
         ld (hl),a
+        call setSpawnArt
     else
         rrca
         rrca
@@ -138,7 +151,7 @@ stepWave:
     ret nz
     ld (hl),WAVE_ENEMIES
     ld a,(waveIndex)
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
         xor #40                  ; alternate high and low entrances per formation
     else
         inc a
@@ -146,6 +159,12 @@ stepWave:
     endif
     ld (waveIndex),a
     ret
+
+    ifdef LEVEL_WAVES
+.yellow:
+    call moveYellow
+    jp .advance
+    endif
 
 ; Packed trajectory bits 3–7 select the bearing and bits 0–2 select its phase.
 moveIncoming:
@@ -197,7 +216,8 @@ moveDot:
     ret
 
 spawnIncoming:
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
+        call emitYellowShot
         ld hl,(greenShot)
         ld a,l
         inc a
@@ -241,15 +261,15 @@ spawnIncoming:
     add hl,de
     ld a,(hl)
     and #40                      ; ship paths 1 and 3 use the three-way spread
-    jr z,.aimPending
+    jr z,aimQueuedShot
     ld hl,spreadWait
     ld a,(hl)
     or a
     ret nz
     ld (hl),2                    ; at least sixteen ticks between spreads
     inc a                        ; mark this shot as a spread
-.aimPending:
     endif
+aimQueuedShot:
     push af
     ld d,0
     ld a,(playerLives)
@@ -260,7 +280,7 @@ spawnIncoming:
     call z,aimIncoming
 .aimReady:
     pop af
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
         jr emitIncoming
     else
     jr z,emitIncoming
@@ -293,7 +313,7 @@ enemyShotEmitted:
     ld (enemyWrite),hl
     ret
 
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
 ; X crosses the configured column only once. Spawn spacing allows at most
 ; one queued shot per tick, which is emitted after existing shots move.
 queueGreenShot:
@@ -305,11 +325,12 @@ queueGreenShot:
     ld (greenShot+1),a
     ret
 
-configureGreenWave:
-    add a,a
+configureLevelWaves:
     ld e,a
     ld d,0
-    ld hl,greenLevelProfiles
+    ld hl,levelWaveProfiles
+    add hl,de
+    add hl,de
     add hl,de
     ld a,(hl)
     ld (stepWave.fireAtColumn+1),a
@@ -321,20 +342,26 @@ configureGreenWave:
     ld a,high incomingX
 .speed:
     ld (incomingPage+1),a
+    inc hl
+    ld a,(hl)
+    ld (yellowFireMode),a
     ret
 
-resetGreenWave:
+resetLevelWaves:
     ld a,(greenStartPhase)
     xor #40                      ; a retry starts with the opposite entrance
     ld (greenStartPhase),a
     ld (waveIndex),a
     ld a,#ff
     ld (greenShot),a
+    ld (yellowShot),a
     ret
 
 greenStartPhase: db #40
 greenShot: dw #ff
-greenLevelProfiles: incbin "level_fire.bin"
+levelWaveProfiles: incbin "level_fire.bin"
+
+    include "yellow_z.a80"
     endif
 
     include "aim_incoming.a80"
@@ -420,6 +447,9 @@ explosion2: incbin "explosion_2.bin"
 explosion3: incbin "explosion_3.bin"
 enemyArt: incbin "enemy_art.bin"
 playerArt: incbin "player_art.bin"
+    ifdef LEVEL_WAVES
+yellowArt: incbin "yellow_art.bin"
+    endif
 
     align 256
 shipTrajectories: incbin "ship_trajectories.bin"
@@ -429,7 +459,7 @@ incomingY: incbin "incoming_y.bin"
     assert incomingY-incomingX=256
 aimThresholds: incbin "aim_thresholds.bin"
     assert low aimThresholds=0
-    ifdef GREEN_WAVES
+    ifdef LEVEL_WAVES
 incomingSlowX: incbin "incoming_slow_x.bin"
 incomingSlowY: incbin "incoming_slow_y.bin"
     assert low incomingSlowX=0

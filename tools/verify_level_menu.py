@@ -12,7 +12,9 @@ from build_art import LEVEL_MAPS, map_output
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
-from verify_blokius_integration import GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, install
+from verify_blokius_integration import (
+    GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, YELLOW_FIRE_COUNTS, install,
+)
 from verify_gameplay import PLAYER_START, aim, packed
 
 
@@ -56,9 +58,14 @@ def verify_choice(emulator, game, model, choice):
     queue_probe = f"PC={s['queueGreenShot']:04X}H"
     shot_probe = f"PC={s['enemyShotEmitted']:04X}H"
     motion_probe = f"{points['halt2']} AND 1=1"
+    yellow_probe = f"{points['halt2']} AND 2=2"
     watch.extend(((wave_probe, "PEEK(HL)"), (queue_probe, "PEEKW(HL)"),
                   (shot_probe, "B+C*256+D*65536"),
-                  (motion_probe, f"PEEKW({s['enemy_records']:04X}H)")))
+                  (motion_probe, f"PEEKW({s['enemy_records']:04X}H)"),
+                  (yellow_probe, f"PEEKW({s['enemy_boxes'] + 4:04X}H)"
+                   f"+PEEK({s['enemyMotion'] + 4:04X}H)*65536")))
+    yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
+    watch.append((yellow_queue, "A"))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(str(choice) * 80, encoding="ascii")
     log = breakpoint_log(emulator, game / "main.tap", model, 35, watch,
@@ -80,10 +87,18 @@ def verify_choice(emulator, game, model, choice):
     if len(frames) < 150 or any(second - first != 2 for first, second in zip(frames, frames[1:])):
         raise ValueError(f"{model} map {choice}: irregular gameplay across {len(frames)} frame pairs")
     entrances = [value for condition, value in rows if condition == wave_probe]
-    if entrances[:13] != [GREEN_SHIP_Y[0][3]] * 12 + [GREEN_SHIP_Y[1][3]]:
+    yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
+    opening = [GREEN_SHIP_Y[0][3]] * 12
+    if yellow_count != 255:
+        opening[2::3] = [8, 35, 15, 28]
+    if entrances[:13] != opening + [GREEN_SHIP_Y[1][3]]:
         raise ValueError(f"{model} map {choice}: first two waves did not use opposite sine entrances")
     queued = [value for condition, value in rows if condition == queue_probe]
     shots = [value for condition, value in rows if condition == shot_probe]
+    yellow_shots = [shot for shot in shots if shot & 255 in (32, 38)]
+    shots = [shot for shot in shots if shot & 255 not in (32, 38)]
+    yellow_origins = [value for condition, value in rows if condition == yellow_queue]
+    check_yellow_path(rows, yellow_probe, yellow_count, yellow_origins, yellow_shots)
     column = GREEN_FIRE_COLUMNS[choice - 1]
     if column == 96:
         if queued or shots:
@@ -91,7 +106,8 @@ def verify_choice(emulator, game, model, choice):
     else:
         expected_origin = packed((column, GREEN_SHIP_Y[0][column] + 2))
         first_bearing = aim(column, expected_origin >> 8, PLAYER_START)
-        if (len(shots) < 12 or len(shots) != len(queued)
+        minimum_shots = 12 if yellow_count == 255 else 8
+        if (len(shots) < minimum_shots or len(shots) != len(queued)
                 or any((shot & 65535) != origin + 512 or origin & 255 != column
                        for shot, origin in zip(shots, queued))
                 or shots[0] != expected_origin + first_bearing * 65536):
@@ -104,7 +120,32 @@ def verify_choice(emulator, game, model, choice):
         if positions[start_at + 8] != packed((column + dx, (expected_origin >> 8) + dy)):
             raise ValueError(f"{model} map {choice}: incorrect projectile speed")
     return {"model": model, "map": choice, "compressed_bytes": level.with_suffix(".zx0").stat().st_size,
-            "unpack_tstates": stop - start, "gameplay_frame_pairs": len(frames), "shots": len(shots)}
+            "unpack_tstates": stop - start, "gameplay_frame_pairs": len(frames),
+            "green_shots": len(shots), "yellow_shots": len(yellow_shots)}
+
+
+def check_yellow_path(rows, probe, fire_count, queued, shots):
+    states = [(v & 255, v >> 8 & 255, v >> 16) for condition, v in rows if condition == probe]
+    if fire_count == 255:
+        if any(state & 128 for _, _, state in states) or queued or shots:
+            raise ValueError("Yellow ships appeared on a green-only level")
+        return
+    first = states.index((67, 8, 128))
+    turn = states.index((26, 8, 129), first)
+    approach = states[first:turn]
+    if any(y != 8 for _, y, _ in approach) or any(
+            x - next_x not in (0, 1) for (x, _, _), (next_x, _, _) in zip(approach, approach[1:])):
+        raise ValueError("Yellow flier's approach was not straight")
+    retreat = states[turn + 1:turn + 13]
+    if ([x for x, _, _ in retreat] != list(range(27, 39))
+            or [y for _, y, _ in retreat[:5]] != [12, 16, 20, 21, 21]
+            or retreat[-1][2] != 192
+            or 37 not in [x for x, _, _ in states[turn + 13:turn + 16]]):
+        raise ValueError(f"Incorrect yellow retreat or exit {retreat}")
+    firing_columns = ([], [38], [32, 38])[fire_count]
+    if (len(queued) < fire_count * 4 or queued != (firing_columns * (len(queued) + 1))[:len(queued)]
+            or [shot & 255 for shot in shots] != queued):
+        raise ValueError("Yellow shot count or firing positions differ from the level profile")
 
 
 def main():

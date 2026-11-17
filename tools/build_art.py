@@ -66,7 +66,10 @@ def build_art(output, *, sprite_dir=None):
         raise ValueError("The tile converter produced an unexpected sheet size")
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
-    for name, filename in SPRITES.items():
+        sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
+    else:
+        sprites = SPRITES
+    for name, filename in sprites.items():
         target = output / filename
         data = convert_image(sprite_dir / f"{name}.png", "converter-sprites.exe", target, (5, 5))
         if len(data) != 60:

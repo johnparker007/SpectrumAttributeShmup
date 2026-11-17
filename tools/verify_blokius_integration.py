@@ -31,6 +31,7 @@ GREEN_SHIP_Y = tuple(tuple(round(22 + sign * 16 * cos(tau * (x - 3) / 64)) for x
 # First visible X is 63. X=58 gives the player five more dots of warning.
 GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63)
 GREEN_FAST_FROM = 6
+YELLOW_FIRE_COUNTS = (255, 255, 255, 0, 0, 1, 2, 2)
 SHOT_DIRECTIONS = 32
 SHOT_PERIOD = 8
 SHOT_VECTORS = tuple((-round(12 * cos(tau * bearing / SHOT_DIRECTIONS)),
@@ -132,7 +133,7 @@ doSinScroll equ barrelScroll_Update
             raise ValueError("Unexpected small-sprite position loader")
         macros.write_bytes(before + marker + small.replace(b"SPRITE.DRAWX", b"SPRITE.X").replace(b"SPRITE.DRAWY", b"SPRITE.Y"))
         for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80", "enemy_runtime.a80",
-                            "aim_incoming.a80", "level_loader.a80", "level_menu.a80"):
+                            "aim_incoming.a80", "level_loader.a80", "level_menu.a80", "yellow_z.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
         font = (game / "font" / "n13.bin").read_bytes()
@@ -160,10 +161,10 @@ doSinScroll equ barrelScroll_Update
         build_art(game, sprite_dir=sprite_dir)
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
-            defines.append("GREEN_WAVES")
+            defines.append("LEVEL_WAVES")
             (game / "level_fire.bin").write_bytes(bytes(
                 value for level, column in enumerate(GREEN_FIRE_COLUMNS, 1)
-                for value in (column, int(level >= GREEN_FAST_FROM))))
+                for value in (column, int(level >= GREEN_FAST_FROM), YELLOW_FIRE_COUNTS[level - 1])))
             for axis, name in enumerate(("x", "y")):
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu and replay is None:
