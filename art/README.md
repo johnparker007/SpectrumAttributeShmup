@@ -18,6 +18,8 @@ The tile animation sequences are defined in the archived engine's `data.asm`. Th
 
 ## Build
 
+Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap`. It uses `SJASMPLUS` if set, then searches PATH, then tries John's existing Desktop installation. The window stays open to show the result or any errors.
+
 From the repository root, using your installed SjASMPlus executable:
 
 ```powershell

@@ -6,6 +6,8 @@ The playable barrel-scroll build targets the ZX Spectrum 128K and +2A/+3 hardwar
 
 Editable graphics are in [art](art/README.md). The background sheet and GIMP master are in `art/gfx`, current player/enemy/explosion PNGs in `art/sprites`, and the Tiled level in `art/maps/level.tmx`. Graphics are converted automatically when the game is built.
 
+Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap` after editing the graphics.
+
 ```powershell
 python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
 ```
