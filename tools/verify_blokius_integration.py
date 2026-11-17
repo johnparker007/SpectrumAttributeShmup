@@ -49,7 +49,7 @@ def star_force_music():
             MUSIC.joinpath("star-force-literal.bin").read_bytes(), b"")
 
 
-def install(game, assembler, audio=None, live=False, replay=None, menu=True):
+def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -150,7 +150,7 @@ doSinScroll equ barrelScroll_Update
             int(major * tan(tau * (bearing + 0.5) / SHOT_DIRECTIONS)) + 1
             for major in range(64) for bearing in range(4)))
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
-        build_art(game)
+        build_art(game, sprite_dir=sprite_dir)
         defines.append("LIVE_SHMUP")
         if menu and replay is None:
             defines.append("LEVEL_MENU")

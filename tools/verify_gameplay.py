@@ -695,8 +695,9 @@ def main():
             stock = build(args.archive, assembler, root / "stock")
             game = Path(shutil.copytree(stock, root / "game"))
             replay = Path(shutil.copytree(stock, root / "replay"))
-            install(game, assembler, build_audio, live=True, menu=False)
-            install(replay, assembler, build_audio, live=True, replay=REPLAY)
+            reference_sprites = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "sprites"
+            install(game, assembler, build_audio, live=True, menu=False, sprite_dir=reference_sprites)
+            install(replay, assembler, build_audio, live=True, replay=REPLAY, sprite_dir=reference_sprites)
             assemble_arithmetic_probe(assembler, replay)
             aim_probe = Path(__file__).resolve().parents[1] / "tests" / "enemies" / "aim.asm"
             run([assembler, "--sym=aim.sym", aim_probe], replay)

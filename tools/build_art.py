@@ -47,18 +47,20 @@ def map_bytes(source):
     return bytes(opening + incoming)
 
 
-def build_art(output):
+def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")
+    if sprite_dir is None:
+        sprite_dir = ART / "sprites"
     for name in SPRITES:
         target = output / f"{name}_art.bin"
         if name.startswith("explosion_"):
             target = output / f"{name}.bin"
-        data = convert_image(ART / "sprites" / f"{name}.png", "converter-sprites.exe", target, (5, 5))
+        data = convert_image(sprite_dir / f"{name}.png", "converter-sprites.exe", target, (5, 5))
         if len(data) != 60:
             raise ValueError(f"The sprite converter produced an unexpected size for {name}")
         # The live compositor preserves the destination's bright/flash bits.

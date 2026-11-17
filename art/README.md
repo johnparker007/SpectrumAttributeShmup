@@ -27,11 +27,13 @@ From the repository root, using your installed SjASMPlus executable:
 python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
 ```
 
-The playable TAP is written to `build/game.tap`. Graphics are converted automatically. To inspect just the converted graphics, run `python tools/build_art.py` or double-click `art/_BUILD_ALL.bat`. Converted files appear in `build/art`.
+The playable TAP is written to `build/game.tap`. Graphics are converted automatically. To inspect the converted graphics on their own, run `python tools/build_art.py`. Converted files appear in `build/art`.
 
 The build compresses both maps with the bundled ZX0 tool. Choose either map with the number keys on the title screen. Enter during gameplay restarts the selected map.
 
 The original Windows sprite and tile converters are included in `gfx`. Python 3 and Windows are required for this conversion workflow. The game build also needs SjASMPlus. The headless verifier additionally needs ZEsarUX.
+
+The gameplay verifier uses solid-colour reference sprites in `tests/fixtures/sprites` for its visual checks. All playable TAPs use your edits in `art/sprites`.
 
 ## Imported originals
 
@@ -39,6 +41,4 @@ The active sheet comes from the archived WIP used by the timing baseline. Your l
 
 The archived Tiled and CSV sources differed from the compiled map used by the game. `maps/level.tmx` was reconstructed from that compiled map to preserve the current scenery exactly. The archived sources and compiled map are retained in `original`.
 
-`gfx/sprite.png`, `gfx/spriteSmall.png` and `gfx/_BUILD_ALL.bat` preserve the old prototype's sprite sheets and conversion commands. The playable game's current ship and explosion images are in `sprites`.
-
-The complete 1 MB reference archive is included at `vendor/blokius-wip1.zip`. Builds extract its engine into a temporary directory, verify the original build, then apply the current game code and convert the artwork above.
+The complete reference archive at `vendor/blokius-wip1.zip` includes the prototype's sprite sheets and converter batch file. Builds extract the archive into a temporary directory, verify the original build, then apply the current game code and convert the artwork above.
