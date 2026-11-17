@@ -25,7 +25,7 @@ The title screen uses the normal Spectrum bitmap and starts test map 1 or 2 with
 | 1 | 463 | 142,385 | 147,481 |
 | 2 | 477 | 143,019 | 148,080 |
 
-`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks both keys and models, screen text, sample map data, bank restoration and renderer start order. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
+`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks both keys and models, screen text, sample map data, bank restoration and renderer start order. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 
 ```powershell
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>

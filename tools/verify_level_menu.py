@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from profile_blokius import ARCHIVE, build
-from profile_ringo8 import HIT, MODELS
+from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_blokius_integration import install
 
@@ -18,7 +18,7 @@ def verify_choice(emulator, game, model, choice):
     s = read_symbols(game / "main.sym")
     points = {name: f"PC={s[name]:04X}H" for name in (
         "menuWait", "levelUnpackBegin", "levelUnpackEnd", "levelPageRestored",
-        "enableRender", "renderFrame1", "firstFrameLogic",
+        "enableRender", "renderFrame1", "firstFrameLogic", "halt2",
     )}
     watch = [(point, "TSTATESP") for point in points.values()]
     checks = {}
@@ -52,7 +52,7 @@ def verify_choice(emulator, game, model, choice):
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(str(choice) * 80, encoding="ascii")
-    log = breakpoint_log(emulator, game / "main.tap", model, 16, watch,
+    log = breakpoint_log(emulator, game / "main.tap", model, 35, watch,
                          fast_autoload=True, keyboard_spool=spool)
     hits = {}
     for condition, value in HIT.findall(log):
@@ -63,11 +63,14 @@ def verify_choice(emulator, game, model, choice):
     for condition, value in checks.items():
         if hits[condition] != value:
             raise ValueError(f"{model} map {choice}: {condition} printed {hits[condition]}, expected {value}")
-    menu, start, stop, restore, enable, render, gameplay = (hits[point] for point in points.values())
-    if not menu < start < stop < restore < enable < render < gameplay:
+    menu, start, stop, restore, enable, render, gameplay, halt = (hits[point] for point in points.values())
+    if not menu < start < stop < restore < enable < render < gameplay < halt:
         raise ValueError(f"{model} map {choice}: renderer ran outside the gameplay handoff")
+    frames = [int(value) // FRAME for condition, value in HIT.findall(log) if condition == points["halt2"]]
+    if len(frames) < 150 or any(second - first != 2 for first, second in zip(frames, frames[1:])):
+        raise ValueError(f"{model} map {choice}: irregular gameplay across {len(frames)} frame pairs")
     return {"model": model, "map": choice, "compressed_bytes": level.with_suffix(".zx0").stat().st_size,
-            "unpack_tstates": stop - start}
+            "unpack_tstates": stop - start, "gameplay_frame_pairs": len(frames)}
 
 
 def main():

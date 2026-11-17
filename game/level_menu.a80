@@ -41,6 +41,10 @@ menuSelected:
 .hold:
     halt
     djnz .hold
+    di
+    call fillScreens
+    call fillPixels
+    ei
     ret
 
 clearMenuScreen:
@@ -51,7 +55,9 @@ clearMenuScreen:
     ld (hl),a
     ldir
     ld a,#47
+    ex de,hl
     ld (hl),a
+    ld de,#5801
     ld bc,768-1
     ldir
     ret

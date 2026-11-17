@@ -61,24 +61,19 @@ def install(game, assembler, audio=None, live=False, replay=None, menu=True):
     ifdef LEVEL_MENU
         include "level_menu.a80"
     endif""")
-        if menu and replay is None:
-            prefix = prefix.replace(b"call initTiles", b"; Tiles initialized after the menu")
+        # Finish the menu in the bootstrap so the raster loop keeps its
+        # original entry point and layout on both hardware families.
+        prefix = prefix.replace(b"jp startGame", b"""ifdef LEVEL_MENU
+        call showLevelMenu
+    else
+        xor a
+        call loadLevel
+    endif
+    jp startGame""")
     source.write_bytes(prefix + b'''
     include "Z80-Optimized-Routines-master/math/multiplication/DE_Times_A.z80"
 
 startGame:
-    ifdef LEVEL_MENU
-        call showLevelMenu
-        di
-        call fillScreens
-        call initTiles
-        ei
-    else
-        ifdef LIVE_SHMUP
-            xor a
-            call loadLevel
-        endif
-    endif
     call barrelScroll_Init
     ifdef LIVE_SHMUP
         call gameInit
