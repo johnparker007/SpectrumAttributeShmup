@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import build_art
+from build_art import ZX0, build_art
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -49,16 +49,36 @@ def star_force_music():
             MUSIC.joinpath("star-force-literal.bin").read_bytes(), b"")
 
 
-def install(game, assembler, audio=None, live=False, replay=None):
+def install(game, assembler, audio=None, live=False, replay=None, menu=True):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
     if not separator or not tail_start:
         raise ValueError("Unexpected Blokius scenery include or vector assertion")
+    if live:
+        prefix = prefix.replace(b'incbin "maps/tilemap.bin"', b"""defs SOURCE_TILEMAP_WIDTH*SOURCE_TILEMAP_HEIGHT,0
+    include "level_loader.a80"
+    ifdef LEVEL_MENU
+        include "level_menu.a80"
+    endif""")
+        if menu and replay is None:
+            prefix = prefix.replace(b"call initTiles", b"; Tiles initialized after the menu")
     source.write_bytes(prefix + b'''
     include "Z80-Optimized-Routines-master/math/multiplication/DE_Times_A.z80"
 
 startGame:
+    ifdef LEVEL_MENU
+        call showLevelMenu
+        di
+        call fillScreens
+        call initTiles
+        ei
+    else
+        ifdef LIVE_SHMUP
+            xor a
+            call loadLevel
+        endif
+    endif
     call barrelScroll_Init
     ifdef LIVE_SHMUP
         call gameInit
@@ -110,8 +130,10 @@ doSinScroll equ barrelScroll_Update
         if not marker or small.count(b"SPRITE.DRAWX") != 1 or small.count(b"SPRITE.DRAWY") != 1:
             raise ValueError("Unexpected small-sprite position loader")
         macros.write_bytes(before + marker + small.replace(b"SPRITE.DRAWX", b"SPRITE.X").replace(b"SPRITE.DRAWY", b"SPRITE.Y"))
-        for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80", "enemy_runtime.a80", "aim_incoming.a80"):
+        for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80", "enemy_runtime.a80",
+                            "aim_incoming.a80", "level_loader.a80", "level_menu.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
+        shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
         font = (game / "font" / "n13.bin").read_bytes()
         digits = "0123456789"
         glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)]
@@ -135,6 +157,8 @@ doSinScroll equ barrelScroll_Update
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
         build_art(game)
         defines.append("LIVE_SHMUP")
+        if menu and replay is None:
+            defines.append("LEVEL_MENU")
         if audio is None:
             defines.append("LIVE_SFX")
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
@@ -159,6 +183,11 @@ doSinScroll equ barrelScroll_Update
     if live:
         resources = game / "gfx" / "resources.a80"
         resources.write_bytes(resources.read_bytes() + b'''
+    page 1
+    org audioLiteral0End
+packedLevelOne: incbin "maps/tilemap.zx0"
+packedLevelTwo: incbin "maps/tilemap-2.zx0"
+    assert $ <= #10000
     page 0
     assert testAudioRecipeEnd <= #e000
     org #e000

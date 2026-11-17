@@ -1,0 +1,93 @@
+; The menu occupies the normal screen with the raster renderer disabled.
+showLevelMenu:
+    call disableRender
+    xor a
+    call swapPage
+    call clearMenuScreen
+    ld hl,menuTitle
+    ld de,#480c               ; row 8, column 12
+    call drawMenuText
+    ld hl,menuChoices
+    ld de,#4889               ; row 12, column 9
+    call drawMenuText
+    ld hl,menuChoiceTwo
+    ld de,#48c9               ; row 14, column 9
+    call drawMenuText
+menuWait:
+    halt
+    ld bc,#f7fe                ; keyboard row 1 to 5
+    in a,(c)
+    rrca
+    ld a,'1'
+    jr nc,menuSelected
+    in a,(c)
+    bit 1,a
+    jr nz,menuWait
+    ld a,'2'
+menuSelected:
+    ld (readyLevel),a
+    call clearMenuScreen
+    ld hl,readyTitle
+    ld de,#484b               ; row 10, column 11
+    call drawMenuText
+    ld hl,readyCaption
+    ld de,#4888               ; row 12, column 8
+    call drawMenuText
+    halt
+    ld a,(readyLevel)
+    sub '1'
+    call loadLevel
+    ld b,35
+.hold:
+    halt
+    djnz .hold
+    ret
+
+clearMenuScreen:
+    xor a
+    ld hl,#4000
+    ld de,#4001
+    ld bc,6144-1
+    ld (hl),a
+    ldir
+    ld a,#47
+    ld (hl),a
+    ld bc,768-1
+    ldir
+    ret
+
+; HL = zero-terminated text, DE = bitmap address of the first character.
+drawMenuText:
+    ld a,(hl)
+    or a
+    ret z
+    inc hl
+    push hl
+    push de
+    sub 32
+    ld l,a
+    ld h,0
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld bc,menuFont
+    add hl,bc
+    ld b,8
+.row:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    inc d
+    djnz .row
+    pop de
+    inc e
+    pop hl
+    jr drawMenuText
+
+menuTitle: db "BLOKIUS",0
+menuChoices: db "1  START MAP 1",0
+menuChoiceTwo: db "2  START MAP 2",0
+readyTitle: db "GET READY",0
+readyCaption: db "ENTERING LEVEL "
+readyLevel: db "1",0
+menuFont: incbin "font/n13.bin"

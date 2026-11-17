@@ -54,6 +54,7 @@ testAudioRecipeEnd:
     page 1
     org #c000
     incbin "gfx/literal0.bin"
+audioLiteral0End:
     page 3
     org #c000
     incbin "gfx/literal1.bin"

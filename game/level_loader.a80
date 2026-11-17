@@ -1,0 +1,24 @@
+; A is a zero-based level number. The caller runs with rendering disabled.
+loadLevel:
+    push af
+    ld a,1
+    call swapPage
+    pop af
+    ld hl,packedLevelOne
+    or a
+    jr z,.decode
+    ld hl,packedLevelTwo
+.decode:
+    ld de,sourceTileMap
+    ; Avoid an interrupt changing paging mid-copy or affecting decode timing.
+    di
+levelUnpackBegin:
+    call dzx0_standard
+levelUnpackEnd:
+    xor a
+    call swapPage
+levelPageRestored:
+    ei
+    ret
+
+    include "dzx0_standard.asm"

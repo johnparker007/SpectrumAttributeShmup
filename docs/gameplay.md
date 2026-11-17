@@ -18,6 +18,15 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 
 ## Reproduce
 
+The title screen uses the normal Spectrum bitmap and starts test map 1 or 2 with the corresponding number key. The ready screen displays the selected level while the game's ZX0 Standard decoder expands its map into the existing 1,536-byte buffer. The renderer stays idle until the screens, tiles and game state are ready. The loader uses logical bank 1 for compressed maps and restores bank 0 before starting gameplay.
+
+| Map | Packed bytes | 128K unpack T-states | +2A unpack T-states |
+| --- | ---: | ---: | ---: |
+| 1 | 463 | 142,385 | 147,481 |
+| 2 | 477 | 143,019 | 148,080 |
+
+`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks both keys and models, screen text, sample map data, bank restoration and renderer start order. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
+
 ```powershell
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>
 ```
@@ -45,4 +54,4 @@ The main replay ends a run with a nonzero score. The trace checks that the final
 | AY ticks checked through the full tune, loop and first restart | 1,312 | 1,312 |
 | AY ticks with both sound effects active | 202 | 202 |
 
-The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites. The keyboard TAP has SHA-256 `acfdc8d1cc19427f55c35ca9820c81e1e08d9dff8278e53558df3e29addc50e4`.
+The 815-tick replay includes two restarts. Headless video checks magenta ships, cyan-and-white player shots at both horizontal alignments, yellow enemy shots and white explosion sprites.

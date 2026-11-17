@@ -694,7 +694,7 @@ def main():
             stock = build(args.archive, assembler, root / "stock")
             game = Path(shutil.copytree(stock, root / "game"))
             replay = Path(shutil.copytree(stock, root / "replay"))
-            install(game, assembler, build_audio, live=True)
+            install(game, assembler, build_audio, live=True, menu=False)
             install(replay, assembler, build_audio, live=True, replay=REPLAY)
             assemble_arithmetic_probe(assembler, replay)
             aim_probe = Path(__file__).resolve().parents[1] / "tests" / "enemies" / "aim.asm"
@@ -705,7 +705,9 @@ def main():
             results = [verify(emulator, stock, game, replay, model, args.seconds, args.replay_seconds, audio,
                               whole_song_audio=build_audio is None)
                        for model in models]
-            tap = game / "main.tap"
+            menu_game = Path(shutil.copytree(stock, root / "menu"))
+            install(menu_game, assembler, build_audio, live=True)
+            tap = menu_game / "main.tap"
             digest = hashlib.sha256(tap.read_bytes()).hexdigest()
             if args.output_tap:
                 shutil.copyfile(tap, args.output_tap)
