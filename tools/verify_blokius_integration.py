@@ -91,8 +91,13 @@ def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, 
 startGame:
     call barrelScroll_Init
     ifdef LIVE_SHMUP
-        call gameInit
-        di
+        ifdef BOTTOM_HUD
+            di                 ; keep the shadow bank mapped through HUD setup
+            call gameInit
+        else
+            call gameInit
+            di
+        endif
         call enableRender
         ei
         halt
