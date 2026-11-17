@@ -1,7 +1,7 @@
 ; One game tick in Frame 1. Frame 2 tests the resulting positions and draws
 ; the same projectile list. The next tick consumes the collision results.
-SHIP_LEFT equ 2             ; leave two dots against the left edge
-PLAYER_RIGHT equ 59
+SHIP_LEFT equ 0
+PLAYER_RIGHT equ 64*3/4-5   ; the five-dot ship ends at the 75% line
 PLAYER_BOTTOM equ 43
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 12

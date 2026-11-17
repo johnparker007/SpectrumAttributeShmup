@@ -37,6 +37,7 @@ PLAYER_PAIRS = 5
 EXPLOSION_TICKS = 6
 HIDDEN = (96, 0)
 PLAYER_START = (8, 21)
+PLAYER_RIGHT = 43
 RESPAWN_TICKS = 12
 INVINCIBLE_TICKS = 75
 
@@ -121,7 +122,7 @@ def expected(inputs):
                 x, y = player
                 dx = bool(command & RIGHT) - bool(command & LEFT)
                 dy = bool(command & DOWN) - bool(command & UP)
-                player = (max(2, min(59, x + dx)), max(0, min(43, y + dy)))
+                player = (max(0, min(PLAYER_RIGHT, x + dx)), max(0, min(43, y + dy)))
                 if reload:
                     reload -= 1
                 elif command & FIRE and player[0] <= 57:
