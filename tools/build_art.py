@@ -13,7 +13,13 @@ from verify_zesarux_raster import run
 ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
-SPRITES = ("player", "enemy", "explosion_1", "explosion_2", "explosion_3")
+SPRITES = {
+    "player": "player_art.bin",
+    "enemy_green_sine": "enemy_art.bin",
+    "explosion_1": "explosion_1.bin",
+    "explosion_2": "explosion_2.bin",
+    "explosion_3": "explosion_3.bin",
+}
 
 
 def convert_image(source, converter, output, size):
@@ -60,10 +66,8 @@ def build_art(output, *, sprite_dir=None):
         raise ValueError("The tile converter produced an unexpected sheet size")
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
-    for name in SPRITES:
-        target = output / f"{name}_art.bin"
-        if name.startswith("explosion_"):
-            target = output / f"{name}.bin"
+    for name, filename in SPRITES.items():
+        target = output / filename
         data = convert_image(sprite_dir / f"{name}.png", "converter-sprites.exe", target, (5, 5))
         if len(data) != 60:
             raise ValueError(f"The sprite converter produced an unexpected size for {name}")
