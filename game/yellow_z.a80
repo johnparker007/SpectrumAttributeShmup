@@ -3,7 +3,7 @@ YELLOW_BACKUP equ #81
 YELLOW_RETREAT_TICKS equ 12
 YELLOW_EXIT equ #c0
 YELLOW_TURN_X equ 26
-YELLOW_WAVE_SIZE equ 6
+YELLOW_WAVE_SIZE equ 8
 
 ; Set both the trajectory and art because slots can change wave type.
 spawnLevelShip:
@@ -74,10 +74,10 @@ advanceLevelWave:
     ld a,(levelWaveGaps)
     jr .saveGap
 .greenOnly:
-    ld (hl),WAVE_ENEMIES
+    ld (hl),GREEN_WAVE_SIZE
     ret
 .afterYellow:
-    ld (hl),WAVE_ENEMIES
+    ld (hl),GREEN_WAVE_SIZE
     xor a
     ld (waveKind),a
     ld a,(levelWaveGaps+1)
@@ -121,6 +121,8 @@ moveYellow:
     ld a,(yellowFireMode)
     cp 2
     ret nz
+    push de
+    ld de,yellowMidShot
     jr .queue
 .endRetreat:
     ld a,YELLOW_EXIT
@@ -128,15 +130,19 @@ moveYellow:
     ld a,(yellowFireMode)
     or a
     ret z
+    push de
+    ld de,yellowEndShot
 .queue:
-    ld a,(hl)
-    add a,2
-    ld (yellowShot+1),a
     dec hl
     ld a,(hl)
 .shotQueued:
-    ld (yellowShot),a
+    ld (de),a
+    inc de
     inc hl
+    ld a,(hl)
+    add a,2
+    ld (de),a
+    pop de
     ret
 .approach:
     dec (hl)
@@ -189,19 +195,30 @@ moveYellow:
     exx
     ret
 
-emitYellowShot:
-    ld hl,(yellowShot)
+; A midpoint and an end-of-retreat shot can land on the same tick.
+emitYellowShots:
+    ld hl,(yellowMidShot)
+    ld a,l
+    inc a
+    jr z,.end
+    ld a,#ff
+    ld (yellowMidShot),a
+    call .emit
+.end:
+    ld hl,(yellowEndShot)
     ld a,l
     inc a
     ret z
     ld a,#ff
-    ld (yellowShot),a
+    ld (yellowEndShot),a
+.emit:
     ld b,l
     ld c,h
     jp aimQueuedShot
 
 ; Indexed by remaining ships, so the first entrance uses the last row here.
-yellowEntryRows: db 28,19,39,15,35,8
+yellowEntryRows: db 24,4,28,19,39,15,35,8
+    assert $-yellowEntryRows=YELLOW_WAVE_SIZE
 yellowRetreatPaths: defs 2*WAVE_ENEMIES
 yellowRetreatSteps:
     incbin "yellow_retreat.bin"
@@ -209,4 +226,5 @@ yellowRetreatSteps:
 waveKind: db 0
 levelWaveGaps: dw 0
 yellowFireMode: db #ff
-yellowShot: dw #ff
+yellowMidShot: dw #ff
+yellowEndShot: dw #ff

@@ -64,10 +64,11 @@ def verify_choice(emulator, game, model, choice):
                   (queue_probe, "PEEKW(HL)"),
                   (shot_probe, "B+C*256+D*65536"),
                   (motion_probe, f"PEEKW({s['enemy_records']:04X}H)"),
-                  (yellow_probe, f"PEEKW({s['enemy_boxes']:04X}H)"
-                   f"+PEEK({s['enemyMotion']:04X}H)*65536")))
+                  (yellow_probe, f"PEEKW({s['enemy_boxes'] + 16:04X}H)"
+                   f"+PEEK({s['enemyMotion'] + 16:04X}H)*65536")))
     yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
-    watch.append((yellow_queue, "A"))
+    yellow_queue_clock = yellow_queue + " AND 1=1"
+    watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP")))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(str(choice) * 80, encoding="ascii")
     log = breakpoint_log(emulator, game / "main.tap", model, 60 if 4 <= choice <= 5 else 40, watch,
@@ -90,13 +91,18 @@ def verify_choice(emulator, game, model, choice):
         raise ValueError(f"{model} map {choice}: irregular gameplay across {len(frames)} frame pairs")
     entrances = [value for condition, value in rows if condition == wave_probe]
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
-    opening = [GREEN_SHIP_Y[0][3]] * 12
+    opening = [GREEN_SHIP_Y[0][3]] * 8
+    yellow_spawns = []
     if yellow_count != 255:
-        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28))
+        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4, 24))
         clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
-        green_to_yellow = (clocks[12] - clocks[11]) // 2
+        yellow_spawns = clocks[8:16]
+        green_to_yellow = (clocks[8] - clocks[7]) // 2
         if (choice <= 5 and green_to_yellow < 144) or (choice >= 7 and green_to_yellow >= 144):
             raise ValueError(f"{model} map {choice}: unexpected spacing between waves")
+        gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
+        if len(gaps) != 7 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
+            raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
     opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
     if entrances[:len(opening)] != opening:
         raise ValueError(f"{model} map {choice}: expected entrances {opening}, saw {entrances[:len(opening)]}")
@@ -105,7 +111,9 @@ def verify_choice(emulator, game, model, choice):
     yellow_shots = [shot for shot in shots if shot & 255 in (38, 50)]
     shots = [shot for shot in shots if shot & 255 not in (38, 50)]
     yellow_origins = [value for condition, value in rows if condition == yellow_queue]
-    check_yellow_path(rows, yellow_probe, yellow_count, yellow_origins, yellow_shots)
+    yellow_clocks = [v // FRAME for condition, v in rows if condition == yellow_queue_clock]
+    check_yellow_path(rows, yellow_probe, yellow_count, yellow_spawns,
+                      list(zip(yellow_clocks, yellow_origins, strict=True)), yellow_shots)
     column = GREEN_FIRE_COLUMNS[choice - 1]
     if column == 96:
         if queued or shots:
@@ -131,7 +139,7 @@ def verify_choice(emulator, game, model, choice):
             "green_shots": len(shots), "yellow_shots": len(yellow_shots)}
 
 
-def check_yellow_path(rows, probe, fire_count, queued, shots):
+def check_yellow_path(rows, probe, fire_count, spawns, queued, shots):
     states = [(v & 255, v >> 8 & 255, v >> 16) for condition, v in rows if condition == probe]
     if fire_count == 255:
         if any(state & 128 for _, _, state in states) or queued or shots:
@@ -148,9 +156,10 @@ def check_yellow_path(rows, probe, fire_count, queued, shots):
             or retreat[-1][2] != 192
             or [x for x, _, _ in states[turn + 13:turn + 16]] != [49, 48, 47]):
         raise ValueError(f"Incorrect yellow retreat or exit {retreat}")
-    firing_columns = ([], [50], [38, 50])[fire_count]
-    if (len(queued) < fire_count * 4 or queued != (firing_columns * (len(queued) + 1))[:len(queued)]
-            or [shot & 255 for shot in shots] != queued):
+    firing = ((), ((53, 50),), ((47, 38), (53, 50)))[fire_count]
+    expected = sorted((spawn + 2 * delay, column) for spawn in spawns for delay, column in firing)
+    if (sorted(queued[:len(expected)]) != expected
+            or sorted(shot & 255 for shot in shots) != sorted(column for _, column in queued)):
         raise ValueError("Yellow shot count or firing positions differ from the level profile")
 
 

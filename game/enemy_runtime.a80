@@ -132,7 +132,15 @@ stepWave:
         ld (ix),a
     endif
     ld a,9
-    ld (spawnWait),a             ; at least ten game ticks between spawns
+    ifdef LEVEL_WAVES
+        ld a,(waveKind)
+        or a
+        ld a,9
+        jr z,.saveDelay
+        ld a,4
+.saveDelay:
+    endif
+    ld (spawnWait),a
     ld a,(spawnSlot)
     inc a
     cp WAVE_ENEMIES
@@ -211,7 +219,7 @@ moveDot:
 
 spawnIncoming:
     ifdef LEVEL_WAVES
-        call emitYellowShot
+        call emitYellowShots
         ld hl,(greenShot)
         ld a,l
         inc a
@@ -357,7 +365,8 @@ resetLevelWaves:
     ld (waveKind),a
     ld a,#ff
     ld (greenShot),a
-    ld (yellowShot),a
+    ld (yellowMidShot),a
+    ld (yellowEndShot),a
     ret
 
 greenStartPhase: db #40

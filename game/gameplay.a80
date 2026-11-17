@@ -5,6 +5,7 @@ PLAYER_RIGHT equ 64*3/4-5   ; the five-dot ship ends at the 75% line
 PLAYER_BOTTOM equ 43
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
 WAVE_ENEMIES equ 12
+GREEN_WAVE_SIZE equ 8
 EXPLOSION_TICKS equ 6
 PLAYER_PAIRS equ 5
 PLAYER_PAIR_GAP equ 4
@@ -398,7 +399,11 @@ enemyWrite: dw 0
 runEnd:
 initialPlayer:
     dw PLAYER_START
-    db STARTING_LIVES,0,0,0,0,0,0,WAVE_ENEMIES,0
+    ifdef LEVEL_WAVES
+        db STARTING_LIVES,0,0,0,0,0,0,GREEN_WAVE_SIZE,0
+    else
+        db STARTING_LIVES,0,0,0,0,0,0,WAVE_ENEMIES,0
+    endif
     dw enemy_records
     assert $-initialPlayer=runEnd-playerXY
 
