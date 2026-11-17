@@ -2,7 +2,7 @@
 
 Use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. Press **Enter** to restart at any time. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. The ship can touch the left edge, and its right edge stops three quarters of the way across the playfield. Hold Space to fire a pair of parallel cyan-and-white shots every four game ticks while a slot is free, with up to five pairs in flight. Each shot has cyan on the left and white on the right. The two shots share an X coordinate, leave three empty rows between them and move three dots per tick.
 
-Green sine fliers enter beyond the right edge and move left one logical dot every other game tick. The renderer clips them as they exit on the left. The formation has 12 slots and admits a new ship every ten ticks when its next slot is free, spacing them five dots apart horizontally. Waves alternate between the high and low ends of a 32-dot vertical sine path. An Enter restart flips the first wave’s entrance. The build bakes both mirrored paths as absolute Y coordinates indexed by X.
+Green sine fliers enter beyond the right edge and move left one logical dot every other game tick. The renderer clips them as they exit on the left. Each green wave has 12 ships, with at least ten ticks between spawns. Green waves alternate between the high and low ends of a 32-dot vertical sine path. An Enter restart flips the first wave’s entrance. The build bakes both mirrored paths as absolute Y coordinates indexed by X.
 
 The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
 
@@ -15,7 +15,9 @@ The level loader selects the firing column and baked bullet speed during **GET R
 | 4 | One slow shot on entry |
 | 6–8 | One shot on entry at the original speed |
 
-Levels 4–8 put four yellow fliers into each twelve-ship formation. They enter at four different heights and travel straight left. Around 60% of the way across the playfield, each yellow ship retreats right for 12 game ticks at twice its entry speed, moving vertically towards the player's Y position by up to four dots per tick. It then resumes its original leftward speed. The next formation mirrors the entrance heights.
+From level 4, each green wave alternates with a separate wave of six yellow fliers. Levels 4 and 5 leave enough time for the previous wave to clear. Levels 6–8 shorten the gaps so waves can overlap within the twelve enemy slots.
+
+Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 
 | Level | Yellow flier firing |
 | --- | --- |

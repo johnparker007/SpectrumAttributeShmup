@@ -125,13 +125,7 @@ stepWave:
     ld (hl),21
     ld a,(waveIndex)
     ifdef LEVEL_WAVES
-        ld (ix),a
-        or 3                     ; spawn X=67 indexes sample 3
-        ld e,a
-        ld d,high shipTrajectories
-        ld a,(de)
-        ld (hl),a
-        call setSpawnArt
+        call spawnLevelShip
     else
         rrca
         rrca
@@ -149,16 +143,16 @@ stepWave:
     ld hl,waveRemaining
     dec (hl)
     ret nz
+    ifdef LEVEL_WAVES
+        jp advanceLevelWave
+    else
     ld (hl),WAVE_ENEMIES
     ld a,(waveIndex)
-    ifdef LEVEL_WAVES
-        xor #40                  ; alternate high and low entrances per formation
-    else
-        inc a
-        and 3
-    endif
+    inc a
+    and 3
     ld (waveIndex),a
     ret
+    endif
 
     ifdef LEVEL_WAVES
 .yellow:
@@ -326,11 +320,13 @@ queueGreenShot:
     ret
 
 configureLevelWaves:
+    ld l,a
+    add a,a
+    add a,a
+    add a,l
     ld e,a
     ld d,0
     ld hl,levelWaveProfiles
-    add hl,de
-    add hl,de
     add hl,de
     ld a,(hl)
     ld (stepWave.fireAtColumn+1),a
@@ -345,6 +341,11 @@ configureLevelWaves:
     inc hl
     ld a,(hl)
     ld (yellowFireMode),a
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ld (levelWaveGaps),de
     ret
 
 resetLevelWaves:
@@ -352,6 +353,8 @@ resetLevelWaves:
     xor #40                      ; a retry starts with the opposite entrance
     ld (greenStartPhase),a
     ld (waveIndex),a
+    xor a
+    ld (waveKind),a
     ld a,#ff
     ld (greenShot),a
     ld (yellowShot),a

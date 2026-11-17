@@ -3,14 +3,25 @@ YELLOW_BACKUP equ #81
 YELLOW_RETREAT_TICKS equ 12
 YELLOW_EXIT equ #c0
 YELLOW_TURN_X equ 26
-YELLOW_Y_STEP equ 4
+YELLOW_WAVE_SIZE equ 6
 
-; Four yellow slots in a twelve-ship formation. The other slots keep the sine.
-setSpawnArt:
-    ld a,(yellowFireMode)
-    inc a
-    ret z
-    ld a,(spawnSlot)
+; Set both the trajectory and art because slots can change wave type.
+spawnLevelShip:
+    ld a,(waveKind)
+    or a
+    jr nz,.yellow
+    ld a,(waveIndex)
+    ld (ix),a
+    or 3                         ; spawn X=67 indexes sample 3
+    ld e,a
+    ld d,high shipTrajectories
+    ld a,(de)
+    ld (hl),a
+    ld bc,enemyArt
+    jr .art
+.yellow:
+    ld a,(waveRemaining)
+    dec a
     ld e,a
     ld d,0
     push hl
@@ -18,19 +29,21 @@ setSpawnArt:
     add hl,de
     ld a,(hl)
     pop hl
-    or a
-    ret m
     ld (ix),YELLOW_APPROACH
     ld (hl),a
     ld a,(waveIndex)
     or a
-    jr z,.art
+    jr nz,.yellowArt
     ld a,PLAYER_BOTTOM
     sub (hl)
     ld (hl),a
+.yellowArt:
+    ld bc,yellowArt
 .art:
     push hl
-    ld a,e
+    ld a,(spawnSlot)
+    ld e,a
+    ld d,0
     add a,a
     add a,a
     add a,a
@@ -39,10 +52,37 @@ setSpawnArt:
     ld e,a
     ld hl,sprite09+SPRITE.IMAGE
     add hl,de
-    ld (hl),low yellowArt
+    ld (hl),c
     inc hl
-    ld (hl),high yellowArt
+    ld (hl),b
     pop hl
+    ret
+
+advanceLevelWave:
+    ld a,(waveKind)
+    or a
+    jr nz,.afterYellow
+    ld a,(waveIndex)
+    xor #40                      ; alternate the green wave's entrance
+    ld (waveIndex),a
+    ld a,(yellowFireMode)
+    inc a
+    jr z,.greenOnly
+    ld (hl),YELLOW_WAVE_SIZE
+    ld a,1
+    ld (waveKind),a
+    ld a,(levelWaveGaps)
+    jr .saveGap
+.greenOnly:
+    ld (hl),WAVE_ENEMIES
+    ret
+.afterYellow:
+    ld (hl),WAVE_ENEMIES
+    xor a
+    ld (waveKind),a
+    ld a,(levelWaveGaps+1)
+.saveGap:
+    ld (spawnWait),a
     ret
 
 ; A is the movement state. HL enters on X and returns on Y.
@@ -53,19 +93,22 @@ moveYellow:
     jr nc,.exit
     push af
     inc (hl)
+    inc (hl)
     inc hl
-    ld a,(playerXY+1)
-    sub (hl)
-    jr c,.up
-    cp YELLOW_Y_STEP+1
-    jr c,.shift
-    ld a,YELLOW_Y_STEP
-    jr .shift
-.up:
-    cp -YELLOW_Y_STEP
-    jr nc,.shift
-    ld a,-YELLOW_Y_STEP
-.shift:
+    exx
+    push hl
+    ld hl,yellowRetreatPaths-enemyMotion
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld a,(bc)
+    inc bc
+    ld (hl),b
+    dec hl
+    ld (hl),c
+    pop hl
+    exx
     add a,(hl)
     ld (hl),a
     pop af
@@ -96,20 +139,44 @@ moveYellow:
     inc hl
     ret
 .approach:
-    bit 0,c
-    jr nz,.still
     dec (hl)
     ld a,(hl)
     cp YELLOW_TURN_X
     jr nz,.still
+    ld a,(playerXY+1)
+.targetLocked:
+    inc hl
+    sub (hl)
+    dec hl
+    add a,PLAYER_BOTTOM
+    ; Select one twelve-step path for the signed Y difference.
+    exx
+    push hl
+    ld l,a
+    ld h,0
+    add hl,hl
+    add hl,hl
+    ld b,h
+    ld c,l
+    add hl,hl
+    add hl,bc
+    ld bc,yellowRetreatSteps
+    add hl,bc
+    ld b,h
+    ld c,l
+    ld hl,yellowRetreatPaths-enemyMotion
+    add hl,de
+    ld (hl),c
+    inc hl
+    ld (hl),b
+    pop hl
+    exx
     ld a,YELLOW_BACKUP
     call .state
 .still:
     inc hl
     ret
 .exit:
-    bit 0,c
-    jr nz,.still
     dec (hl)
     ld a,(hl)
     cp #fb
@@ -133,6 +200,13 @@ emitYellowShot:
     ld c,h
     jp aimQueuedShot
 
-yellowEntryRows: db 255,255,8,255,255,35,255,255,15,255,255,28
+; Indexed by remaining ships, so the first entrance uses the last row here.
+yellowEntryRows: db 28,19,39,15,35,8
+yellowRetreatPaths: defs 2*WAVE_ENEMIES
+yellowRetreatSteps:
+    incbin "yellow_retreat.bin"
+    assert $-yellowRetreatSteps=(2*PLAYER_BOTTOM+1)*YELLOW_RETREAT_TICKS
+waveKind: db 0
+levelWaveGaps: dw 0
 yellowFireMode: db #ff
 yellowShot: dw #ff

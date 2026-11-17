@@ -59,16 +59,18 @@ def verify_choice(emulator, game, model, choice):
     shot_probe = f"PC={s['enemyShotEmitted']:04X}H"
     motion_probe = f"{points['halt2']} AND 1=1"
     yellow_probe = f"{points['halt2']} AND 2=2"
-    watch.extend(((wave_probe, "PEEK(HL)"), (queue_probe, "PEEKW(HL)"),
+    wave_clock_probe = f"{wave_probe} AND 1=1"
+    watch.extend(((wave_probe, "PEEK(HL)+PEEK(IX)*256"), (wave_clock_probe, "TSTATESP"),
+                  (queue_probe, "PEEKW(HL)"),
                   (shot_probe, "B+C*256+D*65536"),
                   (motion_probe, f"PEEKW({s['enemy_records']:04X}H)"),
-                  (yellow_probe, f"PEEKW({s['enemy_boxes'] + 4:04X}H)"
-                   f"+PEEK({s['enemyMotion'] + 4:04X}H)*65536")))
+                  (yellow_probe, f"PEEKW({s['enemy_boxes']:04X}H)"
+                   f"+PEEK({s['enemyMotion']:04X}H)*65536")))
     yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
     watch.append((yellow_queue, "A"))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(str(choice) * 80, encoding="ascii")
-    log = breakpoint_log(emulator, game / "main.tap", model, 35, watch,
+    log = breakpoint_log(emulator, game / "main.tap", model, 60 if 4 <= choice <= 5 else 40, watch,
                          fast_autoload=True, keyboard_spool=spool)
     rows = [(condition, int(value)) for condition, value in HIT.findall(log)]
     hits = {}
@@ -90,13 +92,18 @@ def verify_choice(emulator, game, model, choice):
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
     opening = [GREEN_SHIP_Y[0][3]] * 12
     if yellow_count != 255:
-        opening[2::3] = [8, 35, 15, 28]
-    if entrances[:13] != opening + [GREEN_SHIP_Y[1][3]]:
-        raise ValueError(f"{model} map {choice}: first two waves did not use opposite sine entrances")
+        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28))
+        clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
+        green_to_yellow = (clocks[12] - clocks[11]) // 2
+        if (choice <= 5 and green_to_yellow < 144) or (choice >= 7 and green_to_yellow >= 144):
+            raise ValueError(f"{model} map {choice}: unexpected spacing between waves")
+    opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
+    if entrances[:len(opening)] != opening:
+        raise ValueError(f"{model} map {choice}: expected entrances {opening}, saw {entrances[:len(opening)]}")
     queued = [value for condition, value in rows if condition == queue_probe]
     shots = [value for condition, value in rows if condition == shot_probe]
-    yellow_shots = [shot for shot in shots if shot & 255 in (32, 38)]
-    shots = [shot for shot in shots if shot & 255 not in (32, 38)]
+    yellow_shots = [shot for shot in shots if shot & 255 in (38, 50)]
+    shots = [shot for shot in shots if shot & 255 not in (38, 50)]
     yellow_origins = [value for condition, value in rows if condition == yellow_queue]
     check_yellow_path(rows, yellow_probe, yellow_count, yellow_origins, yellow_shots)
     column = GREEN_FIRE_COLUMNS[choice - 1]
@@ -133,16 +140,15 @@ def check_yellow_path(rows, probe, fire_count, queued, shots):
     first = states.index((67, 8, 128))
     turn = states.index((26, 8, 129), first)
     approach = states[first:turn]
-    if any(y != 8 for _, y, _ in approach) or any(
-            x - next_x not in (0, 1) for (x, _, _), (next_x, _, _) in zip(approach, approach[1:])):
+    if [x for x, _, _ in approach] != list(range(67, 26, -1)) or any(y != 8 for _, y, _ in approach):
         raise ValueError("Yellow flier's approach was not straight")
     retreat = states[turn + 1:turn + 13]
-    if ([x for x, _, _ in retreat] != list(range(27, 39))
-            or [y for _, y, _ in retreat[:5]] != [12, 16, 20, 21, 21]
+    if ([x for x, _, _ in retreat] != list(range(28, 51, 2))
+            or [y for _, y, _ in retreat] != [8 + step * 13 // 12 for step in range(1, 13)]
             or retreat[-1][2] != 192
-            or 37 not in [x for x, _, _ in states[turn + 13:turn + 16]]):
+            or [x for x, _, _ in states[turn + 13:turn + 16]] != [49, 48, 47]):
         raise ValueError(f"Incorrect yellow retreat or exit {retreat}")
-    firing_columns = ([], [38], [32, 38])[fire_count]
+    firing_columns = ([], [50], [38, 50])[fire_count]
     if (len(queued) < fire_count * 4 or queued != (firing_columns * (len(queued) + 1))[:len(queued)]
             or [shot & 255 for shot in shots] != queued):
         raise ValueError("Yellow shot count or firing positions differ from the level profile")

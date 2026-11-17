@@ -32,6 +32,9 @@ GREEN_SHIP_Y = tuple(tuple(round(22 + sign * 16 * cos(tau * (x - 3) / 64)) for x
 GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63)
 GREEN_FAST_FROM = 6
 YELLOW_FIRE_COUNTS = (255, 255, 255, 0, 0, 1, 2, 2)
+WAVE_GAPS = ((9, 9), (9, 9), (9, 9), (145, 108), (145, 108), (70, 50), (35, 25), (9, 9))
+YELLOW_RETREAT_TICKS = 12
+YELLOW_MAX_Y = 43
 SHOT_DIRECTIONS = 32
 SHOT_PERIOD = 8
 SHOT_VECTORS = tuple((-round(12 * cos(tau * bearing / SHOT_DIRECTIONS)),
@@ -162,9 +165,15 @@ doSinScroll equ barrelScroll_Update
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
             defines.append("LEVEL_WAVES")
+            (game / "yellow_retreat.bin").write_bytes(bytes(
+                ((step * delta // YELLOW_RETREAT_TICKS)
+                 - ((step - 1) * delta // YELLOW_RETREAT_TICKS)) & 255
+                for delta in range(-YELLOW_MAX_Y, YELLOW_MAX_Y + 1)
+                for step in range(1, YELLOW_RETREAT_TICKS + 1)))
             (game / "level_fire.bin").write_bytes(bytes(
                 value for level, column in enumerate(GREEN_FIRE_COLUMNS, 1)
-                for value in (column, int(level >= GREEN_FAST_FROM), YELLOW_FIRE_COUNTS[level - 1])))
+                for value in (column, int(level >= GREEN_FAST_FROM), YELLOW_FIRE_COUNTS[level - 1],
+                              *WAVE_GAPS[level - 1])))
             for axis, name in enumerate(("x", "y")):
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu and replay is None:
