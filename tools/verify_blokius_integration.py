@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
+from build_art import build_art
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -41,21 +42,6 @@ def shot_steps(axis):
         steps = [(sign * (end - start)) % 256 for start, end in zip(positions, positions[1:])]
         yield steps[-1]
         yield from steps[:-1]
-
-
-def ship_art(rows, colour):
-    data = bytearray()
-    for shift in (0, 1):
-        for row in rows:
-            pixels = (" " * shift + row).ljust(6)
-            for offset in range(0, 6, 2):
-                mask, ink = 255, 0
-                for lane, pixel in enumerate(pixels[offset:offset + 2]):
-                    if pixel != " ":
-                        mask &= ~(7 << (3 * lane))
-                        ink |= colour << (3 * lane)
-                data.extend((mask, ink))
-    return data
 
 
 def star_force_music():
@@ -147,14 +133,7 @@ doSinScroll equ barrelScroll_Update
             int(major * tan(tau * (bearing + 0.5) / SHOT_DIRECTIONS)) + 1
             for major in range(64) for bearing in range(4)))
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
-        player_shape = (" #   ", " ### ", "#####", " ### ", " #   ")
-        (game / "player_art.bin").write_bytes(ship_art(player_shape, 4))
-        (game / "enemy_art.bin").write_bytes(ship_art(("   # ", " ### ", "#####", " ### ", "   # "), 3))
-        explosions = (("  #  ", " ### ", "#####", " ### ", "  #  "),
-                      ("# # #", " ### ", "## ##", " ### ", "# # #"),
-                      ("#   #", "     ", "  #  ", "     ", "#   #"))
-        for stage, (shape, colour) in enumerate(zip(explosions, (6, 7, 2)), 1):
-            (game / f"explosion_{stage}.bin").write_bytes(ship_art(shape, colour))
+        build_art(game)
         defines.append("LIVE_SHMUP")
         if audio is None:
             defines.append("LIVE_SFX")

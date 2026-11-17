@@ -12,7 +12,7 @@ import tempfile
 
 from benchmark_motion import DEAD
 from moving_overlay import hit
-from profile_blokius import build, capture
+from profile_blokius import ARCHIVE, build, capture
 from profile_ringo8 import HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols, trace
 from verify_ay_stream import register_pairs
@@ -663,7 +663,8 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for arg in ("archive", "assembler", "emulator", "output-tap"):
+    parser.add_argument("--archive", type=Path, default=ARCHIVE)
+    for arg in ("assembler", "emulator", "output-tap"):
         parser.add_argument(f"--{arg}", required=arg != "output-tap", type=Path)
     parser.add_argument("--phrase-reference", type=Path, help="use an alternate full-song capture instead of Star Force")
     parser.add_argument("--model", choices=MODELS)

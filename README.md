@@ -1,6 +1,24 @@
 # Spectrum Attribute Shmup
 
-The first milestone is a headless timing laboratory for the original Ringo-8 renderer on the ZX Spectrum 128K and +2A/+3 hardware families.
+The playable barrel-scroll build targets the ZX Spectrum 128K and +2A/+3 hardware families.
+
+## Artwork and playable build
+
+Editable graphics are in [art](art/README.md). The background sheet and GIMP master are in `art/gfx`, current player/enemy/explosion PNGs in `art/sprites`, and the Tiled level in `art/maps/level.tmx`. Graphics are converted automatically when the game is built.
+
+```powershell
+python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
+```
+
+This writes `build/game.tap`. The original engine archive is included in `vendor`, so the build reads its inputs from this checkout. Python 3, Windows and SjASMPlus are required.
+
+For the headless gameplay checks on both hardware families:
+
+```powershell
+python tools/verify_gameplay.py --assembler "C:/path/to/sjasmplus.exe" --emulator "C:/path/to/zesarux.exe" --output-tap build/verified.tap
+```
+
+The timing laboratory and upstream reference experiments are described below.
 
 ## Rebuild the upstream samples
 

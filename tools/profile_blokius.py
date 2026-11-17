@@ -16,6 +16,7 @@ from verify_zesarux_raster import run
 
 
 TAP_SHA256 = "d4d7b336e8cccaa4799a8dcad4152044e3c0e064824715ed061a6ac7d92653fb"
+ARCHIVE = Path(__file__).resolve().parents[1] / "vendor" / "blokius-wip1.zip"
 
 
 def build(archive_path, assembler, directory):
