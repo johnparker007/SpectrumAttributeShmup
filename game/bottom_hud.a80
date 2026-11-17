@@ -1,0 +1,40 @@
+; Clear the entire character row in each bitmap bank and set its attributes once.
+hudBottomNormal:
+    ld d,HUD_BITMAP_HIGH
+    jr hudBottom
+hudBottomShadow:
+    ld d,HUD_BITMAP_HIGH+#80
+hudBottom:
+    push de
+    call hudClearBottom
+    pop de
+    push de
+    ld a,(selectedLevel)
+    add a,'1'
+    ld (hudLevelNumber),a
+    ld hl,hudLevelText
+    ld e,HUD_BITMAP_LOW
+    call drawScreenText
+hudLevelDrawn:
+    pop de
+    ret
+
+hudClearBottom:
+    ld e,HUD_BITMAP_LOW
+    ld b,8
+.row:
+    xor a
+    dup 31 : ld (de),a : inc e : edup
+    ld (de),a
+    ld e,HUD_BITMAP_LOW
+    inc d
+    djnz .row
+    inc d
+    inc d
+    ld a,HUD_ATTR
+    dup 31 : ld (de),a : inc e : edup
+    ld (de),a
+    ret
+
+hudLevelText: db "LEVEL "
+hudLevelNumber: db "1",0

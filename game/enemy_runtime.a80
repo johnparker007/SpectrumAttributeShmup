@@ -204,7 +204,7 @@ moveDot:
     ld a,(de)
     dec d
     add a,(hl)
-    cp 48
+    cp PLAYFIELD_HEIGHT
     jr nc,.retireY
     ld (hl),a
     dec hl

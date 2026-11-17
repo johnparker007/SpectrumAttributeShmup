@@ -6,7 +6,7 @@ showLevelMenu:
     call clearMenuScreen
     ld hl,menuTitle
     ld de,#480c               ; row 8, column 12
-    call drawMenuText
+    call drawScreenText
     ld ix,menuChoices
     ld b,8
 .drawChoices:
@@ -15,7 +15,7 @@ showLevelMenu:
     ld d,(ix+1)
     ld l,(ix+2)
     ld h,(ix+3)
-    call drawMenuText
+    call drawScreenText
     ld de,4
     add ix,de
     pop bc
@@ -50,10 +50,10 @@ menuSelected:
     call clearMenuScreen
     ld hl,readyTitle
     ld de,#484b               ; row 10, column 11
-    call drawMenuText
+    call drawScreenText
     ld hl,readyCaption
     ld de,#4888               ; row 12, column 8
-    call drawMenuText
+    call drawScreenText
     halt
     ld a,(readyLevel)
     sub '1'
@@ -83,34 +83,6 @@ clearMenuScreen:
     ldir
     ret
 
-; HL = zero-terminated text, DE = bitmap address of the first character.
-drawMenuText:
-    ld a,(hl)
-    or a
-    ret z
-    inc hl
-    push hl
-    push de
-    sub 32
-    ld l,a
-    ld h,0
-    add hl,hl
-    add hl,hl
-    add hl,hl
-    ld bc,menuFont
-    add hl,bc
-    ld b,8
-.row:
-    ld a,(hl)
-    ld (de),a
-    inc hl
-    inc d
-    djnz .row
-    pop de
-    inc e
-    pop hl
-    jr drawMenuText
-
 menuTitle: db "BLOKIUS",0
 menuChoices:
     dw #4860,menuLevel1, #48a0,menuLevel2, #48e0,menuLevel3, #5020,menuLevel4
@@ -126,4 +98,3 @@ menuLevel8: db "8 START LEVEL 8",0
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "
 readyLevel: db "1",0
-menuFont: incbin "font/n13.bin"

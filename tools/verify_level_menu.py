@@ -20,6 +20,8 @@ from verify_gameplay import PLAYER_START, aim, packed
 
 def verify_choice(emulator, game, model, choice):
     s = read_symbols(game / "main.sym")
+    if (s["PLAYFIELD_HEIGHT"], s["ENEMY_COUNT"], s["WAVE_ENEMIES"]) != (46, 24, 15):
+        raise ValueError("Expected the bottom HUD, 24 projectile slots and fifteen enemy slots")
     points = {name: f"PC={s[name]:04X}H" for name in (
         "menuWait", "levelUnpackBegin", "levelUnpackEnd", "levelPageRestored",
         "enableRender", "renderFrame1", "firstFrameLogic", "halt2",
@@ -28,7 +30,8 @@ def verify_choice(emulator, game, model, choice):
     checks = {}
 
     def expect_at(name, expression, value):
-        condition = f"{points[name]} AND {len(watch)}={len(watch)}"
+        point = points.get(name, name)
+        condition = f"{point} AND {len(watch)}={len(watch)}"
         watch.append((condition, expression))
         checks[condition] = value
 
@@ -48,12 +51,40 @@ def verify_choice(emulator, game, model, choice):
     for name, address, char in (("menuWait", 0x480c, "B"), ("levelUnpackBegin", 0x4897, str(choice))):
         for row in range(8):
             expect_at(name, peek(address + row * 256), font[(ord(char) - 32) * 8 + row])
+    for address in (0x50E0, 0xD0E0):
+        hud = f"PC={s['hudLevelDrawn']:04X}H AND D={address >> 8:02X}H"
+        for column, char in ((0, "L"), (6, str(choice))):
+            for row in range(8):
+                expect_at(hud, peek(address + row * 256 + column), font[(ord(char) - 32) * 8 + row])
+        for column in (0, 31):
+            expect_at(hud, peek(address + 0xA00 + column), 0x47)
     level = game / "maps" / f"{map_output(choice)}.bin"
     expected = level.read_bytes()
     for offset in (0, 8, 9, 27, 53, 54, 72, 130, 580, 999, 1534):
         address = s["sourceTileMap"] + offset
         expect_at("levelUnpackEnd", f"PEEKW({address:04X}H)", int.from_bytes(expected[offset:offset + 2], "little"))
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
+    spool = game / f"menu-{model}-{choice}.txt"
+    spool.write_text(str(choice) * 80, encoding="ascii")
+    boot_log = breakpoint_log(emulator, game / "main.tap", model, 14, watch,
+                              fast_autoload=True, keyboard_spool=spool)
+    hits = {}
+    for condition, value in HIT.findall(boot_log):
+        hits.setdefault(condition, int(value))
+    required = (*points.values(), *checks)
+    if missing := [condition for condition in required if condition not in hits]:
+        raise ValueError(f"{model} map {choice}: missing trace points {missing}")
+    for condition, value in checks.items():
+        if hits[condition] != value:
+            raise ValueError(f"{model} map {choice}: {condition} printed {hits[condition]}, expected {value}")
+    menu, start, stop, restore, enable, render, gameplay, halt = (hits[point] for point in points.values())
+    if not menu < start < stop < restore < enable < render < gameplay < halt:
+        raise ValueError(f"{model} map {choice}: renderer ran outside the gameplay handoff")
+
+    # Use a sparse trace for sustained gameplay. The emulator tests every
+    # breakpoint at each instruction, even after the startup probes pass.
+    frame2_halt = f"PC={s['halt1']:04X}H"
+    watch = [(points["halt2"], "TSTATESP"), (frame2_halt, "TSTATESP")]
     wave_probe = f"PC={s['stepWave.saveSlot']:04X}H"
     queue_probe = f"PC={s['queueGreenShot']:04X}H"
     shot_probe = f"PC={s['enemyShotEmitted']:04X}H"
@@ -69,26 +100,16 @@ def verify_choice(emulator, game, model, choice):
     yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
     yellow_queue_clock = yellow_queue + " AND 1=1"
     watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP")))
-    spool = game / f"menu-{model}-{choice}.txt"
-    spool.write_text(str(choice) * 80, encoding="ascii")
-    log = breakpoint_log(emulator, game / "main.tap", model, 60 if 4 <= choice <= 5 else 40, watch,
+    log = breakpoint_log(emulator, game / "main.tap", model, 50 if 4 <= choice <= 5 else 32, watch,
                          fast_autoload=True, keyboard_spool=spool)
     rows = [(condition, int(value)) for condition, value in HIT.findall(log)]
-    hits = {}
-    for condition, value in rows:
-        hits.setdefault(condition, int(value))
-    required = (*points.values(), *checks)
-    if missing := [condition for condition in required if condition not in hits]:
-        raise ValueError(f"{model} map {choice}: missing trace points {missing}")
-    for condition, value in checks.items():
-        if hits[condition] != value:
-            raise ValueError(f"{model} map {choice}: {condition} printed {hits[condition]}, expected {value}")
-    menu, start, stop, restore, enable, render, gameplay, halt = (hits[point] for point in points.values())
-    if not menu < start < stop < restore < enable < render < gameplay < halt:
-        raise ValueError(f"{model} map {choice}: renderer ran outside the gameplay handoff")
-    frames = [value // FRAME for condition, value in rows if condition == points["halt2"]]
-    if len(frames) < 150 or any(second - first != 2 for first, second in zip(frames, frames[1:])):
-        raise ValueError(f"{model} map {choice}: irregular gameplay across {len(frames)} frame pairs")
+    halts = {points["halt2"]: 0, frame2_halt: 1}
+    timing = [(halts[condition], value) for condition, value in rows if condition in halts]
+    frame_pairs = len(timing) // 2
+    if frame_pairs < 150 or any(phase == other or second // FRAME - first // FRAME != 1
+                               for (phase, first), (other, second) in zip(timing, timing[1:])):
+        raise ValueError(f"{model} map {choice}: irregular gameplay across {frame_pairs} frame pairs")
+    headroom = [min(FRAME - value % FRAME for phase, value in timing if phase == slot) for slot in (0, 1)]
     entrances = [value for condition, value in rows if condition == wave_probe]
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
     opening = [GREEN_SHIP_Y[0][3]] * 8
@@ -135,7 +156,7 @@ def verify_choice(emulator, game, model, choice):
         if positions[start_at + 8] != packed((column + dx, (expected_origin >> 8) + dy)):
             raise ValueError(f"{model} map {choice}: incorrect projectile speed")
     return {"model": model, "map": choice, "compressed_bytes": level.with_suffix(".zx0").stat().st_size,
-            "unpack_tstates": stop - start, "gameplay_frame_pairs": len(frames),
+            "unpack_tstates": stop - start, "gameplay_frame_pairs": frame_pairs, "minimum_headroom": headroom,
             "green_shots": len(shots), "yellow_shots": len(yellow_shots)}
 
 

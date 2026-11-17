@@ -13,6 +13,7 @@ import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
 from build_art import LEVEL_MAPS, ZX0, build_art, map_output
+from bottom_hud import install_bottom_raster
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -70,6 +71,10 @@ def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, 
     include "level_loader.a80"
     ifdef LEVEL_MENU
         include "level_menu.a80"
+    endif
+    include "screen_text.a80"
+    ifdef BOTTOM_HUD
+        include "bottom_hud.a80"
     endif""")
         # Finish the menu in the bootstrap so the raster loop keeps its
         # original entry point and layout on both hardware families.
@@ -117,6 +122,9 @@ doSinScroll equ scrollScenery
 doSinScroll equ barrelScroll_Update
     endif
     include "overlay.a80"
+    ifdef BOTTOM_HUD
+        include "bottom_hud_timing.a80"
+    endif
 ''' + tail_start + tail.replace(b'\tinclude "music/resources.a80"', b''))
     defines_source = game / "defines.asm"
     defines_source.write_bytes(defines_source.read_bytes().replace(b"define DRAW_SCORE", b"; define DRAW_SCORE"))
@@ -136,7 +144,8 @@ doSinScroll equ barrelScroll_Update
             raise ValueError("Unexpected small-sprite position loader")
         macros.write_bytes(before + marker + small.replace(b"SPRITE.DRAWX", b"SPRITE.X").replace(b"SPRITE.DRAWY", b"SPRITE.Y"))
         for source_name in ("gameplay.a80", "score_hud.a80", "game_over_hud.a80", "enemy_runtime.a80",
-                            "aim_incoming.a80", "level_loader.a80", "level_menu.a80", "yellow_z.a80"):
+                            "aim_incoming.a80", "level_loader.a80", "level_menu.a80", "screen_text.a80",
+                            "yellow_z.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
         font = (game / "font" / "n13.bin").read_bytes()
@@ -164,7 +173,10 @@ doSinScroll equ barrelScroll_Update
         build_art(game, sprite_dir=sprite_dir)
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
-            defines.append("LEVEL_WAVES")
+            defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
+            for filename in ("bottom_hud.a80", "bottom_hud_timing.a80"):
+                shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
+            install_bottom_raster(game)
             (game / "yellow_retreat.bin").write_bytes(bytes(
                 ((step * delta // YELLOW_RETREAT_TICKS)
                  - ((step - 1) * delta // YELLOW_RETREAT_TICKS)) & 255

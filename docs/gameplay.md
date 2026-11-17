@@ -15,7 +15,7 @@ The level loader selects the firing column and baked bullet speed during **GET R
 | 4 | One slow shot on entry |
 | 6–8 | One shot on entry at the original speed |
 
-From level 4, each green wave alternates with a separate wave of eight yellow fliers. Yellow ships enter five ticks apart when an enemy slot is free. Levels 4 and 5 leave enough time for the previous wave to clear. Levels 6–8 shorten the gaps so waves can overlap within the twelve enemy slots.
+From level 4, each green wave alternates with a separate wave of eight yellow fliers. Yellow ships enter five ticks apart when an enemy slot is free. Levels 4 and 5 leave enough time for the previous wave to clear. Levels 6–8 shorten the gaps so waves can overlap within the fifteen enemy slots.
 
 Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 
@@ -25,13 +25,15 @@ Yellow fliers enter at varied heights and travel straight left at one dot per ga
 | 6 | One aimed shot at the end of the retreat |
 | 7–8 | An aimed shot halfway through the retreat and another at its end |
 
-All enemies on a level share the same 32 prebaked bullet directions and speed. Yellow shots first appear on level 6, which uses the faster paths.
+All enemies on a level share the same 32 prebaked bullet directions and speed. Yellow shots first appear on level 6, which uses the faster paths. Up to 24 enemy bullets can be active at once.
 
 Either player shot destroys an opponent in one hit and retires its whole pair before the next enemy is checked. A pair also retires at the right edge. A bullet destroys a vulnerable player ship, and a ram destroys both the vulnerable player and the enemy it hits. Both sides use 5×5 hitboxes and play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Protected contact is harmless to both ships. Movement and firing work on both blink phases after the spawn frame.
 
-After the last ship is destroyed, **GAME OVER** and **ENTER TO RESTART** appear in a centred panel. The top-right HUD keeps the final score visible. The score freezes even if a shot already in flight reaches an opponent. Enter clears the panel, projectile pools, hit flags and score, restores three lives and the opening formation, and rewinds the scenery and tile animations. Holding Enter triggers one restart. Music continues through the reset.
+After the last ship is destroyed, **GAME OVER** and **ENTER TO RESTART** appear in a centred panel. The HUD keeps the final score visible. The score freezes even if a shot already in flight reaches an opponent. Enter clears the panel, projectile pools, hit flags and score, restores three lives and the opening formation, and rewinds the scenery and tile animations. Holding Enter triggers one restart. Music continues through the reset.
 
-The HUD at the top right shows the remaining lives as small ships to the left of a six-digit score. It awards 100 points per destroyed ship and stores the four significant digits in packed decimal. The trailing `00` is loaded into both bitmap banks at startup and stays outside the update queue. A life change adds or erases only the affected icons. The queue updates at most one scanline of one glyph per 50 Hz frame and copies it to both banks. The bitmap stays untouched when the HUD has caught up. Tile and sprite composition rebuilds the attribute buffer, so the ten-column HUD strip gets its colours reapplied once per game tick.
+The full-width bottom HUD displays the level on the left, with lives and a six-digit score on the right. Level text, the black background and the score's trailing `00` are drawn once into both bitmap banks. Score advances by 100 per enemy and a life change updates only the affected icons. The queue paints at most one changed glyph scanline per 50 Hz frame and copies it to both banks. The playfield is 46 logical rows high, and movement stops with the whole player ship above the HUD.
+
+Frame 1 uses the former bottom-row attribute-copy interval to prepare one tile before the visible raster swaps. The last tile pass omits the two hidden logical rows and skips the display swap inside the HUD. The fixed-time collision slots keep their original schedule and read eight inactive reserve records behind the 24 live projectile slots.
 
 The first game slot reads the keyboard, resolves the previous collision flags, moves the ships and advances the projectiles. The large-sprite intervals check the projectile positions against ship hitboxes and retire spent pairs using the stock paging schedule. After sprite composition, the second game slot checks for ship contact and expands each paired record into two shots for plotting. Collision checks use coordinates. The attribute buffer holds the colours for drawing. Inactive shots skip the buffer write. The banked 50 Hz AY player plays the 25.6-second Star Force loop on A and B. Channel C plays the player-shot tone and enemy-explosion noise.
 
@@ -60,7 +62,7 @@ The default build uses the packed Star Force assets in `game/music`. To audition
 
 The HUD tests compare each bitmap update and its page restore against score and life changes, including resets. They reject writes to the two trailing zeroes and check decimal carries and saturation. Headless video checks `000000` with three ships at startup and the first score update.
 
-The replay checks 1,630 HUD frames and expects 64 life-icon row updates and 168 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The attribute strip takes 340 T-states per game tick.
+The prototype replay checks 1,630 HUD frames and expects 64 life-icon row updates and 168 score row updates per bitmap bank. Each row update takes 235 T-states, including the call, while an idle call takes 72. The prototype's in-playfield attribute strip takes 340 T-states per game tick.
 
 The idle run checks two full respawns, alternating draw coordinates across all 75 protected game frames each time, overlap without life loss during protection, and game over on the third hit. It also checks all 12 enemy draw positions and hitboxes in a full formation before and after game over. A separate trace verifies the coordinates and visible pixels of a ship exiting on the left. The gameplay trace checks mutual destruction from rams, protected ship contact and ten simultaneous player shots. It also compares player and enemy explosion artwork with the expected frame sequence. Assembly probes verify all 32 aimed bearings, two angle boundaries and paired-shot retirement when either shot hits.
 

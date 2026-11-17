@@ -1,6 +1,7 @@
 YELLOW_APPROACH equ #80
 YELLOW_BACKUP equ #81
 YELLOW_RETREAT_TICKS equ 12
+YELLOW_MAX_DELTA equ 43
 YELLOW_EXIT equ #c0
 YELLOW_TURN_X equ 26
 YELLOW_WAVE_SIZE equ 8
@@ -154,7 +155,7 @@ moveYellow:
     inc hl
     sub (hl)
     dec hl
-    add a,PLAYER_BOTTOM
+    add a,YELLOW_MAX_DELTA
     ; Select one twelve-step path for the signed Y difference.
     exx
     push hl
@@ -222,7 +223,7 @@ yellowEntryRows: db 24,4,28,19,39,15,35,8
 yellowRetreatPaths: defs 2*WAVE_ENEMIES
 yellowRetreatSteps:
     incbin "yellow_retreat.bin"
-    assert $-yellowRetreatSteps=(2*PLAYER_BOTTOM+1)*YELLOW_RETREAT_TICKS
+    assert $-yellowRetreatSteps=(2*YELLOW_MAX_DELTA+1)*YELLOW_RETREAT_TICKS
 waveKind: db 0
 levelWaveGaps: dw 0
 yellowFireMode: db #ff

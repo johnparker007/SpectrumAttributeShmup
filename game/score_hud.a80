@@ -1,16 +1,31 @@
-; Top-right fixed bitmap over the two logical attribute rows of character row 0.
+; Score and lives use the same glyph queue in both layouts.
 HUD_WIDTH equ STARTING_LIVES+1+6
 HUD_X equ 32-HUD_WIDTH
 HUD_DIGIT_RIGHT equ 29          ; columns 30 and 31 are startup-only zeroes
 HUD_ATTR equ #47                 ; bright white on black
 HUD_SCORE_DIRTY equ 0
 HUD_LIVES_DIRTY equ 1
+    ifdef BOTTOM_HUD
+HUD_BITMAP_HIGH equ #50
+HUD_BITMAP_LOW equ #e0
+    else
+HUD_BITMAP_HIGH equ #40
+HUD_BITMAP_LOW equ 0
+    endif
 
 hudInit:
-    ld d,#40
+    ifdef BOTTOM_HUD
+        call hudBottomNormal
+    else
+        ld d,HUD_BITMAP_HIGH
+    endif
     call hudInitialBitmap
     SET_PAGE 7
-    ld d,#c0
+    ifdef BOTTOM_HUD
+        call hudBottomShadow
+    else
+        ld d,HUD_BITMAP_HIGH+#80
+    endif
     call hudInitialBitmap
     SET_PAGE 0
     ret
@@ -18,7 +33,7 @@ hudInit:
 hudInitialBitmap:
     ld hl,hudInitialRows
 .row:
-    ld e,HUD_X
+    ld e,HUD_BITMAP_LOW+HUD_X
     ld b,HUD_WIDTH
 .byte:
     ld a,(hl)
@@ -66,7 +81,7 @@ hudStep:
     inc a
     ld (hudRow),a
     ld a,d
-    add a,#40
+    add a,HUD_BITMAP_HIGH
     ld d,a
     ld a,(hudColumn)
     ld e,a
@@ -137,6 +152,9 @@ hudSelectDigit:
 hudQueueGlyph:
     ld (hudGlyph),hl
     ld a,b
+    ifdef BOTTOM_HUD
+        add a,HUD_BITMAP_LOW
+    endif
     ld (hudColumn),a
     xor a
     ld (hudRow),a
@@ -168,6 +186,9 @@ hudSelectLife:
 
 ; Tiles/sprites replace the attribute buffer each game tick, so repaint
 ; just the strip's two rows of attributes after composition.
+    ifdef BOTTOM_HUD
+    defs 48,0                    ; preserve the timing-tested fixed-bank layout
+    else
 hudAttributes:
     ld hl,(attrPointer)
     ld de,HUD_X
@@ -180,13 +201,14 @@ hudAttributes:
     dup HUD_WIDTH-1 : ld (hl),a : inc hl : edup
     ld (hl),a
     ret
+    endif
 
 hudScore: dw 0
 hudDrawn: dw 0                  ; last glyph selected for each digit
 hudLivesDrawn: db STARTING_LIVES
 hudPending: db 0
 hudRow: db 8
-hudColumn: db HUD_DIGIT_RIGHT
+hudColumn: db HUD_BITMAP_LOW+HUD_DIGIT_RIGHT
 hudGlyph: dw hudDigits
 hudDigits: incbin "score_digits.bin"
 hudLifeIcon: incbin "hud_life_icon.bin"

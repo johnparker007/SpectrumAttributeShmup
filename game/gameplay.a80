@@ -2,14 +2,18 @@
 ; the same projectile list. The next tick consumes the collision results.
 SHIP_LEFT equ 0
 PLAYER_RIGHT equ 64*3/4-5   ; the five-dot ship ends at the 75% line
-PLAYER_BOTTOM equ 43
+PLAYER_BOTTOM equ PLAYFIELD_HEIGHT-5
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
+    ifdef BOTTOM_HUD
+WAVE_ENEMIES equ 15
+    else
 WAVE_ENEMIES equ 12
+    endif
 GREEN_WAVE_SIZE equ 8
 EXPLOSION_TICKS equ 6
 PLAYER_PAIRS equ 5
 PLAYER_PAIR_GAP equ 4
-PROJECTILE_POOL_BYTES equ PLAYER_PAIRS*2+ENEMY_COUNT*3
+PROJECTILE_POOL_BYTES equ PLAYER_PAIRS*2+COLLISION_ENEMY_RECORDS*3
 PLAYER_START equ 8+21*256
 STARTING_LIVES equ 3
 RESPAWN_TICKS equ 12          ; brief gap before a replacement ship appears
@@ -425,14 +429,16 @@ player_pairs:
 enemy_records:
     defs ENEMY_COUNT*3
 enemy_end:
-    assert enemy_end-player_pairs=PROJECTILE_POOL_BYTES
+    ; Keep the final collision reads in bounds when the active pool is smaller.
+    dup COLLISION_ENEMY_RECORDS-ENEMY_COUNT : db #ff,0,0 : edup
+    assert $-player_pairs=PROJECTILE_POOL_BYTES
 enemy_positions equ enemy_records
 player_shots:
     defs PLAYER_PAIRS*4
 player_positions equ player_shots
 initialPools:
     dup PLAYER_PAIRS : db #ff,0 : edup
-    dup ENEMY_COUNT : db #ff,0,0 : edup
+    dup COLLISION_ENEMY_RECORDS : db #ff,0,0 : edup
 
     ifdef REPLAY_CONTROLS
 readReplay:

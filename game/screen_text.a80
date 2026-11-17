@@ -1,0 +1,29 @@
+; HL = zero-terminated text, DE = bitmap address of the first character.
+drawScreenText:
+    ld a,(hl)
+    or a
+    ret z
+    inc hl
+    push hl
+    push de
+    sub 32
+    ld l,a
+    ld h,0
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld bc,screenFont
+    add hl,bc
+    ld b,8
+.row:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    inc d
+    djnz .row
+    pop de
+    inc e
+    pop hl
+    jr drawScreenText
+
+screenFont: incbin "font/n13.bin"

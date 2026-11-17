@@ -1,0 +1,34 @@
+; Render tile 48 during the former bottom-row attribute-copy interval.
+; The stack walks its tile pixels here, so this block cannot CALL or PUSH.
+prepareHudTile:
+    ld sp,(renderTilesList+48*2)
+    ld a,(tileMapScroll_H)
+    rrca
+    jp c,hudTileShifted
+ADDR = attrBufferStart + 8 + (48%9)*4 + 8*attrBufferWidth*(48/9)
+    DRAW_TILE_LINES 6
+    jp hudTileWait
+hudTileShifted:
+ADDR = attrBufferStart + 8 + (48%9)*4 + 8*attrBufferWidth*(48/9)
+    DRAW_TILE_LINES_SHIFTED 6
+    jp hudTileWait
+hudTileWait:
+    ld a,(tilesPage2_16)
+    cp #16
+    jp nz,hudTilePlus2a
+    ; Copy contention in the old interval differs by model. Match the
+    ; original first visible tile swap at 22478 T-states on 128K.
+    ld b,22
+    djnz $
+    ld a,0
+    ld a,0
+    jp hudTileDone
+hudTilePlus2a:
+    ; Match the original swap at 22525 T-states on +2A.
+    ld b,23
+    djnz $
+    nop
+    ld a,0
+    jp hudTileDone
+
+    assert $<=#be00             ; IM 2 builds its vector table here at startup

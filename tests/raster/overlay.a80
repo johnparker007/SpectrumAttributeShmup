@@ -1,9 +1,17 @@
 ; Draw into the active buffer after stock Frame 2 and before Frame 1 copies it.
 ROW_BYTES equ attrBufferWidth
-HEIGHT equ 48
+HEIGHT equ 48                   ; physical attribute buffer height
+    ifdef BOTTOM_HUD
+PLAYFIELD_HEIGHT equ 46
+ENEMY_COUNT equ 24
+    else
+PLAYFIELD_HEIGHT equ HEIGHT
+ENEMY_COUNT equ 32
+    endif
 CYAN equ 5
 YELLOW equ 6
-ENEMY_COUNT equ 32
+; The timed collision slices still read two records in each of sixteen slots.
+COLLISION_ENEMY_RECORDS equ 32
     include "packed_plot.a80"
 
 overlayEntry:
@@ -30,7 +38,11 @@ overlayEnemies:
     PLOT_ENEMIES
 overlayEnd:
     ifdef LIVE_SHMUP
-        call hudAttributes
+        ifdef BOTTOM_HUD
+            nop : nop : nop   ; preserve the fixed-bank overlay layout
+        else
+            call hudAttributes
+        endif
 hudAttributesDone:
         call hudStep
 hudFrame2Done:
