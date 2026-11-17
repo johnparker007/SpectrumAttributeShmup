@@ -32,6 +32,14 @@ stepWave:
     exx
     inc hl
     ld (hl),a
+    ifdef GREEN_WAVES
+        dec hl
+        ld a,(hl)
+.fireAtColumn:
+        cp HIDDEN_BOX
+        call z,queueGreenShot
+        inc hl
+    endif
     jr .advance
 .hit:
     exx
@@ -104,9 +112,18 @@ stepWave:
     inc hl
     ld (hl),21
     ld a,(waveIndex)
-    rrca
-    rrca
-    ld (ix),a
+    ifdef GREEN_WAVES
+        ld (ix),a
+        or 3                     ; spawn X=67 indexes sample 3
+        ld e,a
+        ld d,high shipTrajectories
+        ld a,(de)
+        ld (hl),a
+    else
+        rrca
+        rrca
+        ld (ix),a
+    endif
     ld a,9
     ld (spawnWait),a             ; at least ten game ticks between spawns
     ld a,(spawnSlot)
@@ -121,13 +138,18 @@ stepWave:
     ret nz
     ld (hl),WAVE_ENEMIES
     ld a,(waveIndex)
-    inc a
-    and 3
+    ifdef GREEN_WAVES
+        xor #40                  ; alternate high and low entrances per formation
+    else
+        inc a
+        and 3
+    endif
     ld (waveIndex),a
     ret
 
 ; Packed trajectory bits 3–7 select the bearing and bits 0–2 select its phase.
 moveIncoming:
+incomingPage:
     ld d,high incomingX
     ; Sparse fire leaves most slots empty. An untaken call costs less than
     ; advancing the three-byte pointer and counting each empty slot.
@@ -175,6 +197,17 @@ moveDot:
     ret
 
 spawnIncoming:
+    ifdef GREEN_WAVES
+        ld hl,(greenShot)
+        ld a,l
+        inc a
+        ret z
+        ld a,#ff
+        ld (greenShot),a
+        ld b,l
+        ld c,h
+        xor a
+    else
     ld a,(gameTick)
     and 7
     ret nz                       ; one firing opportunity per eight game ticks
@@ -216,6 +249,7 @@ spawnIncoming:
     ld (hl),2                    ; at least sixteen ticks between spreads
     inc a                        ; mark this shot as a spread
 .aimPending:
+    endif
     push af
     ld d,0
     ld a,(playerLives)
@@ -226,6 +260,9 @@ spawnIncoming:
     call z,aimIncoming
 .aimReady:
     pop af
+    ifdef GREEN_WAVES
+        jr emitIncoming
+    else
     jr z,emitIncoming
     call emitIncoming            ; centre, then 22.5 degrees either side
     ld a,d
@@ -235,6 +272,7 @@ spawnIncoming:
     ld a,d
     add a,32
     ld d,a
+    endif
 emitIncoming:
     ld hl,(enemyWrite)
     ld a,(hl)
@@ -254,6 +292,50 @@ enemyShotEmitted:
 .save:
     ld (enemyWrite),hl
     ret
+
+    ifdef GREEN_WAVES
+; X crosses the configured column only once. Spawn spacing allows at most
+; one queued shot per tick, which is emitted after existing shots move.
+queueGreenShot:
+    ld (greenShot),a
+    inc hl
+    ld a,(hl)
+    dec hl
+    add a,2
+    ld (greenShot+1),a
+    ret
+
+configureGreenWave:
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,greenLevelProfiles
+    add hl,de
+    ld a,(hl)
+    ld (stepWave.fireAtColumn+1),a
+    inc hl
+    ld a,(hl)
+    or a
+    ld a,high incomingSlowX
+    jr z,.speed
+    ld a,high incomingX
+.speed:
+    ld (incomingPage+1),a
+    ret
+
+resetGreenWave:
+    ld a,(greenStartPhase)
+    xor #40                      ; a retry starts with the opposite entrance
+    ld (greenStartPhase),a
+    ld (waveIndex),a
+    ld a,#ff
+    ld (greenShot),a
+    ret
+
+greenStartPhase: db #40
+greenShot: dw #ff
+greenLevelProfiles: incbin "level_fire.bin"
+    endif
 
     include "aim_incoming.a80"
 
@@ -341,8 +423,15 @@ playerArt: incbin "player_art.bin"
 
     align 256
 shipTrajectories: incbin "ship_trajectories.bin"
+    align 256
 incomingX: incbin "incoming_x.bin"
 incomingY: incbin "incoming_y.bin"
     assert incomingY-incomingX=256
 aimThresholds: incbin "aim_thresholds.bin"
     assert low aimThresholds=0
+    ifdef GREEN_WAVES
+incomingSlowX: incbin "incoming_slow_x.bin"
+incomingSlowY: incbin "incoming_slow_y.bin"
+    assert low incomingSlowX=0
+    assert incomingSlowY-incomingSlowX=256
+    endif

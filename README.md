@@ -4,7 +4,7 @@ The playable barrel-scroll build targets the ZX Spectrum 128K and +2A/+3 hardwar
 
 ## Artwork and playable build
 
-Editable graphics are in [art](art/README.md). The background sheet and GIMP master are in `art/gfx`, current player/enemy/explosion PNGs in `art/sprites`, and the two Tiled test maps in `art/maps`. Graphics are converted and maps are compressed automatically when the game is built. Press **1** or **2** on the title screen to select a map.
+Editable graphics are in [art](art/README.md). The background sheet and GIMP master are in `art/gfx`, current player/enemy/explosion PNGs in `art/sprites`, and eight Tiled test maps in `art/maps`. Graphics are converted and maps are compressed automatically when the game is built. Press **1–8** on the title screen to select a level.
 
 Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap` after editing the graphics.
 
@@ -99,4 +99,4 @@ The [Blokius timing baseline](docs/blokius-timing.md) follows the unmodified gam
 
 The [Blokius scenery test](docs/blokius-integration.md) checks the WIP's barrel scroll and animated tiles with the new projectile and AY workload.
 
-The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, three-way firing, enemy waves, and an incremental score HUD.
+The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, green sine waves with level-specific firing, and an incremental score HUD.

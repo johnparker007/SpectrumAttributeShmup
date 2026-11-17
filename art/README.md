@@ -11,6 +11,7 @@ The playable build reads these files on every build.
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` | Test map 1 for Tiled, 256 by 6 tiles |
 | `maps/level-2.tmx` | Test map 2 for Tiled, 256 by 6 tiles |
+| `maps/level-3.tmx` through `level-8.tmx` | Test maps 3–8 for Tiled, 256 by 6 tiles |
 | `maps/tileSet.tsx` | Tiled tileset linked to `gfx/tileSet.png` |
 
 Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Ship collision boxes stay 5 by 5 dots.
@@ -29,7 +30,7 @@ python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
 
 The playable TAP is written to `build/game.tap`. Graphics are converted automatically. To inspect the converted graphics on their own, run `python tools/build_art.py`. Converted files appear in `build/art`.
 
-The build compresses both maps with the bundled ZX0 tool. Choose either map with the number keys on the title screen. Enter during gameplay restarts the selected map.
+The build compresses all eight maps with the bundled ZX0 tool. Press **1–8** on the title screen to choose a level. Enter during gameplay restarts that level. The green sine flier uses `sprites/enemy.png` at every difficulty.
 
 The original Windows sprite and tile converters are included in `gfx`. Python 3 and Windows are required for this conversion workflow. The game build also needs SjASMPlus. The headless verifier additionally needs ZEsarUX.
 

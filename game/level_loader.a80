@@ -1,14 +1,19 @@
 ; A is a zero-based level number. The caller runs with rendering disabled.
 loadLevel:
+    ld (selectedLevel),a
     push af
     ld a,1
     call swapPage
     pop af
-    ld hl,packedLevelOne
-    or a
-    jr z,.decode
-    ld hl,packedLevelTwo
-.decode:
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,packedLevels
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
     ld de,sourceTileMap
     ; Avoid an interrupt changing paging mid-copy or affecting decode timing.
     di
@@ -18,7 +23,13 @@ levelUnpackEnd:
     xor a
     call swapPage
 levelPageRestored:
+    ifdef GREEN_WAVES
+        ld a,(selectedLevel)
+        call configureGreenWave
+    endif
     ei
     ret
 
     include "dzx0_standard.asm"
+
+selectedLevel: db 0

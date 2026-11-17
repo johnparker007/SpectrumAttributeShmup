@@ -12,7 +12,7 @@ from verify_zesarux_raster import run
 
 ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
-LEVEL_MAPS = ("level.tmx", "level-2.tmx")
+LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SPRITES = ("player", "enemy", "explosion_1", "explosion_2", "explosion_3")
 
 
@@ -47,6 +47,10 @@ def map_bytes(source):
     return bytes(opening + incoming)
 
 
+def map_output(number):
+    return f"tilemap-{number}" if number > 1 else "tilemap"
+
+
 def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
     gfx = output / "gfx"
@@ -69,7 +73,7 @@ def build_art(output, *, sprite_dir=None):
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
     for number, name in enumerate(LEVEL_MAPS, 1):
-        unpacked = maps / ("tilemap.bin" if number == 1 else "tilemap-2.bin")
+        unpacked = maps / f"{map_output(number)}.bin"
         unpacked.write_bytes(map_bytes(ART / "maps" / name))
         run([ZX0 / "zx0.exe", "-f", unpacked.resolve(), unpacked.with_suffix(".zx0").resolve()], maps)
 

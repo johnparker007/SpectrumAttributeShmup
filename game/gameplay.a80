@@ -335,6 +335,9 @@ resetEncounter:
     ld (fireSlot),a
     ld (spreadWait),a
     ld (spawnSlot),a
+    ifdef GREEN_WAVES
+        call resetGreenWave
+    endif
     ifdef LIVE_SFX
         jp resetSoundEffects
     else

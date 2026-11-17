@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import ZX0, build_art
+from build_art import LEVEL_MAPS, ZX0, build_art, map_output
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -26,6 +26,11 @@ MUSIC = TESTS.parent / "game" / "music"
 SHIP_PATTERNS = ((21, 0, 64), (13, 5, 64), (29, 7, 32), (22, 11, 64))
 SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in range(64))
                for centre, amplitude, period in SHIP_PATTERNS)
+GREEN_SHIP_Y = tuple(tuple(round(22 + sign * 16 * cos(tau * (x - 3) / 64)) for x in range(64))
+                     for sign in (-1, 1))
+# First visible X is 63. X=58 gives the player five more dots of warning.
+GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63)
+GREEN_FAST_FROM = 6
 SHOT_DIRECTIONS = 32
 SHOT_PERIOD = 8
 SHOT_VECTORS = tuple((-round(12 * cos(tau * bearing / SHOT_DIRECTIONS)),
@@ -33,10 +38,10 @@ SHOT_VECTORS = tuple((-round(12 * cos(tau * bearing / SHOT_DIRECTIONS)),
                      for bearing in range(SHOT_DIRECTIONS))
 
 
-def shot_steps(axis):
+def shot_steps(axis, slow=False):
     # The table is indexed by the arrival phase, with phase 0 wrapping.
     for vector in SHOT_VECTORS:
-        total = vector[axis]
+        total = round(vector[axis] * 2 / 3) if slow else vector[axis]
         sign = -1 if total < 0 else 1
         positions = [abs(total) * step // SHOT_PERIOD for step in range(SHOT_PERIOD + 1)]
         steps = [(sign * (end - start)) % 256 for start, end in zip(positions, positions[1:])]
@@ -49,7 +54,8 @@ def star_force_music():
             MUSIC.joinpath("star-force-literal.bin").read_bytes(), b"")
 
 
-def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None):
+def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None,
+            prototype_waves=False):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -149,9 +155,17 @@ doSinScroll equ barrelScroll_Update
         (game / "aim_thresholds.bin").write_bytes(bytes(
             int(major * tan(tau * (bearing + 0.5) / SHOT_DIRECTIONS)) + 1
             for major in range(64) for bearing in range(4)))
-        (game / "ship_trajectories.bin").write_bytes(bytes(y for path in SHIP_Y for y in path))
+        paths = SHIP_Y if prototype_waves else GREEN_SHIP_Y
+        (game / "ship_trajectories.bin").write_bytes(bytes(y for path in paths for y in path))
         build_art(game, sprite_dir=sprite_dir)
         defines.append("LIVE_SHMUP")
+        if not prototype_waves:
+            defines.append("GREEN_WAVES")
+            (game / "level_fire.bin").write_bytes(bytes(
+                value for level, column in enumerate(GREEN_FIRE_COLUMNS, 1)
+                for value in (column, int(level >= GREEN_FAST_FROM))))
+            for axis, name in enumerate(("x", "y")):
+                (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu and replay is None:
             defines.append("LEVEL_MENU")
         if audio is None:
@@ -177,11 +191,13 @@ doSinScroll equ barrelScroll_Update
     install_audio(game, audio, phrases=True, packed_audio=star_force_music() if audio is None else None)
     if live:
         resources = game / "gfx" / "resources.a80"
+        levels = "".join(f'packedLevel{n}: incbin "maps/{map_output(n)}.zx0"\n'
+                         for n in range(1, len(LEVEL_MAPS) + 1))
+        pointers = ",".join(f"packedLevel{n}" for n in range(1, len(LEVEL_MAPS) + 1))
         resources.write_bytes(resources.read_bytes() + b'''
     page 1
     org audioLiteral0End
-packedLevelOne: incbin "maps/tilemap.zx0"
-packedLevelTwo: incbin "maps/tilemap-2.zx0"
+''' + f"packedLevels: dw {pointers}\n{levels}".encode("ascii") + b'''
     assert $ <= #10000
     page 0
     assert testAudioRecipeEnd <= #e000

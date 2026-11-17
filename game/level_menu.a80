@@ -7,23 +7,44 @@ showLevelMenu:
     ld hl,menuTitle
     ld de,#480c               ; row 8, column 12
     call drawMenuText
-    ld hl,menuChoices
-    ld de,#4889               ; row 12, column 9
+    ld ix,menuChoices
+    ld b,8
+.drawChoices:
+    push bc
+    ld e,(ix)
+    ld d,(ix+1)
+    ld l,(ix+2)
+    ld h,(ix+3)
     call drawMenuText
-    ld hl,menuChoiceTwo
-    ld de,#48c9               ; row 14, column 9
-    call drawMenuText
+    ld de,4
+    add ix,de
+    pop bc
+    djnz .drawChoices
 menuWait:
     halt
     ld bc,#f7fe                ; keyboard row 1 to 5
     in a,(c)
-    rrca
+    ld d,a
     ld a,'1'
+    ld b,5
+.leftKeys:
+    srl d
     jr nc,menuSelected
+    inc a
+    djnz .leftKeys
+    ld b,#ef                 ; keyboard row 0, 9, 8, 7, 6
     in a,(c)
-    bit 1,a
-    jr nz,menuWait
-    ld a,'2'
+    rrca
+    rrca
+    ld d,a
+    ld a,'8'
+    ld b,3
+.rightKeys:
+    srl d
+    jr nc,menuSelected
+    dec a
+    djnz .rightKeys
+    jr menuWait
 menuSelected:
     ld (readyLevel),a
     call clearMenuScreen
@@ -91,8 +112,17 @@ drawMenuText:
     jr drawMenuText
 
 menuTitle: db "BLOKIUS",0
-menuChoices: db "1  START MAP 1",0
-menuChoiceTwo: db "2  START MAP 2",0
+menuChoices:
+    dw #4860,menuLevel1, #48a0,menuLevel2, #48e0,menuLevel3, #5020,menuLevel4
+    dw #4871,menuLevel5, #48b1,menuLevel6, #48f1,menuLevel7, #5031,menuLevel8
+menuLevel1: db "1 START LEVEL 1",0
+menuLevel2: db "2 START LEVEL 2",0
+menuLevel3: db "3 START LEVEL 3",0
+menuLevel4: db "4 START LEVEL 4",0
+menuLevel5: db "5 START LEVEL 5",0
+menuLevel6: db "6 START LEVEL 6",0
+menuLevel7: db "7 START LEVEL 7",0
+menuLevel8: db "8 START LEVEL 8",0
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "
 readyLevel: db "1",0

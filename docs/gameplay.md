@@ -2,11 +2,18 @@
 
 Use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. Press **Enter** to restart at any time. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. The ship can touch the left edge, and its right edge stops three quarters of the way across the playfield. Hold Space to fire a pair of parallel cyan-and-white shots every four game ticks while a slot is free, with up to five pairs in flight. Each shot has cyan on the left and white on the right. The two shots share an X coordinate, leave three empty rows between them and move three dots per tick.
 
-Enemy ships enter beyond the right edge and move left one logical dot every other game tick. The renderer uses offscreen padding to clip each ship as it exits on the left. The ship retires once its last dot leaves the viewport. The formation has 12 slots and admits a new ship every ten ticks when its next slot is free, spacing them five dots apart horizontally. The player and formation use 13 of the 16 small-sprite slots. Each group of 12 uses the next of four paths, cycling through a straight line and three sine patterns with different centres, amplitudes and periods. The build generates 256 absolute Y coordinates. A ship uses its X position and pattern to fetch a Y coordinate during play.
+Green sine fliers enter beyond the right edge and move left one logical dot every other game tick. The renderer clips them as they exit on the left. The formation has 12 slots and admits a new ship every ten ticks when its next slot is free, spacing them five dots apart horizontally. Waves alternate between the high and low ends of a 32-dot vertical sine path. An Enter restart flips the first wave’s entrance. The build bakes both mirrored paths as absolute Y coordinates indexed by X.
 
 The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
 
-The ships take turns firing, with one firing opportunity across the formation every eight game ticks. At firing time, integer comparisons against precomputed thresholds pick the closest of 32 bearings toward the player. The second and fourth flight patterns fire three shots centred on that bearing, with one shot 22.5° to either side and at least 16 game ticks between spreads. The first and third patterns fire single shots. When the player is absent, the centre bearing points straight left. Horizontal and vertical shots alternate one and two dots per game tick. Exact diagonal shots move one dot on each axis per tick. The build distributes the intermediate angles' X and Y steps across eight-tick sequences. In flight, each shot reads its deltas from two 256-byte tables and uses a three-byte record. Collisions are sampled at the resulting position, once per game tick.
+The level loader selects the firing column and baked bullet speed during **GET READY**. Each armed flier gets one shot when it crosses that column. The shot uses the closest of 32 bearings towards the player, or points left while the player is absent. Slow trajectories average about two thirds of the original speed. Each in-flight shot uses the same three-byte record and reads X and Y deltas from the selected pair of 256-byte tables.
+
+| Level | Green flier firing |
+| --- | --- |
+| 1–2 | Unarmed |
+| 3 and 5 | One slow shot, five dots inside the playfield |
+| 4 | One slow shot on entry |
+| 6–8 | One shot on entry at the original speed |
 
 Either player shot destroys an opponent in one hit and retires its whole pair before the next enemy is checked. A pair also retires at the right edge. A bullet destroys a vulnerable player ship, and a ram destroys both the vulnerable player and the enemy it hits. Both sides use 5×5 hitboxes and play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Protected contact is harmless to both ships. Movement and firing work on both blink phases after the spawn frame.
 
@@ -18,20 +25,26 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 
 ## Reproduce
 
-The title screen uses the normal Spectrum bitmap and starts test map 1 or 2 with the corresponding number key. The ready screen displays the selected level while the game's ZX0 Standard decoder expands its map into the existing 1,536-byte buffer. The renderer stays idle until the screens, tiles and game state are ready. The loader uses logical bank 1 for compressed maps and restores bank 0 before starting gameplay.
+The title screen uses the normal Spectrum bitmap. Press **1–8** to start a test map. Maps 3–8 rearrange scenery from the original test map and share its tile sheet. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
 
 | Map | Packed bytes | 128K unpack T-states | +2A unpack T-states |
 | --- | ---: | ---: | ---: |
-| 1 | 463 | 142,385 | 147,481 |
-| 2 | 477 | 143,019 | 148,080 |
+| 1 | 463 | 142,338 | 147,434 |
+| 2 | 477 | 142,980 | 148,038 |
+| 3 | 457 | 139,939 | 145,270 |
+| 4 | 463 | 140,528 | 145,750 |
+| 5 | 443 | 138,895 | 143,914 |
+| 6 | 452 | 140,561 | 145,957 |
+| 7 | 466 | 142,336 | 147,389 |
+| 8 | 465 | 143,157 | 148,265 |
 
-`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks both keys and models, screen text, sample map data, bank restoration and renderer start order. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
+`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all eight keys on both models, screen text, sample map data, bank restoration, renderer startup, opposite wave entrances, firing columns, aiming and bullet speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 
 ```powershell
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>
 ```
 
-The default build uses the packed Star Force assets in `game/music`. To audition an alternate tune, pass `--phrase-reference <full-reference.json>` with a full-song capture from `benchmark_ay.py --through-loop`. The verifier builds a keyboard-controlled TAP and a separate deterministic replay build. Only the keyboard-controlled TAP is exported. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 36 game ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
+The default build uses the packed Star Force assets in `game/music`. To audition an alternate tune, pass `--phrase-reference <full-reference.json>` with a full-song capture from `benchmark_ay.py --through-loop`. The gameplay regression uses the prototype waves and solid-colour artwork to retain its scripted collision scenarios. The exported keyboard-controlled TAP uses the current artwork and level waves. A keyboard spool checks all six controls and reaches the restart routine through the emulated Spectrum matrix. The replay covers the moving formations, a restart while alive, and a restart after losing all lives. The first 36 game ticks following each restart are compared with the cold-start sequence, including the source cursor, sampled map cells and all five animated-tile pointers. Both builds are compared against the stock render-time paging trace. Increase `--replay-seconds` if the replay paging trace stops short of the second restart.
 
 The HUD tests compare each bitmap update and its page restore against score and life changes, including resets. They reject writes to the two trailing zeroes and check decimal carries and saturation. Headless video checks `000000` with three ships at startup and the first score update.
 
