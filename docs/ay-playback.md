@@ -33,6 +33,10 @@ On both models, the verifier compared every write of the 5,120-tick song and the
 
 The [combined renderer experiment](projectile-integration.md#with-50-hz-playback) verifies both a looping 256-tick prefix and banked playback with the complete track loaded. A captured-audio comparison remains open.
 
+## Meadows Edge menu music
+
+The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The menu calls the player once per video interrupt with the raster renderer disabled. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
+
 ## Star Force gameplay music
 
 The gameplay build uses the packed Star Force cover in `game/music`. It plays on channels A and B and loops after 1,280 AY ticks. The 759-byte recipe and 695-byte literal pool were generated from `MainLoop.pt3` (SHA-256 `2e4d488e6070f127f911adbe4f5707043c9145a1c78f681dc154b62a187daa97`). Capture the export with `benchmark_ay.py --pt3 MainLoop.pt3 --through-loop` and pack the resulting JSON with `verify_ay_phrases.py`. The recipe and first literal bank are the gameplay assets.

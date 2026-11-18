@@ -28,8 +28,14 @@ showLevelMenu:
     call drawScreenText
     xor a
     call showControlMark
+    call menuMusicPage
+    call menuTrackInit
+    call menuMusicRestore
 menuWait:
     halt
+    call menuMusicPage
+    call menuTrackTick
+    call menuMusicRestore
     call pollMenuControls
     ld bc,#f7fe                ; keyboard row 1 to 5
     in a,(c)
@@ -56,6 +62,9 @@ menuWait:
     jr menuWait
 menuSelected:
     ld (readyLevel),a
+    call menuMusicPage
+    call menuTrackMute
+    call menuMusicRestore
     call clearMenuScreen
     ld hl,readyTitle
     ld de,#484b               ; row 10, column 11
@@ -74,6 +83,18 @@ menuSelected:
     di
     call fillScreens
     call fillPixels
+    ei
+    ret
+
+; The PT3 player and its self-modifying state share logical bank 3.
+menuMusicPage:
+    di
+    ld a,3
+    jp swapPage
+
+menuMusicRestore:
+    xor a
+    call swapPage
     ei
     ret
 

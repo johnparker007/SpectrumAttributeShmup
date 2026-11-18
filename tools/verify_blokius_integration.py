@@ -230,6 +230,18 @@ doSinScroll equ barrelScroll_Update
     org audioLiteral0End
 ''' + f"packedLevels: dw {pointers}\n{levels}".encode("ascii") + b'''
     assert $ <= #10000
+    ifdef LEVEL_MENU
+        page 3
+        org 55000
+menuTrackInit:
+        incbin "music/player_55000.bin"
+menuTrackTick equ menuTrackInit+5
+menuTrackMute equ menuTrackInit+8
+        assert $ <= 57158
+        org 57158
+        incbin "music/song_57158.bin"
+        assert $ <= #10000
+    endif
     page 0
     assert testAudioRecipeEnd <= #e000
     org #e000
