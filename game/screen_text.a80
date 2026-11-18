@@ -26,4 +26,4 @@ drawScreenText:
     pop hl
     jr drawScreenText
 
-screenFont: incbin "font/n13.bin"
+screenFont: incbin "font/arcade-8.bin"

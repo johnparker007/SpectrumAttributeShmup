@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import LEVEL_MAPS, ZX0, build_art, map_output
+from build_art import LEVEL_MAPS, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -157,13 +157,14 @@ doSinScroll equ barrelScroll_Update
                             "yellow_z.a80"):
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
-        font = (game / "font" / "n13.bin").read_bytes()
+        build_art(game, sprite_dir=sprite_dir)
+        font = (game / SCREEN_FONT).read_bytes()
         digits = "0123456789"
         game_over_text = GAME_OVER_TEXT + (("M TO MAIN MENU".center(16),) if menu else ())
         glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)]
                   for char in set(digits + "".join(game_over_text))}
         if any(len(glyph) != 8 for glyph in glyphs.values()):
-            raise ValueError("The archived score font is incomplete")
+            raise ValueError("The screen font is incomplete")
         (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in digits))
         (game / "game_over.bin").write_bytes(bytes(glyphs[char][row] for line in game_over_text
                                                  for row in range(8) for char in line))
@@ -180,7 +181,6 @@ doSinScroll equ barrelScroll_Update
             for major in range(64) for bearing in range(4)))
         paths = SHIP_Y if prototype_waves else GREEN_SHIP_Y
         (game / "ship_trajectories.bin").write_bytes(bytes(y for path in paths for y in path))
-        build_art(game, sprite_dir=sprite_dir)
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))

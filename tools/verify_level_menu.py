@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from build_art import LEVEL_MAPS, map_output
+from build_art import LEVEL_MAPS, SCREEN_FONT, map_output
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -53,7 +53,7 @@ def verify_choice(emulator, game, model, choice):
     expect_at("levelPageRestored", peek(s["currentPage"]), 0)
     expect_at("firstFrameLogic", f"PEEKW({s['intProc'] + 1:04X}H)", s["renderFrame2"])
 
-    font = (game / "font/n13.bin").read_bytes()
+    font = (game / SCREEN_FONT).read_bytes()
     for name, address, char in (("menuWait", 0x480c, "B"), ("levelUnpackBegin", 0x4897, str(choice))):
         for row in range(8):
             expect_at(name, peek(address + row * 256), font[(ord(char) - 32) * 8 + row])

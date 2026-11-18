@@ -14,10 +14,13 @@ The playable build reads these files on every build.
 | `maps/level-2.tmx` | Test map 2 for Tiled, 256 by 6 tiles |
 | `maps/level-3.tmx` through `level-8.tmx` | Test maps 3–8 for Tiled, 256 by 6 tiles |
 | `maps/tileSet.tsx` | Tiled tileset linked to `gfx/tileSet.png` |
+| `fonts/PressStart2P-8.bdf` | Source for the menu, HUD and GAME OVER lettering |
 
 Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Ship collision boxes stay 5 by 5 dots.
 
 The tile animation sequences are defined in the archived engine's `data.asm`. The imported sheet preserves their existing tile positions, including the preshifted parallax frames. Keep tiles in their existing slots when changing their artwork. Save the Tiled map with CSV layer data and fill every cell with a tile.
+
+The Blokius Arcade 8 bitmap uses the ASCII cells from Cody “CodeMan38” Boisclair’s Press Start 2P. The build packs the native 8×8 pixels for the Spectrum. [Pinned bitmap source](https://github.com/googlefonts/googlefontdirectory-hg/blob/52f780bc9d197280a9f430574e179a5f233c56b6/ofl/pressstart2p/src/PressStart2P-8.bdf) · [SIL Open Font License](fonts/OFL.txt)
 
 ## Build
 

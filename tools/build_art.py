@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import shutil
 import struct
 import tempfile
@@ -13,6 +14,7 @@ from verify_zesarux_raster import run
 ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
+SCREEN_FONT = "font/arcade-8.bin"
 SPRITES = {
     "player": "player_art.bin",
     "enemy_green_sine": "enemy_art.bin",
@@ -20,6 +22,29 @@ SPRITES = {
     "explosion_2": "explosion_2.bin",
     "explosion_3": "explosion_3.bin",
 }
+
+
+def arcade_font(source):
+    """Pack the native 8×8 BDF cells as eight Spectrum bitmap rows per glyph."""
+    bdf = source.read_text(encoding="ascii")
+    records = re.findall(
+        r"^ENCODING (\d+)\nSWIDTH [^\n]+\nDWIDTH 8 0\nBBX ([^\n]+)\nBITMAP\n([0-9A-F\n]+)ENDCHAR$",
+        bdf, re.MULTILINE,
+    )
+    glyphs = {}
+    for encoding, bounds, bitmap in records:
+        number = int(encoding)
+        if not 32 <= number <= 127:
+            continue
+        width, height, x, y = map(int, bounds.split())
+        rows = bytes.fromhex(bitmap)
+        top = 8 - y - height
+        if x < 0 or y < 0 or x + width > 8 or top < 0 or len(rows) != height:
+            raise ValueError(f"Arcade font glyph {number} exceeds its 8×8 cell")
+        glyphs[number] = bytes(top) + bytes(row >> x for row in rows) + bytes(y)
+    if len(glyphs) != 96:
+        raise ValueError("The arcade font must supply ASCII glyphs 32 through 127")
+    return b"".join(glyphs[number] for number in range(32, 128))
 
 
 def convert_image(source, converter, output, size):
@@ -59,6 +84,9 @@ def map_output(number):
 
 def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
+    font = output / SCREEN_FONT
+    font.parent.mkdir(exist_ok=True)
+    font.write_bytes(arcade_font(ART / "fonts/PressStart2P-8.bdf"))
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
