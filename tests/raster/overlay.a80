@@ -22,6 +22,9 @@ overlayEntry:
 overlayBegin:
     ifdef LIVE_SHMUP
         call checkPlayerContact
+        ifdef LEVEL_WAVES
+            call sceneryStep
+        endif
         call expandPlayerPairs
         ld a,(playerLives)
         or a

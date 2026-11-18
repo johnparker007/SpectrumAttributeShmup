@@ -25,6 +25,8 @@ levelUnpackEnd:
 levelPageRestored:
     ifdef LEVEL_WAVES
         ld a,(selectedLevel)
+        call configureScenery
+        ld a,(selectedLevel)
         call configureLevelWaves
     endif
     ei

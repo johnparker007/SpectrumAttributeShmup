@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import LEVEL_MAPS, SCREEN_FONT, ZX0, build_art, map_output
+from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -186,6 +186,7 @@ doSinScroll equ barrelScroll_Update
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_timing.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
+            shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
             (game / "yellow_retreat.bin").write_bytes(bytes(
                 ((step * delta // YELLOW_RETREAT_TICKS)
@@ -235,7 +236,14 @@ doSinScroll equ barrelScroll_Update
         test_art = code.index(b"testSprite:")
         tiles = code.index(b";page with tiles", test_art)
         # Leave bank 0 space after the renderer, with the AY recipe still at #cb00.
-        code = code[:test_art] + b"    assert $ <= #cb00\n\n" + code[tiles:]
+        scenery_source = f"""    ifdef LEVEL_WAVES
+DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
+        include "destructible.a80"
+    endif
+    assert $ <= #cb00
+
+""".encode("ascii")
+        code = code[:test_art] + scenery_source + code[tiles:]
         code = code.replace(b"    assert testSmallSprite+60 <= #cb00\n", b"", 1)
 
         levels = "".join(f'packedLevel{n}: incbin "maps/{map_output(n)}.zx0"\n'

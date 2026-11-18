@@ -356,6 +356,7 @@ resetEncounter:
     ld (spreadWait),a
     ld (spawnSlot),a
     ifdef LEVEL_WAVES
+        call resetScenery
         call resetLevelWaves
     endif
     ifdef LIVE_SFX

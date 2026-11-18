@@ -15,6 +15,8 @@ ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
+DESTRUCTIBLE_TILE = 124
+DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
     "player": "player_art.bin",
     "enemy_green_sine": "enemy_art.bin",
@@ -69,9 +71,21 @@ def map_bytes(source):
     layer = layers[0].find("data")
     if layer is None or layer.get("encoding") != "csv" or layer.get("compression"):
         raise ValueError("Save the scenery map with CSV layer data")
-    tiles = [int(value.strip()) - 1 for value in layer.text.split(",") if value.strip()]
-    if len(tiles) != 1536 or any(tile < 0 or tile >= 128 for tile in tiles):
-        raise ValueError("Fill the map using tile IDs from the 128-tile sheet")
+    base = root.find("tileset[@source='tileSet.tsx']")
+    target = root.find(f"tileset[@source='{DESTRUCTIBLE_TILESET}']")
+    if base is None or base.get("firstgid") != "1":
+        raise ValueError("Use the Blokius base tileset with firstgid 1")
+    target_gid = None
+    if target is not None:
+        target_gid = int(target.get("firstgid"))
+        tileset = ET.parse(source.parent / DESTRUCTIBLE_TILESET).getroot()
+        marker = tileset.find("tile[@id='0']/properties/property[@name='destructible']")
+        if target_gid <= 128 or marker is None or marker.get("value") != "true":
+            raise ValueError("Place the marked destructible tileset after the 128 base tiles")
+    gids = [int(value.strip()) for value in layer.text.split(",") if value.strip()]
+    if len(gids) != 1536 or any(not 1 <= gid <= DESTRUCTIBLE_TILE and gid != target_gid for gid in gids):
+        raise ValueError("Fill the map with base tiles 0–123 or the intact destructible tile")
+    tiles = [DESTRUCTIBLE_TILE if gid == target_gid else gid - 1 for gid in gids]
     # The barrel starts with nine complete columns, then streams six tiles
     # per incoming column. Preserve that layout when exporting from Tiled.
     opening = [tiles[y * 256 + x] for y in range(6) for x in range(9)]
@@ -93,6 +107,10 @@ def build_art(output, *, sprite_dir=None):
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")
+    blast_tiles = convert_image(ART / "gfx/destructible.png", "converter-tiles.exe", gfx / "destructible.bin", (32, 8))
+    if len(blast_tiles) != 4 * 48:
+        raise ValueError("Expected the intact target and three explosion frames")
+    (gfx / "tileSet.png.bin").write_bytes(tiles[:DESTRUCTIBLE_TILE * 48] + blast_tiles)
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
@@ -108,10 +126,14 @@ def build_art(output, *, sprite_dir=None):
                                  for index, value in enumerate(data)))
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
+    level_targets = bytearray()
     for number, name in enumerate(LEVEL_MAPS, 1):
         unpacked = maps / f"{map_output(number)}.bin"
-        unpacked.write_bytes(map_bytes(ART / "maps" / name))
+        data = map_bytes(ART / "maps" / name)
+        unpacked.write_bytes(data)
+        level_targets.append(DESTRUCTIBLE_TILE in data)
         run([ZX0 / "zx0.exe", "-f", unpacked.resolve(), unpacked.with_suffix(".zx0").resolve()], maps)
+    (output / "level_targets.bin").write_bytes(level_targets)
 
 
 def main():

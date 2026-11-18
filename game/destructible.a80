@@ -1,0 +1,194 @@
+; The live barrel has 18 columns. Columns 0–7 share their tile with 10–17
+; after streaming; columns 8 and 9 have no second copy.
+SCENERY_BLAST_SLOTS equ 8
+SCENERY_BLAST_TICKS equ 6
+    assert tileMapWidth=18 && low tileMap=0
+    assert tileMapWidth*tileMapHeight<=256
+
+configureScenery:
+    ld l,a
+    ld h,0
+    ld de,levelScenery
+    add hl,de
+    ld a,(hl)
+    ld (sceneryEnabled),a
+    ret
+
+sceneryStep:
+    ld a,(sceneryEnabled)
+    or a
+    ret z
+    call sceneryAgeBlasts
+    ld a,(tileMapScroll_H)
+    ld d,a
+    ld ix,player_pairs
+    ld b,PLAYER_PAIRS
+.pair:
+    ; A three-dot shot step plus at most one dot of scroll cannot skip a full tile.
+    ld a,(ix)
+    inc a
+    jr z,.next
+    dec a
+    add a,d
+    ld c,a                       ; barrel X of the two-dot footprint
+    rrca : rrca : rrca
+    and #1f
+    ld e,a                       ; physical barrel column
+    ld a,(ix+1)
+    call sceneryTestRow
+    jr z,.hit
+    ld a,(ix+1)
+    add a,PLAYER_PAIR_GAP
+    xor (ix+1)
+    bit 3,a                      ; one probe when both lanes share a tile row
+    jr z,.next
+    ld a,(ix+1)
+    add a,PLAYER_PAIR_GAP
+    call sceneryTestRow
+    jr nz,.next
+.hit:
+    ld (ix),#ff                  ; either lane spends the entire paired shot
+    push bc
+    push de
+    push ix
+    call sceneryStartBlast
+    pop ix
+    pop de
+    pop bc
+.next:
+    inc ix
+    inc ix
+    djnz .pair
+    ret
+
+; A = lane Y, E = column, C = barrel X. On a hit HL and E identify the cell.
+sceneryTestRow:
+    and #f8
+    ld l,a
+    add a,a
+    srl l : srl l
+    add a,l                      ; tile row times 18
+    add a,e
+    ld l,a
+    ld h,high tileMap
+    ld a,(hl)
+    cp DESTRUCTIBLE_TILE
+    ret z
+    ld a,c
+    and 7
+    cp 7
+    ret nz
+    inc l                        ; second dot crosses the tile edge
+    ld a,(hl)
+    cp DESTRUCTIBLE_TILE
+    ret nz
+    inc e
+    xor a
+    ret
+
+sceneryStartBlast:
+    ld c,l
+    ld a,e
+    cp 8
+    jr nc,.checkRight
+    ld a,l
+    add a,10
+    ld c,a
+    jr .find
+.checkRight:
+    cp 10
+    jr c,.find
+    ld a,l
+    sub 10
+    ld l,a
+.find:
+    ld ix,sceneryBlasts
+    ld de,3
+    ld b,SCENERY_BLAST_SLOTS
+.slot:
+    ld a,(ix+2)
+    or a
+    jr z,.start
+    add ix,de
+    djnz .slot
+    ld de,DESTRUCTIBLE_TILE*256 ; safe fallback if the pool is full
+    jr sceneryReplace
+.start:
+    ld (ix),l
+    ld (ix+1),c
+    ld (ix+2),SCENERY_BLAST_TICKS
+    ld a,(sceneryBlastCount)
+    inc a
+    ld (sceneryBlastCount),a
+    ld de,DESTRUCTIBLE_TILE*256+DESTRUCTIBLE_TILE+1
+
+; HL = primary, C = alias low byte, D = old tile, E = replacement.
+; The first nine world columns have no streaming copy at initial load.
+sceneryReplace:
+    ld (hl),e
+    ld l,c
+    ld a,(hl)
+    cp d
+    ret nz
+    ld (hl),e
+    ret
+
+sceneryAgeBlasts:
+    ld a,(sceneryBlastCount)
+    or a
+    ret z
+    ld ix,sceneryBlasts
+    ld b,SCENERY_BLAST_SLOTS
+.slot:
+    ld a,(ix+2)
+    or a
+    jr z,.next
+    ld e,a
+    ld d,0
+    ld hl,sceneryBlastStages
+    add hl,de
+    ld d,(hl)
+    ld h,high tileMap
+    ld l,(ix)
+    ld a,(hl)
+    cp d
+    jr nz,.retire                ; barrel streamed a new world cell here
+    dec (ix+2)
+    jr z,.finish
+    bit 0,(ix+2)
+    jr nz,.next
+    ld e,d
+    inc e
+    ld c,(ix+1)
+    call sceneryReplace
+    jr .next
+.finish:
+    ld e,0                       ; base tileset's blank tile
+    ld c,(ix+1)
+    call sceneryReplace
+.retire:
+    ld (ix+2),0
+    ld hl,sceneryBlastCount
+    dec (hl)
+.next:
+    ld de,3
+    add ix,de
+    djnz .slot
+    ret
+
+resetScenery:
+    ld (sceneryBlastCount),a     ; caller supplies zero
+    ld hl,sceneryBlasts
+    dup SCENERY_BLAST_SLOTS
+        inc hl : inc hl
+        ld (hl),a
+        inc hl
+    edup
+    ret
+
+sceneryEnabled: db 0
+sceneryBlastCount: db 0
+sceneryBlasts: defs SCENERY_BLAST_SLOTS*3
+sceneryBlastStages: db 0,DESTRUCTIBLE_TILE+3,DESTRUCTIBLE_TILE+3
+    db DESTRUCTIBLE_TILE+2,DESTRUCTIBLE_TILE+2,DESTRUCTIBLE_TILE+1,DESTRUCTIBLE_TILE+1
+levelScenery: incbin "level_targets.bin"
