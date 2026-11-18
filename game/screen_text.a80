@@ -1,4 +1,4 @@
-; HL = zero-terminated text, DE = bitmap address of the first character.
+; HL = zero-terminated ASCII 32–95, DE = bitmap address of the first character.
 drawScreenText:
     ld a,(hl)
     or a

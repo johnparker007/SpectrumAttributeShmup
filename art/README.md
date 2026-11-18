@@ -20,7 +20,7 @@ Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on t
 
 The tile animation sequences are defined in the archived engine's `data.asm`. The imported sheet preserves their existing tile positions, including the preshifted parallax frames. Keep tiles in their existing slots when changing their artwork. Save the Tiled map with CSV layer data and fill every cell with a tile.
 
-The Blokius Arcade 8 bitmap uses the ASCII cells from Cody “CodeMan38” Boisclair’s Press Start 2P. The build packs the native 8×8 pixels for the Spectrum. [Pinned bitmap source](https://github.com/googlefonts/googlefontdirectory-hg/blob/52f780bc9d197280a9f430574e179a5f233c56b6/ofl/pressstart2p/src/PressStart2P-8.bdf) · [SIL Open Font License](fonts/OFL.txt)
+The Blokius Arcade 8 bitmap uses ASCII 32–95 from Cody “CodeMan38” Boisclair’s Press Start 2P. The build packs these 64 native 8×8 cells into 512 bytes for the Spectrum. [Pinned bitmap source](https://github.com/googlefonts/googlefontdirectory-hg/blob/52f780bc9d197280a9f430574e179a5f233c56b6/ofl/pressstart2p/src/PressStart2P-8.bdf) · [SIL Open Font License](fonts/OFL.txt)
 
 ## Build
 

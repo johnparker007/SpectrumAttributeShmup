@@ -26,6 +26,7 @@ SPRITES = {
 
 def arcade_font(source):
     """Pack the native 8×8 BDF cells as eight Spectrum bitmap rows per glyph."""
+    codes = range(32, 96)
     bdf = source.read_text(encoding="ascii")
     records = re.findall(
         r"^ENCODING (\d+)\nSWIDTH [^\n]+\nDWIDTH 8 0\nBBX ([^\n]+)\nBITMAP\n([0-9A-F\n]+)ENDCHAR$",
@@ -34,7 +35,7 @@ def arcade_font(source):
     glyphs = {}
     for encoding, bounds, bitmap in records:
         number = int(encoding)
-        if not 32 <= number <= 127:
+        if number not in codes:
             continue
         width, height, x, y = map(int, bounds.split())
         rows = bytes.fromhex(bitmap)
@@ -42,9 +43,9 @@ def arcade_font(source):
         if x < 0 or y < 0 or x + width > 8 or top < 0 or len(rows) != height:
             raise ValueError(f"Arcade font glyph {number} exceeds its 8×8 cell")
         glyphs[number] = bytes(top) + bytes(row >> x for row in rows) + bytes(y)
-    if len(glyphs) != 96:
-        raise ValueError("The arcade font must supply ASCII glyphs 32 through 127")
-    return b"".join(glyphs[number] for number in range(32, 128))
+    if len(glyphs) != len(codes):
+        raise ValueError("The arcade font must supply ASCII glyphs 32 through 95")
+    return b"".join(glyphs[number] for number in codes)
 
 
 def convert_image(source, converter, output, size):
