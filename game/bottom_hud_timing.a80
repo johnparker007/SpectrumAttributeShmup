@@ -1,15 +1,18 @@
-; Render tile 48 during the former bottom-row attribute-copy interval.
+; Start the bottom tile row during the former HUD attribute-copy interval.
+; Shifted tiles merge their left edge with the preceding tile's right edge.
+HUD_PREPARED_TILE equ 45
+HUD_TILE_BUFFER equ attrBufferStart + 8 + (HUD_PREPARED_TILE%9)*4 + 8*attrBufferWidth*(HUD_PREPARED_TILE/9)
 ; The stack walks its tile pixels here, so this block cannot CALL or PUSH.
 prepareHudTile:
-    ld sp,(renderTilesList+48*2)
+    ld sp,(renderTilesList+HUD_PREPARED_TILE*2)
     ld a,(tileMapScroll_H)
     rrca
     jp c,hudTileShifted
-ADDR = attrBufferStart + 8 + (48%9)*4 + 8*attrBufferWidth*(48/9)
+ADDR = HUD_TILE_BUFFER
     DRAW_TILE_LINES 6
     jp hudTileWait
 hudTileShifted:
-ADDR = attrBufferStart + 8 + (48%9)*4 + 8*attrBufferWidth*(48/9)
+ADDR = HUD_TILE_BUFFER
     DRAW_TILE_LINES_SHIFTED 6
     jp hudTileWait
 hudTileWait:

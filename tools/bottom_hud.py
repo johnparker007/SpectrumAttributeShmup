@@ -28,9 +28,11 @@ hudTileDone:
         code = path.read_bytes()
         end = code.index(b"    jp renderTiles1Exit")
         starts = [match.start() for match in re.finditer(rb"(?m)^ADDR = attrBufferStart", code[:end])]
-        # The final four tiles are on the bottom tile row. Finish the first
-        # three on this pass. Tile 48 now runs before the first visible swap.
-        first = code[starts[-4]:starts[-2]].replace(macro + b" 8", macro + b" 6")
+        # Draw the first bottom-row tile early so the remaining shifted tiles
+        # can still merge their edges in left-to-right order.
+        second = code[starts[-3]:starts[-2]].replace(macro + b" 8", macro + b" 6")
         third = code[starts[-2]:starts[-1]].split(macro + b" 4")[0]
-        path.write_bytes(code[:starts[-4]] + first + third + macro + b" 6\n"
-                         b"TILE = TILE + 2\n" + code[end:])
+        fourth = code[starts[-1]:end].replace(macro + b" 8", macro + b" 6")
+        path.write_bytes(code[:starts[-4]] + b"    assert TILE = HUD_PREPARED_TILE\nTILE = TILE + 1\n"
+                         + second + third + macro + b" 6\nTILE = TILE + 1\n"
+                         + fourth + code[end:])
