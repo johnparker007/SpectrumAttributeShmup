@@ -15,7 +15,7 @@ from trace_zesarux import breakpoint_log, read_symbols
 from verify_blokius_integration import (
     GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, YELLOW_FIRE_COUNTS, install,
 )
-from verify_gameplay import PLAYER_START, aim, packed
+from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
 
 
 def verify_choice(emulator, game, model, choice):
@@ -191,6 +191,45 @@ def check_yellow_path(rows, probe, fire_count, spawns, queued, shots):
         raise ValueError("Yellow shot count or firing positions differ from the level profile")
 
 
+def verify_green_corners(emulator, game, model):
+    """Park at the top left, restart, then park at the bottom left on level 8."""
+    s = read_symbols(game / "main.sym")
+    player, shot, contact, restart = (f"PC={s[name]:04X}H" for name in (
+        "updatePlayerLife.checkPlayer", "enemyShotEmitted", "checkPlayerContact.hit", "restartGame",
+    ))
+    spool = game / f"green-corners-{model}.txt"
+    spool.write_text("8" * 80, encoding="ascii")
+    watch = [(player, f"PEEKW({s['playerXY']:04X}H)+PEEK({s['player_hit']:04X}H)*65536"),
+             (shot, "B+C*256+D*65536"), (contact, "A"), (restart, "A")]
+    log = breakpoint_log(emulator, game / "main.tap", model, 24, watch, fast_autoload=True, keyboard_spool=spool)
+    runs = [[]]
+    for point, value in HIT.findall(log):
+        if point == restart:
+            runs.append([])
+        else:
+            runs[-1].append((point, int(value)))
+    if len(runs) != 2:
+        raise ValueError(f"{model}: expected an Enter restart between green wave entrances")
+    for y, events in zip((0, s["PLAYER_BOTTOM"]), runs):
+        corner = packed((0, y))
+        entry_shot = packed((63, y + 2))  # bearing zero means straight left
+        fired_at_corner = False
+        position = None
+        for point, value in events:
+            if point == player:
+                position = value & 65535
+                if value >> 16:
+                    if fired_at_corner and position == corner:
+                        break
+                    raise ValueError(f"{model}: first hit missed the expected corner at Y={y}")
+            elif point == shot and value == entry_shot and position == corner:
+                fired_at_corner = True
+            elif point == contact or (point == shot and value & 255 != 63):
+                raise ValueError(f"{model}: another attack reached the corner test at Y={y}")
+        else:
+            raise ValueError(f"{model}: green shots failed to hit the corner at Y={y}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for arg in ("assembler", "emulator", "output-tap"):
@@ -200,9 +239,17 @@ def main():
     with tempfile.TemporaryDirectory(prefix="shmup-levels-") as scratch:
         game = build(ARCHIVE, assembler, Path(scratch))
         install(game, assembler, live=True)
+        corner_scratch = Path(scratch) / "corner-test"
+        corner_scratch.mkdir()
+        corner_game = build(ARCHIVE, assembler, corner_scratch)
+        replay = [LEFT | UP] * 24 + [0] * 96 + [RESTART] + [LEFT | DOWN] * 24 + [0] * 115
+        install(corner_game, assembler, live=True, replay=replay)
         with ThreadPoolExecutor(max_workers=4) as pool:
+            corners = [pool.submit(verify_green_corners, emulator, corner_game, model) for model in MODELS]
             checks = [pool.submit(verify_choice, emulator, game, model, choice)
                       for choice in range(1, len(LEVEL_MAPS) + 1) for model in MODELS]
+            for corner in corners:
+                corner.result()
             results = [check.result() for check in checks]
         if args.output_tap:
             args.output_tap.parent.mkdir(exist_ok=True, parents=True)

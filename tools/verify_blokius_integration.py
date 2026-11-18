@@ -27,8 +27,11 @@ MUSIC = TESTS.parent / "game" / "music"
 SHIP_PATTERNS = ((21, 0, 64), (13, 5, 64), (29, 7, 32), (22, 11, 64))
 SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in range(64))
                for centre, amplitude, period in SHIP_PATTERNS)
-GREEN_SHIP_Y = tuple(tuple(round(22 + sign * 16 * cos(tau * (x - 3) / 64)) for x in range(64))
-                     for sign in (-1, 1))
+# The five-dot ships travel from Y=0 to Y=41 in the 46-dot playfield.
+# Put a crest at X=63 so a shot at entry lines up with a ship at either edge.
+GREEN_TRAVEL_Y = 46 - 5
+GREEN_TOP_Y = tuple(round(GREEN_TRAVEL_Y * (1 - cos(tau * (x - 63) / 64)) / 2) for x in range(64))
+GREEN_SHIP_Y = (GREEN_TOP_Y, tuple(GREEN_TRAVEL_Y - y for y in GREEN_TOP_Y))
 # First visible X is 63. X=58 gives the player five more dots of warning.
 GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63)
 GREEN_FAST_FROM = 6
@@ -193,7 +196,7 @@ doSinScroll equ barrelScroll_Update
                               *WAVE_GAPS[level - 1])))
             for axis, name in enumerate(("x", "y")):
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
-        if menu and replay is None:
+        if menu:
             defines.append("LEVEL_MENU")
             shutil.copyfile(TESTS.parent / "game" / "joystick.a80", game / "joystick.a80")
         if audio is None:
