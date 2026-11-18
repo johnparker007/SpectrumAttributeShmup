@@ -223,11 +223,25 @@ doSinScroll equ barrelScroll_Update
         (game / "collision_expected.bin").write_bytes(phases()[0].hits)
     install_audio(game, audio, phrases=True, packed_audio=star_force_music() if audio is None else None)
     if live:
+        data = game / "data.asm"
+        code = data.read_bytes()
+        sine_start = code.index(b"\nsin:")
+        frames_start = code.index(b"\ntileFrames:", sine_start)
+        # Leave #8000–#82ff available without moving the tile animation tables.
+        data.write_bytes(code[:sine_start] + b"\n    org #8300\n" + code[frames_start:])
+
         resources = game / "gfx" / "resources.a80"
+        code = resources.read_bytes()
+        test_art = code.index(b"testSprite:")
+        tiles = code.index(b";page with tiles", test_art)
+        # Leave bank 0 space after the renderer, with the AY recipe still at #cb00.
+        code = code[:test_art] + b"    assert $ <= #cb00\n\n" + code[tiles:]
+        code = code.replace(b"    assert testSmallSprite+60 <= #cb00\n", b"", 1)
+
         levels = "".join(f'packedLevel{n}: incbin "maps/{map_output(n)}.zx0"\n'
                          for n in range(1, len(LEVEL_MAPS) + 1))
         pointers = ",".join(f"packedLevel{n}" for n in range(1, len(LEVEL_MAPS) + 1))
-        resources.write_bytes(resources.read_bytes() + b'''
+        resources.write_bytes(code + b'''
     page 1
     org audioLiteral0End
 ''' + f"packedLevels: dw {pointers}\n{levels}".encode("ascii") + b'''
