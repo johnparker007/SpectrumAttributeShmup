@@ -53,7 +53,11 @@ controlsReady:
     jp nz,restartGame
     ld a,(playerLives)
     or a
-    jr z,.moveEnemy
+    ifdef LEVEL_MENU
+        jr z,.gameOver
+    else
+        jr z,.moveEnemy
+    endif
     ld a,(respawnWait)
     or a
     jr nz,.moveEnemy
@@ -72,6 +76,15 @@ controlsReady:
     inc (hl)
 gameplayComplete:
     ret
+
+    ifdef LEVEL_MENU
+controlsReady.gameOver:
+    ld bc,#7ffe                    ; Space, Symbol Shift, M, N, B
+    in a,(c)
+    bit 2,a
+    jp z,returnToMenu
+    jr controlsReady.moveEnemy
+    endif
 
 ; Active input bits are P, O, Q, A, Space and Enter.
 readControls:

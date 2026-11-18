@@ -1,5 +1,6 @@
 ; The menu occupies the normal screen with the raster renderer disabled.
 showLevelMenu:
+    di
     call disableRender
     xor a
     call swapPage
@@ -26,7 +27,7 @@ showLevelMenu:
     ld hl,menuSinclairChoice
     ld de,#50c1               ; row 22
     call drawScreenText
-    xor a
+    ld a,(menuControl)
     call showControlMark
     call menuMusicPage
     call menuTrackInit
@@ -85,6 +86,41 @@ menuSelected:
     call fillPixels
     ei
     ret
+
+returnToMenu:
+    pop hl                         ; discard the return from motionStep
+    call showLevelMenu
+    di
+    call rewindBarrel
+    ; The first render pass otherwise reads the old level's buffer and tile list.
+    xor a
+    ld hl,attrBuffer
+    ld de,attrBuffer+1
+    ld bc,renderTilesList-attrBuffer-1
+    ld (hl),a
+    ldir
+    call processTileMap
+
+    xor a
+    ld (gameOverRows),a
+    ld (restartHeld),a
+    ld (hudPending),a
+    ld (sound_initialized),a
+    ld (phrase_left),a
+    ld h,a
+    ld l,a
+    ld (hudScore),hl
+    ld (hudDrawn),hl
+    ld a,STARTING_LIVES
+    ld (playerLives),a
+    ld (hudLivesDrawn),a
+    ld a,8
+    ld (hudRow),a
+    ld a,#40
+    ld (greenStartPhase),a
+    ld hl,testAudioRecipe
+    ld (phrase_next),hl
+    jp levelPrepared
 
 ; The PT3 player and its self-modifying state share logical bank 3.
 menuMusicPage:
@@ -186,3 +222,6 @@ menuReaders: dw readControls,readKempston,readSinclair
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "
 readyLevel: db "1",0
+
+gameOverText: incbin "game_over.bin"
+    assert $-gameOverText=GAME_OVER_WIDTH*GAME_OVER_ROWS

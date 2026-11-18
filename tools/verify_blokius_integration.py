@@ -93,6 +93,7 @@ def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, 
 
 startGame:
     call barrelScroll_Init
+levelPrepared:
     ifdef LIVE_SHMUP
         ifdef BOTTOM_HUD
             di                 ; keep the shadow bank mapped through HUD setup
@@ -158,12 +159,13 @@ doSinScroll equ barrelScroll_Update
         shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
         font = (game / "font" / "n13.bin").read_bytes()
         digits = "0123456789"
+        game_over_text = GAME_OVER_TEXT + (("M TO MAIN MENU".center(16),) if menu else ())
         glyphs = {char: font[8 * (ord(char) - 32):8 * (ord(char) - 31)]
-                  for char in set(digits + "".join(GAME_OVER_TEXT))}
+                  for char in set(digits + "".join(game_over_text))}
         if any(len(glyph) != 8 for glyph in glyphs.values()):
             raise ValueError("The archived score font is incomplete")
         (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in digits))
-        (game / "game_over.bin").write_bytes(bytes(glyphs[char][row] for line in GAME_OVER_TEXT
+        (game / "game_over.bin").write_bytes(bytes(glyphs[char][row] for line in game_over_text
                                                  for row in range(8) for char in line))
         icon = bytes((0, 0x20, 0x38, 0x7C, 0x38, 0x20, 0, 0))
         (game / "hud_life_icon.bin").write_bytes(icon)
