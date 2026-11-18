@@ -39,7 +39,13 @@ def verify_choice(emulator, game, model, choice):
         return f"PEEK({address:04X}H)"
 
     input_page = 0x11 if model == "128k" else 0x14
+    controls, reader = {
+        2: ("j" * 8, "readKempston"),
+        3: ("s" * 8, "readSinclair"),
+        4: ("s" * 4 + "k" * 4, "readControls"),
+    }.get(choice, ("", "readControls"))
     expect_at("menuWait", f"PEEKW({s['intProc'] + 1:04X}H)", s["nullProc"])
+    expect_at("firstFrameLogic", f"PEEKW({s['controlReader'] + 1:04X}H)", s[reader])
     expect_at("levelUnpackBegin", f"PEEKW({s['intProc'] + 1:04X}H)", s["nullProc"])
     expect_at("levelUnpackBegin", "HL", s[f"packedLevel{choice}"])
     expect_at("levelUnpackBegin", peek(s["pageTable"] + 1), input_page)
@@ -65,7 +71,7 @@ def verify_choice(emulator, game, model, choice):
         expect_at("levelUnpackEnd", f"PEEKW({address:04X}H)", int.from_bytes(expected[offset:offset + 2], "little"))
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
     spool = game / f"menu-{model}-{choice}.txt"
-    spool.write_text(str(choice) * 80, encoding="ascii")
+    spool.write_text(controls + str(choice) * 80, encoding="ascii")
     boot_log = breakpoint_log(emulator, game / "main.tap", model, 14, watch,
                               fast_autoload=True, keyboard_spool=spool)
     hits = {}
@@ -83,6 +89,7 @@ def verify_choice(emulator, game, model, choice):
 
     # Use a sparse trace for sustained gameplay. The emulator tests every
     # breakpoint at each instruction, even after the startup probes pass.
+    spool.write_text(str(choice) * 80, encoding="ascii")
     frame2_halt = f"PC={s['halt1']:04X}H"
     watch = [(points["halt2"], "TSTATESP"), (frame2_halt, "TSTATESP")]
     wave_probe = f"PC={s['stepWave.saveSlot']:04X}H"

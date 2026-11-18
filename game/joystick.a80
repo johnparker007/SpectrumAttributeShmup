@@ -1,0 +1,30 @@
+; Translate both interfaces into the same Right, Left, Up, Down, Fire bits.
+readKempston:
+    in a,(#1f)
+    and #1f
+    ld hl,kempstonButtons
+    jr readJoystickButtons
+
+; Sinclair player 1 uses the active-low 6, 7, 8, 9 and 0 keyboard lines.
+readSinclair:
+    ld bc,#effe
+    in a,(c)
+    cpl
+    and #1f
+    ld hl,sinclairButtons
+readJoystickButtons:
+    ld e,a
+    ld d,0
+    add hl,de
+    ld e,(hl)
+    ld c,#fe
+    jp readRestartControl
+
+kempstonButtons:
+    dup 32, buttons
+        db (buttons & #13) | ((buttons & #04)<<1) | ((buttons & #08)>>1)
+    edup
+sinclairButtons:
+    dup 32, buttons
+        db ((buttons & #18)>>3) | ((buttons & #06)<<1) | ((buttons & 1)<<4)
+    edup

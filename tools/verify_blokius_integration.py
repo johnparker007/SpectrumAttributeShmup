@@ -195,6 +195,7 @@ doSinScroll equ barrelScroll_Update
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu and replay is None:
             defines.append("LEVEL_MENU")
+            shutil.copyfile(TESTS.parent / "game" / "joystick.a80", game / "joystick.a80")
         if audio is None:
             defines.append("LIVE_SFX")
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
@@ -232,6 +233,9 @@ doSinScroll equ barrelScroll_Update
     include "enemy_runtime.a80"
     ifdef LIVE_SFX
         include "sound_effects.a80"
+    endif
+    ifdef LEVEL_MENU
+        include "joystick.a80"
     endif
     assert $ <= #10000
 ''')

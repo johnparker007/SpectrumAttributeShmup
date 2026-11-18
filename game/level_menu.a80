@@ -20,8 +20,17 @@ showLevelMenu:
     add ix,de
     pop bc
     djnz .drawChoices
+    ld hl,menuControlChoices
+    ld de,#5081               ; row 20
+    call drawScreenText
+    ld hl,menuSinclairChoice
+    ld de,#50c1               ; row 22
+    call drawScreenText
+    xor a
+    call showControlMark
 menuWait:
     halt
+    call pollMenuControls
     ld bc,#f7fe                ; keyboard row 1 to 5
     in a,(c)
     ld d,a
@@ -68,6 +77,57 @@ menuSelected:
     ei
     ret
 
+pollMenuControls:
+    ld bc,#bffe               ; Enter, L, K, J, H
+    in a,(c)
+    bit 2,a
+    ld e,0
+    jr z,selectControls
+    inc e
+    bit 3,a
+    jr z,selectControls
+    ld b,#fd                  ; A, S, D, F, G
+    in a,(c)
+    bit 1,a
+    ret nz
+    inc e
+selectControls:
+    ld a,(menuControl)
+    cp e
+    ret z
+    push de
+    call controlMarkAddress
+    ld hl,menuNoMark
+    call drawScreenText
+    pop de
+    ld a,e
+    ld (menuControl),a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,menuReaders
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld (controlReader+1),bc
+    ld a,(menuControl)
+showControlMark:
+    call controlMarkAddress
+    ld hl,menuMark
+    jp drawScreenText
+
+controlMarkAddress:
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,menuMarkAddresses
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ret
+
 clearMenuScreen:
     xor a
     ld hl,#4000
@@ -95,6 +155,13 @@ menuLevel5: db "5 START LEVEL 5",0
 menuLevel6: db "6 START LEVEL 6",0
 menuLevel7: db "7 START LEVEL 7",0
 menuLevel8: db "8 START LEVEL 8",0
+menuControlChoices: db "K KEYBOARD     J KEMPSTON",0
+menuSinclairChoice: db "S SINCLAIR",0
+menuMark: db ">",0
+menuNoMark: db " ",0
+menuControl: db 0
+menuMarkAddresses: dw #5080,#508f,#50c0
+menuReaders: dw readControls,readKempston,readSinclair
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "
 readyLevel: db "1",0

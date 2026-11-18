@@ -37,6 +37,7 @@ scrollScenery:
 
 motionStep:
     call updatePlayerLife
+controlReader:
     call readControls
     ifdef REPLAY_CONTROLS
         call readReplay
@@ -97,6 +98,7 @@ readControls:
     jr c,.fireReleased
     set 4,e
 .fireReleased:
+readRestartControl:
     ld b,#bf
     in a,(c)
     rrca
