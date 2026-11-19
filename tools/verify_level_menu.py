@@ -230,6 +230,44 @@ def verify_green_corners(emulator, game, model):
             raise ValueError(f"{model}: green shots failed to hit the corner at Y={y}")
 
 
+def verify_redefined_keys(emulator, game, model):
+    s = read_symbols(game / "main.sym")
+    capture, apply, select, controls, restart, halt1, halt2 = (
+        f"PC={s[name]:04X}H" for name in (
+            "redefineKeys.save", "applyCustomKeys", "menuSelected", "controlsReady",
+            "restartGame", "halt1", "halt2",
+        )
+    )
+    reader = select + " AND 1=1"
+    watch = [(capture, "C"), (apply, "TSTATESP"), (select, "A"), (controls, "A"),
+             (restart, "TSTATESP"), (halt1, "TSTATESP"), (halt2, "TSTATESP"),
+             (reader, f"PEEKW({s['controlReader'] + 1:04X}H)+PEEK({s['menuControl']:04X}H)*65536")]
+    spool = game / f"redefine-{model}.txt"
+    # Ignore M and a second Z, then cancel a second definition after pressing A.
+    spool.write_bytes(b"n" * 45 + b"srmzzxin0" + b"b" * 5 + b"ra\r" + b"b" * 5 + b"sk8"
+                      + b"b" * 12 + b"".join(bytes((key,)) * 6 for key in b"zxin0")
+                      + b"\r" + b"b" * 3 + b"z" * 6 + b"b" * 55)
+    log = breakpoint_log(emulator, game / "main.tap", model, 44, watch,
+                         fast_autoload=True, keyboard_spool=spool)
+    rows = [(point, int(value)) for point, value in HIT.findall(log)]
+
+    def values(point):
+        return [value for label, value in rows if label == point]
+
+    if (values(capture) != [1, 2, 27, 38, 20, 5] or len(values(apply)) != 1
+            or values(select) != [ord("8")] or values(reader) != [s["readCustomControls"]]):
+        raise ValueError(f"{model}: key capture, cancellation or control selection failed")
+    if set(values(controls)) != {0, 1, 2, 4, 8, 16, 32} or len(values(restart)) != 1:
+        raise ValueError(f"{model}: redefined controls or Enter restart failed")
+    after_restart = rows.index((restart, values(restart)[0]))
+    if (controls, 2) not in rows[after_restart:]:
+        raise ValueError(f"{model}: the Left binding was lost after restart")
+    timing = [(point, value) for point, value in rows if point in (halt1, halt2)]
+    if len(timing) < 150 or any(p == q or end // FRAME - start // FRAME != 1
+                               for (p, start), (q, end) in zip(timing, timing[1:])):
+        raise ValueError(f"{model}: irregular frame cadence with redefined keys")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for arg in ("assembler", "emulator", "output-tap"):
@@ -246,10 +284,11 @@ def main():
         install(corner_game, assembler, live=True, replay=replay)
         with ThreadPoolExecutor(max_workers=4) as pool:
             corners = [pool.submit(verify_green_corners, emulator, corner_game, model) for model in MODELS]
+            keys = [pool.submit(verify_redefined_keys, emulator, game, model) for model in MODELS]
             checks = [pool.submit(verify_choice, emulator, game, model, choice)
                       for choice in range(1, len(LEVEL_MAPS) + 1) for model in MODELS]
-            for corner in corners:
-                corner.result()
+            for check in (*corners, *keys):
+                check.result()
             results = [check.result() for check in checks]
         if args.output_tap:
             args.output_tap.parent.mkdir(exist_ok=True, parents=True)

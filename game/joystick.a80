@@ -28,3 +28,28 @@ sinclairButtons:
     dup 32, buttons
         db ((buttons & #18)>>3) | ((buttons & #06)<<1) | ((buttons & 1)<<4)
     edup
+
+; The menu patches only the row and mask operands. The fixed sequence
+; builds bits 4 to 0 in reverse order and shares the Enter reader.
+    macro READ_BOUND_KEY row,mask
+        ld a,row
+        in a,(#fe)
+        and mask
+        sub 1
+        rl e
+    endm
+
+readCustomControls:
+    ld e,0
+keyFire:
+    READ_BOUND_KEY #7f,1
+keyDown:
+    READ_BOUND_KEY #fd,1
+keyUp:
+    READ_BOUND_KEY #fb,1
+keyLeft:
+    READ_BOUND_KEY #df,2
+keyRight:
+    READ_BOUND_KEY #df,1
+    ld c,#fe
+    jp readRestartControl

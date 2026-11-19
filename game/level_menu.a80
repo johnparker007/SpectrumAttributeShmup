@@ -4,6 +4,13 @@ showLevelMenu:
     call disableRender
     xor a
     call swapPage
+    call drawLevelMenu
+    call menuMusicPage
+    call menuTrackInit
+    call menuMusicRestore
+    jr menuWait
+
+drawLevelMenu:
     call clearMenuScreen
     ld hl,menuTitle
     ld de,#480c               ; row 8, column 12
@@ -28,15 +35,14 @@ showLevelMenu:
     ld de,#50c1               ; row 22
     call drawScreenText
     ld a,(menuControl)
-    call showControlMark
-    call menuMusicPage
-    call menuTrackInit
-    call menuMusicRestore
+    jp showControlMark
+
 menuWait:
-    halt
-    call menuMusicPage
-    call menuTrackTick
-    call menuMusicRestore
+    call menuFrame
+    ld bc,#fbfe                ; Q, W, E, R, T
+    in a,(c)
+    bit 3,a
+    jr z,menuRedefine
     call pollMenuControls
     ld bc,#f7fe                ; keyboard row 1 to 5
     in a,(c)
@@ -61,6 +67,12 @@ menuWait:
     dec a
     djnz .rightKeys
     jr menuWait
+
+menuRedefine:
+    call redefineKeys
+    call drawLevelMenu
+    jr menuWait
+
 menuSelected:
     ld (readyLevel),a
     call menuMusicPage
@@ -123,6 +135,12 @@ returnToMenu:
     jp levelPrepared
 
 ; The PT3 player and its self-modifying state share logical bank 3.
+menuFrame:
+    halt
+    call menuMusicPage
+    call menuTrackTick
+    jr menuMusicRestore
+
 menuMusicPage:
     di
     ld a,3
@@ -213,7 +231,7 @@ menuLevel6: db "6 START LEVEL 6",0
 menuLevel7: db "7 START LEVEL 7",0
 menuLevel8: db "8 START LEVEL 8",0
 menuControlChoices: db "K KEYBOARD     J KEMPSTON",0
-menuSinclairChoice: db "S SINCLAIR",0
+menuSinclairChoice: db "S SINCLAIR     R REDEFINE KEYS",0
 menuMark: db ">",0
 menuNoMark: db " ",0
 menuControl: db 0
@@ -225,3 +243,5 @@ readyLevel: db "1",0
 
 gameOverText: incbin "game_over.bin"
     assert $-gameOverText=GAME_OVER_WIDTH*GAME_OVER_ROWS
+
+    include "redefine_keys.a80"

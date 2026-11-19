@@ -2,6 +2,8 @@
 
 Choose **K** for Keyboard, **J** for Kempston or **S** for Sinclair on the title screen before choosing a level. Keyboard is selected when the TAP loads. Sinclair uses player 1, the port mapped to **6–0**. **Enter** restarts the level in every control mode.
 
+Press **R** on the title screen to assign Left, Right, Up, Down and Fire. Use five different letter, number or Space keys. **M** is reserved for the GAME OVER menu shortcut. **Enter** cancels an unfinished definition. A completed definition selects Keyboard. The keyboard bindings are kept until the TAP is reloaded or the keys are redefined again.
+
 On the keyboard, use **O** and **P** to move left and right, **Q** and **A** to move up and down, and **Space** to fire. The player moves one logical dot per axis per 25 Hz game tick. Opposite directions cancel. The ship can touch the left edge, and its right edge stops three quarters of the way across the playfield. Hold fire to launch a pair of parallel cyan-and-white shots every four game ticks while a slot is free, with up to five pairs in flight. Each shot has cyan on the left and white on the right. The two shots share an X coordinate, leave three empty rows between them and move three dots per tick.
 
 Green sine fliers enter beyond the right edge and move left one logical dot every other game tick. The renderer clips them as they exit on the left. Each green wave has eight ships, with at least ten ticks between spawns. The mirrored paths span all 41 dots of vertical ship travel, with the first visible column aligned to the top or bottom edge. An Enter restart flips the first wave’s entrance. The build bakes both paths as absolute Y coordinates indexed by X.

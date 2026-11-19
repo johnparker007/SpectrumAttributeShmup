@@ -201,7 +201,8 @@ doSinScroll equ barrelScroll_Update
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu:
             defines.append("LEVEL_MENU")
-            shutil.copyfile(TESTS.parent / "game" / "joystick.a80", game / "joystick.a80")
+            for name in ("joystick.a80", "redefine_keys.a80"):
+                shutil.copyfile(TESTS.parent / "game" / name, game / name)
         if audio is None:
             defines.append("LIVE_SFX")
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")

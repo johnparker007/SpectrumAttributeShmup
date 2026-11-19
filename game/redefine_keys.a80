@@ -1,0 +1,161 @@
+redefineKeys:
+    call clearMenuScreen
+    ld hl,redefineTitle
+    ld de,#4809
+    call drawScreenText
+    ld hl,redefineAllowed
+    ld de,#5028
+    call drawScreenText
+    ld hl,redefineReserved
+    ld de,#5064
+    call drawScreenText
+    xor a
+    ld (pendingKeyCount),a
+.prompt:
+    ld a,(pendingKeyCount)
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,redefinePrompts
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    ld de,#488a
+    call drawScreenText
+.release:
+    call waitMenuKeyRelease
+.wait:
+    call menuFrame
+    call readMenuKey
+    cp 40
+    jr nc,.wait
+    ld c,a
+    ld e,a
+    ld d,0
+    ld hl,menuKeyNames
+    add hl,de
+    ld a,(hl)
+    cp 13
+    jr z,waitMenuKeyRelease
+    or a
+    jr z,.release                ; Shift keys are reserved
+    cp 'M'
+    jr z,.release
+    ld hl,pendingKeys
+    ld a,(pendingKeyCount)
+    or a
+    jr z,.save
+    ld b,a
+.duplicate:
+    ld a,(hl)
+    cp c
+    jr z,.release
+    inc hl
+    djnz .duplicate
+.save:
+    ld (hl),c
+    ld hl,pendingKeyCount
+    inc (hl)
+    ld a,(hl)
+    cp 5
+    jr nz,.prompt
+    call applyCustomKeys
+    jr waitMenuKeyRelease
+
+applyCustomKeys:
+    ld ix,pendingKeys
+    ld iy,customKeyTargets
+    ld b,5
+.patch:
+    push bc
+    ld a,(ix)
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,menuKeyBindings
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld l,(iy)
+    ld h,(iy+1)
+    inc hl
+    ld (hl),c                    ; LD A,row
+    ld de,4
+    add hl,de
+    ld (hl),b                    ; AND mask
+    inc ix
+    inc iy : inc iy
+    pop bc
+    djnz .patch
+    ld hl,readCustomControls
+    ld (menuReaders),hl
+    ld (controlReader+1),hl
+    xor a                        ; select Keyboard after a complete definition
+    ld (menuControl),a
+    ret
+
+waitMenuKeyRelease:
+    call menuFrame
+    call readMenuKey
+    cp #ff
+    jr nz,waitMenuKeyRelease
+    ret
+
+; Return a physical key index, #ff for no key, or #fe for multiple keys.
+readMenuKey:
+    ld bc,#fefe
+    ld de,#ff00
+.row:
+    in a,(c)
+    cpl
+    and #1f
+    jr z,.nextRow
+    bit 7,d
+    jr z,.multiple
+    ld h,a
+    dec a
+    and h
+    jr nz,.multiple
+    ld a,e
+.findBit:
+    srl h
+    jr c,.found
+    inc a
+    jr .findBit
+.found:
+    ld d,a
+.nextRow:
+    rlc b
+    ld a,e
+    add a,5
+    ld e,a
+    cp 40
+    jr nz,.row
+    ld a,d
+    ret
+.multiple:
+    ld a,#fe
+    ret
+
+redefineTitle: db "REDEFINE KEYS",0
+redefineAllowed: db "A-Z 0-9 SPACE",0
+redefineReserved: db "M MENU KEY  ENTER CANCEL",0
+redefinePrompts: dw promptLeft,promptRight,promptUp,promptDown,promptFire
+promptLeft:  db "PRESS LEFT ",0
+promptRight: db "PRESS RIGHT",0
+promptUp:    db "PRESS UP   ",0
+promptDown:  db "PRESS DOWN ",0
+promptFire:  db "PRESS FIRE ",0
+pendingKeyCount: db 0
+pendingKeys: defs 5
+customKeyTargets: dw keyLeft,keyRight,keyUp,keyDown,keyFire
+
+menuKeyNames: db 0,"ZXCVASDFGQWERT1234509876POIUY",13,"LKJH ",0,"MNB"
+    assert $-menuKeyNames=40
+menuKeyBindings:
+    dup 40, key
+        db #ff-(1<<(key/5)),1<<(key%5)
+    edup
