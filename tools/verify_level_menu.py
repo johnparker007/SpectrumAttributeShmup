@@ -24,7 +24,7 @@ def verify_logo_video(emulator, game, model):
     width, rows, left, top = (s["MENU_LOGO_" + name] for name in ("WIDTH", "ROWS", "LEFT", "TOP"))
     bitmap = (game / MENU_LOGO).read_bytes()
     palette_data = (game / MENU_LOGO_PALETTES).read_bytes()
-    length = s["MENU_LOGO_PAIR_BYTES"]
+    length = s["MENU_LOGO_COLOURS"]
     palettes = tuple(palette_data[i:i + length] for i in range(0, len(palette_data), length))
     if any(palettes == palettes[lag:] + palettes[:lag] for lag in range(1, 126)):
         raise ValueError("The menu shimmer repeats within ten seconds")
@@ -33,20 +33,19 @@ def verify_logo_video(emulator, game, model):
         intensity = 255 if attr & 64 else 192
         return bytes(intensity if attr & channel else 0 for channel in (1, 4, 2))
 
-    def logo_rows(palette):
+    def logo_rows(phase, palette):
         for y in range(rows * 8):
             character_row, scan = divmod(y, 8)
             start = (scan * rows + character_row) * width
             pixels = bytearray(3 * left * 8)
             for column, value in enumerate(bitmap[start:start + width]):
-                pair = column // 2
-                shade = ((3*y + 2*pair + y*pair//13 + pair*pair//9 + y*y//20)//5) % 4
-                colour = ink(palette[2*shade + column % 2])
+                shade = ((2*y + 7*(column // 2) + phase) // 8) % 4
+                colour = ink(palette[shade])
                 for bit in range(7, -1, -1):
                     pixels += colour if value & (1 << bit) else b"\0\0\0"
             yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")
 
-    phases = {b"".join(logo_rows(palette)): phase for phase, palette in enumerate(palettes)}
+    phases = {b"".join(logo_rows(phase, palette)): phase for phase, palette in enumerate(palettes)}
     video = game / f"menu-logo-{model}.raw"
     capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 8)
     frame_bytes = WIDTH * HEIGHT * 3
@@ -60,9 +59,9 @@ def verify_logo_video(emulator, game, model):
             phase = phases.get(logo)
             if phase is None:
                 raise ValueError(f"{model}: menu logo bands are misaligned")
-            seen.add(phase)
-    if len(seen) < 2:
-        raise ValueError(f"{model}: the rainbow did not animate")
+            seen.add(phase % 32)
+    if len(seen) < 4:
+        raise ValueError(f"{model}: the captured logo did not move through four offsets")
     video.unlink()
 
 

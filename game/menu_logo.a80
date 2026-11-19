@@ -3,15 +3,19 @@ menuLogoFrame:
     halt
     di
     ld (menuLogoHostStack+1),sp
+    call patchMenuLogoRows
     call seedMenuLogoRows
-    ld bc,14916
+    ld bc,5298
     call DELAY
     ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af
 
 menuLogoRaster:
     dup 8*MENU_LOGO_ROWS, line
-        MENU_LOGO_LINE line,1
+        ld sp,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH+32*(line/8)
+        dup MENU_LOGO_PAIRS
+            push bc
+        edup
         ; Pad one contended 28-byte transfer to a 228-T-state scanline.
         jr $+2
         inc sp

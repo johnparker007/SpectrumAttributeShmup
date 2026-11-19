@@ -7,24 +7,8 @@ MENU_LOGO_ATTRS equ #5800+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
 MENU_LOGO_PAIRS equ MENU_LOGO_WIDTH/2
 MENU_LOGO_LATE_PAIRS equ 9
 MENU_LOGO_PAIR_BYTES equ 8
-
-; PUSH paints from right to left. The ULA has already fetched the first
-; nine pairs when their writes arrive, so those writes target the next line.
-    macro MENU_LOGO_PUSH px,py
-        ; PUSH BC, DE, HL and AF are spaced by #10.
-        db #c5+16*((3*(py)+2*(px)+(py)*(px)/13+(px)*(px)/9+(py)*(py)/20)/5%4)
-    endm
-
-    macro MENU_LOGO_LINE scan_y,race_on
-        ld sp,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH+32*((scan_y)/8)
-        dup MENU_LOGO_PAIRS, word
-            if race_on && MENU_LOGO_PAIRS-1-word<MENU_LOGO_LATE_PAIRS
-                MENU_LOGO_PUSH MENU_LOGO_PAIRS-1-word,(scan_y)+1
-            else
-                MENU_LOGO_PUSH MENU_LOGO_PAIRS-1-word,(scan_y)
-            endif
-        edup
-    endm
+MENU_LOGO_COLOURS equ MENU_LOGO_PAIR_BYTES/2
+MENU_LOGO_EARLY_PAIRS equ MENU_LOGO_PAIRS-MENU_LOGO_LATE_PAIRS
 
 drawMenuLogo:
     ld hl,menuLogoBitmap
@@ -47,17 +31,68 @@ drawMenuLogo:
     xor a
     ld (menuLogoClock),a
     ld (menuLogoPhase),a
-    jr loadMenuLogoPalette
+    jp loadMenuLogoPalette
+
+; Select a phase of the moving pattern. Each page contains one parity of
+; motion, and advancing to the next scanline is a 16-byte step within it.
+patchMenuLogoRows:
+    ld a,(menuLogoPhase)
+    and 1
+    add a,high menuLogoPushPatterns
+    ld h,a
+    ld a,(menuLogoPhase)
+    and #1e
+    add a,a : add a,a : add a,a
+    ld l,a
+    push hl
+    ld de,menuLogoRaster+3
+    ld a,8*MENU_LOGO_ROWS
+.rasterRow:
+    dup MENU_LOGO_PAIRS
+        ldi
+    edup
+    inc l : inc l
+    ; Skip the end-of-line padding and the next LD SP instruction.
+    ex de,hl
+    ld bc,7
+    add hl,bc
+    ex de,hl
+    dec a
+    jr nz,.rasterRow
+
+    pop hl
+    ld a,l
+    sub 16-MENU_LOGO_EARLY_PAIRS
+    ld l,a
+    ld de,menuLogoSeedCode+3
+    ld ixl,MENU_LOGO_ROWS
+.seedRow:
+    ; Take the previous line's late writes, which target this new row.
+    dup MENU_LOGO_LATE_PAIRS
+        ldi
+    edup
+    ld a,l
+    sub MENU_LOGO_LATE_PAIRS
+    xor #80                     ; eight scanlines later on the same page
+    ld l,a
+    inc de : inc de : inc de
+    dec ixl
+    jr nz,.seedRow
+    ret
 
 ; Seed the first scanline of each physical attribute row before the beam.
 seedMenuLogoRows:
-    ld (.restoreStack+1),sp
+    ld (menuLogoSeedStack+1),sp
     ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af
+menuLogoSeedCode:
     dup MENU_LOGO_ROWS, row
-        MENU_LOGO_LINE row*8,0
+        ld sp,MENU_LOGO_ATTRS+2*MENU_LOGO_LATE_PAIRS+32*row
+        dup MENU_LOGO_LATE_PAIRS
+            push bc
+        edup
     edup
-.restoreStack:
+menuLogoSeedStack:
     ld sp,0
     ret
 
@@ -73,15 +108,40 @@ advanceMenuLogoPalette:
 loadMenuLogoPalette:
     ld l,a
     ld h,0
-    add hl,hl : add hl,hl : add hl,hl
+    add hl,hl : add hl,hl
     ld de,menuLogoPalettes
     add hl,de
     ld de,menuLogoPalette
-    ld bc,MENU_LOGO_PAIR_BYTES
-    ldir
+    ; Each band has one colour. Expand it into the two adjacent attributes.
+    dup MENU_LOGO_COLOURS
+        ld a,(hl)
+        inc hl
+        ld (de),a
+        inc de
+        ld (de),a
+        inc de
+    edup
     ret
 
 menuLogoClock: db 0
 menuLogoPhase: db 0
 menuLogoPalettes: incbin "gfx/blokius-logo-palettes.bin"
-    assert $-menuLogoPalettes=256*MENU_LOGO_PAIR_BYTES
+    assert $-menuLogoPalettes=256*MENU_LOGO_COLOURS
+
+; Increasing phase moves each band toward smaller X and Y. PUSH opcodes
+; paint right to left. The beam sees the left nine pairs on the following
+; scanline, so their writes use phase+2.
+    align 256
+menuLogoPushPatterns:
+    dup 2, parity
+        dup 16, step
+            dup MENU_LOGO_EARLY_PAIRS, word
+                db #c5+16*((2*step+parity+7*(MENU_LOGO_PAIRS-1-word))/8%4)
+            edup
+            dup MENU_LOGO_LATE_PAIRS, word
+                db #c5+16*((2*step+parity+2+7*(MENU_LOGO_LATE_PAIRS-1-word))/8%4)
+            edup
+            db 0,0
+        edup
+    edup
+    assert $-menuLogoPushPatterns=512

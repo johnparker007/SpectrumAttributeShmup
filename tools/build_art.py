@@ -66,7 +66,7 @@ def logo_bitmap(source):
 
 
 def logo_palettes():
-    """Bake four independently moving colour pairs for 256 shimmer steps."""
+    """Bake slowly changing tints for the four moving diagonal bands."""
     rainbow = (0x41, 0x41, 0x45, 0x45, 0x44, 0x44, 0x46, 0x47,
                0x46, 0x46, 0x42, 0x42, 0x43, 0x43, 0x43, 0x01)
     rows = bytearray()
@@ -74,8 +74,8 @@ def logo_palettes():
         turn = frame / 256
         for pair in range(4):
             wave = 2 * sin(tau * ((pair + 1) * turn + pair / 7))
-            shade = floor(16 * (3 + 2 * pair) * turn + pair * 4 + wave)
-            rows.extend((rainbow[shade % 16], rainbow[(shade + 1) % 16]))
+            shade = floor(16 * turn + pair * 4 + wave)
+            rows.append(rainbow[shade % 16])
     return bytes(rows)
 
 
