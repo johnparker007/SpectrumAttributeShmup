@@ -1,7 +1,6 @@
 """Convert the editable artwork into the engine's binary formats."""
 
 import argparse
-from math import floor, sin, tau
 from pathlib import Path
 import re
 import shutil
@@ -17,7 +16,17 @@ ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
 MENU_LOGO = "gfx/blokius-logo.bin"
-MENU_LOGO_PALETTES = "gfx/blokius-logo-palettes.bin"
+MENU_LOGO_RASTER = "gfx/blokius-logo-raster.bin"
+MENU_LOGO_BANDS = (
+    0, 1, 2, 3, 0, 2, 3, 1,
+    2, 0, 3, 1, 2, 3, 0, 1,
+    3, 1, 2, 0, 3, 2, 1, 0,
+    2, 1, 3, 0, 1, 3, 2, 1,
+    0, 3, 2, 0, 1, 2, 3, 2,
+    1, 3, 0, 2, 1, 0, 3, 1,
+    2, 3, 0, 3, 2, 1, 0, 2,
+    3, 1, 0, 2, 3, 2, 0, 1,
+)
 DESTRUCTIBLE_TILE = 124
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
@@ -65,17 +74,17 @@ def logo_bitmap(source):
                  for value in rows[y * 28:(y + 1) * 28])
 
 
-def logo_palettes():
-    """Bake slowly changing tints for the four moving diagonal bands."""
-    rainbow = (0x41, 0x41, 0x45, 0x45, 0x44, 0x44, 0x46, 0x47,
-               0x46, 0x46, 0x42, 0x42, 0x43, 0x43, 0x43, 0x01)
+def logo_raster():
+    """Bake PUSH instructions for each position of the continuous colour ribbon."""
     rows = bytearray()
-    for frame in range(256):
-        turn = frame / 256
-        for pair in range(4):
-            wave = 2 * sin(tau * ((pair + 1) * turn + pair / 7))
-            shade = floor(16 * turn + pair * 4 + wave)
-            rows.append(rainbow[shade % 16])
+    for parity in range(2):
+        for band in range(len(MENU_LOGO_BANDS)):
+            phase = 2 * band + parity
+            for pair in reversed(range(14)):
+                # The left nine pairs have already been fetched by the ULA.
+                position = (phase + 7 * pair) // 2 + (pair < 9)
+                rows.append(0xC5 + 16 * MENU_LOGO_BANDS[position % len(MENU_LOGO_BANDS)])
+            rows.extend((0, 0))
     return bytes(rows)
 
 
@@ -134,7 +143,7 @@ def build_art(output, *, sprite_dir=None):
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
     (output / MENU_LOGO).write_bytes(logo_bitmap(ART / "gfx/blokius-logo.pbm"))
-    (output / MENU_LOGO_PALETTES).write_bytes(logo_palettes())
+    (output / MENU_LOGO_RASTER).write_bytes(logo_raster())
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")

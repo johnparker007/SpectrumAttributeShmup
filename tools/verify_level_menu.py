@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from build_art import LEVEL_MAPS, MENU_LOGO, MENU_LOGO_PALETTES, SCREEN_FONT, map_output
+from build_art import LEVEL_MAPS, MENU_LOGO, MENU_LOGO_BANDS, SCREEN_FONT, map_output
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -23,29 +23,31 @@ def verify_logo_video(emulator, game, model):
     s = read_symbols(game / "main.sym")
     width, rows, left, top = (s["MENU_LOGO_" + name] for name in ("WIDTH", "ROWS", "LEFT", "TOP"))
     bitmap = (game / MENU_LOGO).read_bytes()
-    palette_data = (game / MENU_LOGO_PALETTES).read_bytes()
-    length = s["MENU_LOGO_COLOURS"]
-    palettes = tuple(palette_data[i:i + length] for i in range(0, len(palette_data), length))
-    if any(palettes == palettes[lag:] + palettes[:lag] for lag in range(1, 126)):
-        raise ValueError("The menu shimmer repeats within ten seconds")
+    palette_offset = 27 + s["menuLogoPalette"] - 0x4000
+    palette = (game / "main.sna").read_bytes()[palette_offset:palette_offset + 8:2]
+    bands = MENU_LOGO_BANDS
+    if any(bands[i] == bands[i - 1] for i in range(len(bands))):
+        raise ValueError("Adjacent logo bands must have distinct colours")
+    if any(bands == bands[lag:] + bands[:lag] for lag in range(1, len(bands))):
+        raise ValueError("The ribbon repeats before completing its full cycle")
 
     def ink(attr):
         intensity = 255 if attr & 64 else 192
         return bytes(intensity if attr & channel else 0 for channel in (1, 4, 2))
 
-    def logo_rows(phase, palette):
+    def logo_rows(phase):
         for y in range(rows * 8):
             character_row, scan = divmod(y, 8)
             start = (scan * rows + character_row) * width
             pixels = bytearray(3 * left * 8)
             for column, value in enumerate(bitmap[start:start + width]):
-                shade = ((2*y + 7*(column // 2) + phase) // 8) % 4
-                colour = ink(palette[shade])
+                ribbon_row = y + (7 * (column // 2) + phase) // 2
+                colour = ink(palette[bands[ribbon_row % len(bands)]])
                 for bit in range(7, -1, -1):
                     pixels += colour if value & (1 << bit) else b"\0\0\0"
             yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")
 
-    phases = {b"".join(logo_rows(phase, palette)): phase for phase, palette in enumerate(palettes)}
+    phases = {b"".join(logo_rows(phase)): phase for phase in range(s["MENU_LOGO_PHASES"])}
     video = game / f"menu-logo-{model}.raw"
     capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 8)
     frame_bytes = WIDTH * HEIGHT * 3
@@ -59,7 +61,7 @@ def verify_logo_video(emulator, game, model):
             phase = phases.get(logo)
             if phase is None:
                 raise ValueError(f"{model}: menu logo bands are misaligned")
-            seen.add(phase % 32)
+            seen.add(phase)
     if len(seen) < 4:
         raise ValueError(f"{model}: the captured logo did not move through four offsets")
     video.unlink()
