@@ -66,6 +66,12 @@ redefineKeys:
 
 applyCustomKeys:
     call makeKeyReadPlan
+    ; The second entry is Fire, after the fixed Enter binding.
+    ld hl,(keyReadPlan+2)
+    ld a,l
+    ld (menuKeyboardFire+1),a
+    ld a,h
+    ld (menuKeyboardFire+5),a
     ld hl,0
     ld (cachedKeyRows),hl
     xor a

@@ -43,7 +43,7 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 
 ## Reproduce
 
-The title screen uses the normal Spectrum bitmap. Press **1–8** to start a test map. Maps 3–8 rearrange scenery from the original test map and share its tile sheet. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
+Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (**0**) to start Level 1 with that controller. A held fire button must be released when returning to the menu. **1–8** start a test map with the selected controller. The menu reserves those digits for level selection and **R** for redefining keys. Sinclair fire takes priority over its direction keys on the same keyboard row. Maps 3–8 rearrange scenery from the original test map and share its tile sheet. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
 
 | Map | Packed bytes | 128K unpack T-states | +2A unpack T-states |
 | --- | ---: | ---: | ---: |

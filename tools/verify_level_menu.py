@@ -134,7 +134,7 @@ def verify_choice(emulator, game, model, choice):
     # The first gameplay frame has already drawn the level, lives and score.
     for column in range(0, 32, 2):
         expect_at("firstFrameLogic", f"PEEKW({0x50E0 + column:04X}H)", 0)
-    for name, address, char in (("menuWait", 0x4846, "1"), ("levelUnpackBegin", 0x4897, str(choice))):
+    for name, address, char in (("menuWait", 0x4841, "P"), ("levelUnpackBegin", 0x4897, str(choice))):
         for row in range(8):
             expect_at(name, peek(address + row * 256), font[(ord(char) - 32) * 8 + row])
     for address in (0x50E0, 0xD0E0):
