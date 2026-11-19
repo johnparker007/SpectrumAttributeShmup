@@ -16,7 +16,8 @@ The playable build reads these files on every build.
 | `maps/tileSet.tsx` | Tiled tileset linked to `gfx/tileSet.png` |
 | `maps/destructible.tsx` | Tiled tileset for the destructible target and its explosion |
 | `gfx/destructible.png` | Four 8×8 tiles laid out as the intact target followed by three explosion frames |
-| `gfx/blokius-logo.pbm` | Main menu wordmark, 224 by 32 screen pixels, white on black. Export as binary PBM |
+| `gfx/blokius-logo.svg` | Editable vector master for the Interceptor Rounded menu logo |
+| `gfx/blokius-logo.pbm` | Baked 224×32 monochrome logo used by the TAP build |
 | `fonts/Blokius-Arcade-8.bdf` | Editable 8×8 source for the menu, HUD and GAME OVER lettering |
 
 Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Ship collision boxes stay 5 by 5 dots.
@@ -28,6 +29,14 @@ Levels 1 and 8 contain destructible scenery for playtesting. Paint the first til
 Blokius Arcade 8 adapts ASCII 32–95 from Cody “CodeMan38” Boisclair’s Press Start 2P. Every glyph cell starts with a blank scanline to separate the HUD lettering from the playfield. The comma and underscore already used the bottom row, so they retain their placement. The build packs the 64 cells into 512 bytes. [Pinned bitmap source](https://github.com/googlefonts/googlefontdirectory-hg/blob/52f780bc9d197280a9f430574e179a5f233c56b6/ofl/pressstart2p/src/PressStart2P-8.bdf) · [SIL Open Font License](fonts/OFL.txt)
 
 ## Build
+
+After editing the logo SVG, export it at 896×128, then box-filter to 224×32 and threshold at 50% to reproduce the one-bit edges. From the repository root with Inkscape and ImageMagick on PATH:
+
+```powershell
+New-Item -ItemType Directory -Force build | Out-Null
+inkscape art/gfx/blokius-logo.svg --export-width=896 --export-height=128 --export-filename=build/blokius-logo.png
+magick build/blokius-logo.png -colorspace Gray -filter Box -resize 224x32! -threshold 50% art/gfx/blokius-logo.pbm
+```
 
 Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap` with the 50 Hz logo and cyan copper menu text. It uses `SJASMPLUS` if set, then searches PATH, then tries John's existing Desktop installation. The window stays open to show the result or any errors.
 
