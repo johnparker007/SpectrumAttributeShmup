@@ -35,13 +35,13 @@ The [combined renderer experiment](projectile-integration.md#with-50-hz-playback
 
 ## Meadows Edge menu music
 
-The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the bottom border. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
+The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the blank area below the controls. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
 
 The top border prepares 28 attribute cells per scanline for the logo. Each cell to the right samples the colour ribbon one scanline further along, so a band steps up one scanline every eight pixels. The ribbon advances one scanline every interrupt and wraps after 512 frames (about 10.2 seconds). Each stack write paints two different cells. The five rightmost pairs reach the screen before the ULA fetches them. The raster switches register sets to paint the other nine pairs for the following scanline. The menu test checks consecutive 50 Hz frames against the ribbon using both the logo artwork and a solid rectangle.
 
 The default build runs a 14-band luminance loop at 50 Hz, alternating a blue and cyan ramp with a red and yellow ramp. Its generated raster covers the inked cells of the logo and seeds the first scanline of each character row ahead of the beam. The menu borrows the gameplay attribute buffer for the current raster program and clears the borrowed space before starting a level.
 
-Below that logo, the menu shades the text and control markers one scanline at a time. The sequence is normal blue, normal cyan twice, bright cyan, bright white, bright cyan, then normal cyan twice. The font's blank first scanline leaves the blue band hidden. The copper program skips empty character pairs to fit the one-scanline writes. AY playback runs in the bottom border. The menu copies the next logo program across the bottom and top borders.
+Below that logo, the menu shades the text and control markers one scanline at a time. The sequence is normal blue, normal cyan twice, bright cyan, bright white, bright cyan, then normal cyan twice. The font's blank first scanline leaves the blue band hidden. The copper program skips empty character pairs to fit the one-scanline writes. The menu copies the next logo program across the bottom and top borders.
 
 ## Star Force gameplay music
 
