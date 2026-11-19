@@ -37,7 +37,7 @@ def verify_logo_video(emulator, game, model):
             start = (scan * rows + character_row) * width
             pixels = bytearray(3 * left * 8)
             for column, value in enumerate(bitmap[start:start + width]):
-                colour = ink(palette[(phase + column + 2 * character_row + scan // 4) % 16])
+                colour = ink(palette[(phase + column + 2 * character_row + scan % 2) % 16])
                 for bit in range(7, -1, -1):
                     pixels += colour if value & (1 << bit) else b"\0\0\0"
             yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")

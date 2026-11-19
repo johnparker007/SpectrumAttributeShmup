@@ -1,5 +1,5 @@
-; Menu-only beam timing in bank 2. The ULA sees bank 5 for the first four
-; scanlines of each logo character row and bank 7 for the other four.
+; Menu-only beam timing in bank 2. The ULA alternates between the two
+; screen banks on each logo scanline, starting on bank 5.
 MENU_LOGO_WIDTH equ 28
 MENU_LOGO_ROWS equ 4
 MENU_LOGO_LEFT equ (32-MENU_LOGO_WIDTH)/2
@@ -52,21 +52,23 @@ copyMenuLogo:
 menuLogoFrame:
     halt
     di
-    ; Aim the first switch at the left border of paper scanline 12.
-    ld bc,16595
+    ; Aim the first switch at the left border of paper scanline 9.
+    ld bc,15911
     call DELAY
     ld bc,#7ffd
-    ld d,2*MENU_LOGO_ROWS
+    ld d,8*MENU_LOGO_ROWS
     ld a,#18
 menuLogoSwitch:
     out (c),a
     dec d
-    jp z,menuLogoEnd
-    ; 912 T-states between writes, including both paging and loop overhead.
-    ld b,66
+    jr z,menuLogoEnd
+    ; 228 T-states between writes, including both paging and loop overhead.
+    ld b,13
     djnz $
     ld b,#7f
     xor 8
+    nop
+    nop
     jr menuLogoSwitch
 
 menuLogoEnd:
