@@ -374,8 +374,9 @@ def main():
         replay = [LEFT | UP] * 24 + [0] * 96 + [RESTART] + [LEFT | DOWN] * 24 + [0] * 115
         install(corner_game, assembler, live=True, replay=replay, solid_menu_logo=True)
         with ThreadPoolExecutor(max_workers=4) as pool:
-            logos = [pool.submit(verify_logo_video, emulator, build_game, model)
-                     for build_game in (game, corner_game) for model in MODELS]
+            menu_models = (*MODELS, "P341") if args.luminance_logo else MODELS
+            logos = [pool.submit(verify_logo_video, emulator, game, model) for model in menu_models]
+            logos.extend(pool.submit(verify_logo_video, emulator, corner_game, model) for model in MODELS)
             for check in logos:
                 check.result()
             corners = [pool.submit(verify_green_corners, emulator, corner_game, model) for model in MODELS]

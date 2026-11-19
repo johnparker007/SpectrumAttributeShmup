@@ -217,8 +217,16 @@ def compile_copper(model):
     # The logo jumps through the two exit stubs, restores SP, then selects
     # the copper's private stack and jumps to this program.
     time = RASTER_END + LOGO_LINE_SHIFT + 70
-    # Leave the stack ready for DELAY after the last timed write.
-    code = compile_gold_bar(model, GOLD_BAR_BOTTOM, time, 27000 + LINE_TSTATES * 8)
+    code = []
+    if model == "plus":
+        # Re-lock on blank paper below the logo. Sample in the middle of
+        # an ASIC wait group so either side of the expected arrival lands
+        # on the same release cycle before the lower bar and copper text.
+        sample = origin + (49 - 8) * LINE_TSTATES + 29
+        delay = sample - time - 20  # LD BC and the read's opcode/address fetch.
+        code.extend((f"ld bc,{delay}", "call DELAY", "ld a,(#5800)"))
+        time = attribute_write_end(sample, origin, waits)
+    code.extend(compile_gold_bar(model, GOLD_BAR_BOTTOM, time, 27000 + LINE_TSTATES * 8))
     time = 27000 + LINE_TSTATES * 8
     code.append("ld sp,menuCopperStack")
     time += 10
@@ -346,6 +354,8 @@ def build_luminance(output, bitmap):
         (output / f"luminance-{model}-extra.bin").write_bytes(b"".join(extra))
         (output / f"copper-{model}.a80").write_text(compile_copper(model), encoding="ascii")
         gate = PROFILES[model][2] + LOGO_LINE_SHIFT - 111  # JP, read, palette loads and JP.
+        if model == "plus":
+            gate -= 4  # Sample inside the ASIC wait group, before its final free slot.
         top = compile_gold_bar(model, GOLD_BAR_TOP, TOP_BAR_START, gate)
         (output / f"gold-{model}.a80").write_text(
             "\n".join(f"    {line}" for line in (*top, "jp menuLogoGate")) + "\n", encoding="ascii")
