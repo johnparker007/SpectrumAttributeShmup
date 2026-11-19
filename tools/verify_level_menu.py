@@ -239,13 +239,19 @@ def verify_redefined_keys(emulator, game, model):
         )
     )
     reader = select + " AND 1=1"
+    code = s["customKeyCode"]
+    cached = select + " AND 2=2"
+    # Enter/L, S/A and Z/X share three separate matrix rows.
+    row_reloads = "+".join(f"PEEK({code + offset:04X}H)*{256 ** index}"
+                           for index, offset in enumerate((11, 29, 47)))
     watch = [(capture, "C"), (apply, "TSTATESP"), (select, "A"), (controls, "A"),
              (restart, "TSTATESP"), (halt1, "TSTATESP"), (halt2, "TSTATESP"),
-             (reader, f"PEEKW({s['controlReader'] + 1:04X}H)+PEEK({s['menuControl']:04X}H)*65536")]
+             (reader, f"PEEKW({s['controlReader'] + 1:04X}H)+PEEK({s['menuControl']:04X}H)*65536"),
+             (cached, row_reloads)]
     spool = game / f"redefine-{model}.txt"
     # Ignore M and a second Z, then cancel a second definition after pressing A.
-    spool.write_bytes(b"n" * 45 + b"srmzzxin0" + b"b" * 5 + b"ra\r" + b"b" * 5 + b"sk8"
-                      + b"b" * 12 + b"".join(bytes((key,)) * 6 for key in b"zxin0")
+    spool.write_bytes(b"n" * 45 + b"srmzzxasl" + b"b" * 5 + b"ra\r" + b"b" * 5 + b"sk8"
+                      + b"b" * 12 + b"".join(bytes((key,)) * 6 for key in b"zxasl")
                       + b"\r" + b"b" * 3 + b"z" * 6 + b"b" * 55)
     log = breakpoint_log(emulator, game / "main.tap", model, 44, watch,
                          fast_autoload=True, keyboard_spool=spool)
@@ -254,9 +260,11 @@ def verify_redefined_keys(emulator, game, model):
     def values(point):
         return [value for label, value in rows if label == point]
 
-    if (values(capture) != [1, 2, 27, 38, 20, 5] or len(values(apply)) != 1
+    if (values(capture) != [1, 2, 5, 6, 31, 5] or len(values(apply)) != 1
             or values(select) != [ord("8")] or values(reader) != [s["readCustomControls"]]):
         raise ValueError(f"{model}: key capture, cancellation or control selection failed")
+    if values(cached) != [0x7D7C7A]:  # LD A,D / LD A,H / LD A,L
+        raise ValueError(f"{model}: the generated reader did not reuse the three shared rows")
     if set(values(controls)) != {0, 1, 2, 4, 8, 16, 32} or len(values(restart)) != 1:
         raise ValueError(f"{model}: redefined controls or Enter restart failed")
     after_restart = rows.index((restart, values(restart)[0]))

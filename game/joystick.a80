@@ -29,8 +29,8 @@ sinclairButtons:
         db ((buttons & #18)>>3) | ((buttons & #06)<<1) | ((buttons & 1)<<4)
     edup
 
-; The menu patches only the row and mask operands. The fixed sequence
-; builds bits 4 to 0 in reverse order and shares the Enter reader.
+; The menu rewrites the reader body in this area. Six independent
+; reads are the longest possible body.
     macro READ_BOUND_KEY row,mask
         ld a,row
         in a,(#fe)
@@ -41,15 +41,13 @@ sinclairButtons:
 
 readCustomControls:
     ld e,0
-keyFire:
+customKeyCode:
+    READ_BOUND_KEY #bf,1
     READ_BOUND_KEY #7f,1
-keyDown:
     READ_BOUND_KEY #fd,1
-keyUp:
     READ_BOUND_KEY #fb,1
-keyLeft:
     READ_BOUND_KEY #df,2
-keyRight:
     READ_BOUND_KEY #df,1
-    ld c,#fe
-    jp readRestartControl
+    ld a,e
+    ret
+    assert $-customKeyCode=6*10+2

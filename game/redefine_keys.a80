@@ -38,7 +38,7 @@ redefineKeys:
     add hl,de
     ld a,(hl)
     cp 13
-    jr z,waitMenuKeyRelease
+    jp z,waitMenuKeyRelease
     or a
     jr z,.release                ; Shift keys are reserved
     cp 'M'
@@ -62,40 +62,137 @@ redefineKeys:
     cp 5
     jr nz,.prompt
     call applyCustomKeys
-    jr waitMenuKeyRelease
+    jp waitMenuKeyRelease
 
 applyCustomKeys:
-    ld ix,pendingKeys
-    ld iy,customKeyTargets
-    ld b,5
-.patch:
+    call makeKeyReadPlan
+    ld hl,0
+    ld (cachedKeyRows),hl
+    xor a
+    ld (cachedKeyRows+2),a
+    ld ix,keyReadPlan
+    ld de,customKeyCode
+    ld b,6
+.key:
     push bc
-    ld a,(ix)
-    add a,a
-    ld e,a
-    ld d,0
-    ld hl,menuKeyBindings
-    add hl,de
-    ld c,(hl)
-    inc hl
-    ld b,(hl)
-    ld l,(iy)
-    ld h,(iy+1)
-    inc hl
-    ld (hl),c                    ; LD A,row
-    ld de,4
-    add hl,de
-    ld (hl),b                    ; AND mask
-    inc ix
-    inc iy : inc iy
+    call emitKeyRead
+    ld a,#e6                     ; AND mask
+    ld (de),a
+    inc de
+    ld a,(ix+1)
+    ld (de),a
+    inc de
+    ld hl,customKeyBit
+    ld bc,customKeyExit-customKeyBit
+    ldir
+    inc ix : inc ix
     pop bc
-    djnz .patch
+    djnz .key
+    ld hl,customKeyExit
+    ld bc,customKeyTemplatesEnd-customKeyExit
+    ldir
+
     ld hl,readCustomControls
     ld (menuReaders),hl
     ld (controlReader+1),hl
     xor a                        ; select Keyboard after a complete definition
     ld (menuControl),a
     ret
+
+makeKeyReadPlan:
+    ld ix,customReadOrder
+    ld de,keyReadPlan
+    ld b,6
+.key:
+    push bc
+    ld l,(ix)
+    ld h,0
+    ld bc,pendingKeys
+    add hl,bc
+    ld a,(hl)
+    add a,a
+    ld l,a
+    ld h,0
+    ld bc,menuKeyBindings
+    add hl,bc
+    ldi : ldi                    ; physical row selector and active-low mask
+    inc ix
+    pop bc
+    djnz .key
+    ret
+
+; IX points to the next key, B includes that key, DE is the code cursor.
+emitKeyRead:
+    ld c,(ix)
+    ld hl,(cachedKeyRows)
+    ld a,c
+    cp l
+    ld a,#7a                     ; LD A,D
+    jr z,.emit
+    ld a,c
+    cp h
+    ld a,#7c                     ; LD A,H
+    jr z,.emit
+    ld a,(cachedKeyRows+2)
+    cp c
+    ld a,#7d                     ; LD A,L
+    jr z,.emit
+
+    ld a,#3e                     ; LD A,row
+    ld (de),a
+    inc de
+    ld a,c
+    ld (de),a
+    inc de
+    ld a,#db                     ; IN A,(#fe)
+    ld (de),a
+    inc de
+    ld a,#fe
+    ld (de),a
+    inc de
+    dec b
+    ret z
+    push ix
+    pop hl
+.scan:
+    inc hl : inc hl
+    ld a,(hl)
+    cp c
+    jr z,.cache
+    djnz .scan
+    ret
+.cache:
+    ; Six keys can share at most three rows. Cache their sampled bytes in D, H and L.
+    ld a,(cachedKeyRows)
+    or a
+    ld a,c
+    jr nz,.second
+    ld (cachedKeyRows),a
+    ld a,#57                     ; LD D,A
+    jr .emit
+.second:
+    ld a,(cachedKeyRows+1)
+    or a
+    ld a,c
+    jr nz,.third
+    ld (cachedKeyRows+1),a
+    ld a,#67                     ; LD H,A
+    jr .emit
+.third:
+    ld (cachedKeyRows+2),a
+    ld a,#6f                     ; LD L,A
+.emit:
+    ld (de),a
+    inc de
+    ret
+
+customKeyBit:
+    sub 1
+    rl e
+customKeyExit:
+    ld a,e
+    ret
+customKeyTemplatesEnd:
 
 waitMenuKeyRelease:
     call menuFrame
@@ -151,7 +248,10 @@ promptDown:  db "PRESS DOWN ",0
 promptFire:  db "PRESS FIRE ",0
 pendingKeyCount: db 0
 pendingKeys: defs 5
-customKeyTargets: dw keyLeft,keyRight,keyUp,keyDown,keyFire
+    db 30                        ; Enter is fixed, but can share a row
+customReadOrder: db 5,4,3,2,0,1   ; Enter, Fire, Down, Up, Left, Right, for RL E
+keyReadPlan: defs 6*2
+cachedKeyRows: defs 3
 
 menuKeyNames: db 0,"ZXCVASDFGQWERT1234509876POIUY",13,"LKJH ",0,"MNB"
     assert $-menuKeyNames=40
