@@ -17,6 +17,7 @@ from verify_blokius_integration import (
     GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, YELLOW_FIRE_COUNTS, install,
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
+from verify_luminance_writes import verify_luminance_writes
 from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, WIDTH, capture_video, paper_row
 
 
@@ -339,6 +340,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="shmup-levels-") as scratch:
         game = build(ARCHIVE, assembler, Path(scratch))
         install(game, assembler, live=True, luminance_logo=args.luminance_logo)
+        if args.luminance_logo:
+            verify_luminance_writes(game / "gfx", (game / MENU_LOGO).read_bytes())
         corner_scratch = Path(scratch) / "corner-test"
         corner_scratch.mkdir()
         corner_game = build(ARCHIVE, assembler, corner_scratch)

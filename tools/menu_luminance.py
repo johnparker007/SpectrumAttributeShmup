@@ -10,6 +10,7 @@ WIDTH, HEIGHT = 28, 32
 LINE_TSTATES = 228
 ATTRS = 0x5822
 EARLIEST_FETCH, LATEST_FETCH = 16191, 16198  # At the logo's left edge.
+ATTRIBUTE_WRITE_DEADLINE = 16194  # Three T-states before the nominal 128K fetch.
 RASTER_EXIT, SEED_EXIT = 0x8003, 0x8006
 PROFILES = {
     # Contention start, wait pattern and calibrated first instruction T-state.
@@ -70,10 +71,17 @@ def schedule(model, phase, visible):
         for x in pairs:
             begin = t
             t += 5 + 4 * (len(PUSH[((x + y + phase) % 12) // 2]) == 2)
-            t = write_end(write_end(t))
             for cell in (x + 1, x):
-                if early and cell in visible[y] and begin > EARLIEST_FETCH + 4 * cell:
-                    return None
+                t = write_end(t)
+                if cell in visible[y]:
+                    # The ULA fetches two cells in an eight-T-state burst.
+                    # Check each byte's completion, as well as the emulator's
+                    # instruction-start fetch window.
+                    deadline = ATTRIBUTE_WRITE_DEADLINE + 4 * cell - 2 * (cell % 2)
+                    if t > deadline + (0 if early else LINE_TSTATES):
+                        return None
+                    if early and begin > EARLIEST_FETCH + 4 * cell:
+                        return None
                 if cell in visible[y - 1]:
                     previous_fetch = LATEST_FETCH + 4 * cell - (LINE_TSTATES if early else 0)
                     if begin <= previous_fetch:
