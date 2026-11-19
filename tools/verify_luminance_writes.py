@@ -14,6 +14,7 @@ def attribute_stores(program, palette, time, model):
     origin, waits, _ = PROFILES[model]
     sp = 0
     pc = 0
+    alternate = False
     while program[pc] != 0xC3:  # Jump back to the fixed-bank menu code.
         opcode = program[pc]
         if opcode == 0x31:
@@ -33,8 +34,12 @@ def attribute_stores(program, palette, time, model):
             sp += 1 if opcode == 0x33 else -1
             pc += 1
             time += 6
+        elif opcode == 0xD9:
+            alternate = not alternate
+            pc += 1
+            time += 4
         else:
-            pair = palette[opcode]
+            pair = palette[alternate][opcode]
             pc += 1
             time += 5
             for ink in reversed(pair):
@@ -47,12 +52,15 @@ def attribute_stores(program, palette, time, model):
 def verify_luminance_writes(gfx, bitmap):
     cells = [sorted(row) for row in visible_cells(bitmap)]
     inks = (gfx / "luminance-inks.bin").read_bytes()
-    palette = {opcode: inks[2 * index:2 * index + 2] for index, opcode in enumerate(PUSH)}
+    palette = (
+        dict(zip(PUSH[:4], (inks[0:2], inks[2:4], inks[4:6], inks[6:8]))),
+        dict(zip((*PUSH[4:], 0xF5), (inks[8:10], inks[10:12], inks[12:14], inks[6:8]))),
+    )
     for model, first_fetch in FIRST_FETCH.items():
-        bundle = (gfx / f"luminance-{model}.bin").read_bytes()
+        bundle = (gfx / f"luminance-{model}.bin").read_bytes() + (gfx / f"luminance-{model}-extra.bin").read_bytes()
         frames = []
         for phase in range(len(LUMINANCE_BANDS)):
-            offset = unpack_from("<H", bundle, 2 * phase)[0]
+            offset = (PROGRAM_BYTES + 2) * phase
             seed_offset = unpack_from("<H", bundle, offset)[0]
             start = offset + 2
             seed = bundle[start + seed_offset:start + PROGRAM_BYTES]

@@ -274,6 +274,11 @@ DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
     page 1
     org audioLiteral0End
 ''' + f"packedLevels: dw {pointers}\n{levels}".encode("ascii") + b'''
+    ifdef LUMINANCE_LOGO
+        if MENU_LOGO_PHASES>5
+luminance128Extra: incbin "gfx/luminance-128k-extra.bin"
+        endif
+    endif
     assert $ <= #10000
     ifdef LEVEL_MENU
         page 3
@@ -294,6 +299,14 @@ menuTrackMute equ menuTrackInit+8
 luminancePlus: incbin "gfx/luminance-plus.bin"
         endif
         assert $ <= #10000
+        ifdef LUMINANCE_LOGO
+            if MENU_LOGO_PHASES>6
+                page 7
+                org #e000   ; Above the shadow bitmap and attributes.
+luminancePlusExtra: incbin "gfx/luminance-plus-extra.bin"
+                assert $ <= #10000
+            endif
+        endif
     endif
     page 0
     assert testAudioRecipeEnd <= #e000

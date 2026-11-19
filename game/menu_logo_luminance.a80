@@ -30,27 +30,31 @@ initMenuCopper:
     ret
 
 runLuminanceFrame:
-    call menuMusicPage
-    ld hl,luminance128
+    di
+    ld hl,luminance128Programs
     ld bc,655
     ld a,(2899)
     cp 159                         ; 128K / grey +2 ROM identifier
     jr z,.selectPhase
-    ld hl,luminancePlus
+    ld hl,luminancePlusPrograms
     ld bc,663
 .selectPhase:
     ld (menuLogoDelay+1),bc
     ld a,(menuLogoPhase)
+    ld e,a
     add a,a
+    add a,e
     ld e,a
     ld d,0
-    push hl
     add hl,de
+    ld a,(hl)
+    ld (menuLogoProgramPage+1),a
+    inc hl
     ld e,(hl)
     inc hl
     ld d,(hl)
-    pop hl
-    add hl,de
+    call pageMenuLogoProgram
+    ex de,hl
     ; Seed the first scanlines from the banked program during the bottom border.
     ld e,(hl)
     inc hl
@@ -72,7 +76,7 @@ menuLogoWaitRaster:
     halt
     di
     ld (menuLogoHostStack+1),sp
-    call menuMusicPage
+    call pageMenuLogoProgram
 menuLogoCopySource:
     ld hl,0
     ld de,attrBuffer+MENU_LOGO_PREFIX
@@ -85,7 +89,7 @@ menuLogoDelay:
     call DELAY
     ld a,(#5800)                  ; Contention aligns the first raster instruction.
     ld sp,menuLogoPalette
-    ; Only BC, DE and HL supply ink pairs. Keep the calibrated load time.
+    ; Seed setup has already loaded the alternate colour pairs.
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
     jp attrBuffer
 
@@ -112,6 +116,12 @@ menuLogoFrameDone:
     ei
     ret
 
+pageMenuLogoProgram:
+    di
+menuLogoProgramPage:
+    ld a,0
+    jp swapPage
+
 copyMenuProgram:
     dup 32
         ldi
@@ -121,6 +131,11 @@ copyMenuProgram:
 
 seedLuminanceRows:
     ld (menuLogoSeedStack+1),sp
+    exx
+    ld bc,(menuLogoPalette+8)
+    ld de,(menuLogoPalette+10)
+    ld hl,(menuLogoPalette+12)
+    exx
     ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
 menuLogoSeedStart:

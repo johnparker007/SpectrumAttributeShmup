@@ -5,14 +5,18 @@ from functools import cache
 from struct import pack
 
 
-LUMINANCE_BANDS = bytes((0x01, 0x05, 0x45, 0x47, 0x45, 0x05))
+LUMINANCE_BANDS = bytes((
+    0x01, 0x05, 0x45, 0x47, 0x45, 0x05,  # Blue and cyan.
+    0x01, 0x02, 0x06, 0x46, 0x47, 0x46, 0x06, 0x02,  # Red and yellow.
+))
 WIDTH, HEIGHT = 28, 32
 LINE_TSTATES = 228
 ATTRS = 0x5822
 EARLIEST_FETCH, LATEST_FETCH = 16191, 16198  # At the logo's left edge.
 ATTRIBUTE_WRITE_DEADLINE = 16194  # Three T-states before the nominal 128K fetch.
 RASTER_EXIT, SEED_EXIT = 0x8003, 0x8006
-PROGRAM_BYTES = 960
+RASTER_BYTES = 960
+PROGRAM_BYTES = 992  # The seed runs in its source bank and need not fit the raster copy.
 RASTER_END = 23364
 COPPER_BANDS = (0x01, 0x05, 0x05, 0x45, 0x47, 0x45, 0x05, 0x05)
 COPPER_MENU_TEXT = {
@@ -26,8 +30,8 @@ PROFILES = {
     "128k": (16185, (6, 5, 4, 3, 2, 1, 0, 0), 16110),
     "plus": (16189, (1, 0, 7, 6, 5, 4, 3, 2), 16109),
 }
-# BC, DE and HL hold the three consecutive two-cell pairs.
-PUSH = (0xC5, 0xD5, 0xE5)
+# BC, DE, HL, AF, IX, IY and BC' hold the consecutive two-cell pairs.
+PUSH = (0xC5, 0xD5, 0xE5, 0xF5, 0xC5, 0xD5, 0xE5)
 
 
 def word(value):
@@ -57,6 +61,21 @@ def attribute_write_end(time, origin, waits):
     return time + 3 + (waits[slot % 8] if slot < 128 else 0)
 
 
+def burst_ops(pairs, y, phase, *, copper=False):
+    """Yield stack writes, reloading SP at gaps and grouping register swaps."""
+    alternate = False
+    for i, x in enumerate(pairs):
+        if i and x != pairs[i - 1] - 2:
+            yield 0x31, x  # LD SP,nn
+        pair = 2 if copper else ((x + y + phase) % len(LUMINANCE_BANDS)) // 2
+        if pair != 3 and alternate != (pair >= 4):
+            yield 0xD9, x  # EXX
+            alternate = not alternate
+        yield PUSH[pair], x
+    if alternate:
+        yield 0xD9, None
+
+
 def schedule(model, phase, visible, *, copper=False):
     """Find a scanline schedule whose writes straddle the ULA fetch window."""
     origin, waits, first = PROFILES[model]
@@ -72,20 +91,26 @@ def schedule(model, phase, visible, *, copper=False):
         cells = visible[y] & set(range(first_column, last_column))
         if not cells:
             return ()
-        if copper:
-            return tuple(sorted({x & ~1 for x in cells}, reverse=True))
-        high, low, p = max(cells), min(cells), parity(y)
-        return tuple(range(high - (high - p) % 2, low - (low - p) % 2 - 1, -2))
+        p = parity(y)
+        return tuple(sorted({x - (x - p) % 2 for x in cells}, reverse=True))
 
     def cuts(y):
         # Seed the entire first scanline of each character row ahead of time.
         return (width + parity(y),) if y % 8 == 0 else range(parity(y) - 2, width + 2, 2)
 
     @cache
+    def operations(y, pairs):
+        return tuple(burst_ops(pairs, y, phase, copper=copper))
+
+    @cache
     def burst(y, pairs, t, early):
-        for i, x in enumerate(pairs):
-            if i and x != pairs[i - 1] - 2:
-                t += 10  # Reload SP to skip a gap in the text.
+        for op, x in operations(y, pairs):
+            if op == 0x31:
+                t += 10
+                continue
+            if op == 0xD9:
+                t += 4
+                continue
             begin = t
             t += 5
             for cell in (x + 1, x):
@@ -217,24 +242,30 @@ def compile_phase(job):
     raster = bytearray()
     seed = bytearray()
 
-    def pushes(pairs, y):
-        return bytes(PUSH[((x + y + phase) % len(LUMINANCE_BANDS)) // 2] for x in pairs)
+    def pushes(pairs, y, target):
+        code = bytearray()
+        for op, x in burst_ops(pairs, y, phase):
+            if op == 0x31:
+                code += load_sp(target + x + 2)
+            else:
+                code.append(op)
+        return code
 
     program, finish = schedule(model, phase, visible)
     for y, (right, left, shift, idle, tail) in enumerate(program):
         target = ATTRS + 32 * (y // 8)
         if right:
-            raster += load_sp(target + right[0] + 2) + pushes(right, y)
+            raster += load_sp(target + right[0] + 2) + pushes(right, y, target)
         if left:
             adjust = {-1: b"\x3b", 0: b"", 1: b"\x33"}
             raster += adjust.get(shift, load_sp(target + left[0] + 2))
-            raster += padding(idle) + pushes(left, y + 1)
+            raster += padding(idle) + pushes(left, y + 1, target)
         raster += padding(tail)
         if y % 8 == 0 and visible[y]:
             parity = (y + phase) % 2
             high, low = max(visible[y]), min(visible[y])
             pairs = range(high - (high - parity) % 2, low - (low - parity) % 2 - 1, -2)
-            seed += load_sp(target + pairs[0] + 2) + pushes(pairs, y)
+            seed += load_sp(target + pairs[0] + 2) + pushes(pairs, y, target)
     cycles = RASTER_END - finish
     if cycles % 2:
         raster += b"\x3e\0"  # LD A,0. The logo has finished using the palette.
@@ -242,24 +273,34 @@ def compile_phase(job):
     assert cycles >= 4
     raster += padding(cycles) + b"\xc3" + word(RASTER_EXIT)
     seed += b"\xc3" + word(SEED_EXIT)
-    if len(raster) + len(seed) > PROGRAM_BYTES:
-        raise ValueError("Luminance logo exceeds its scratch buffer")
+    if len(raster) > RASTER_BYTES or len(raster) + len(seed) > PROGRAM_BYTES:
+        raise ValueError(f"Luminance logo program is too large for {model}, phase {phase}")
     return word(len(raster)) + (raster + seed).ljust(PROGRAM_BYTES, b"\0")
 
 
 def build_luminance(output, bitmap):
     phases = len(LUMINANCE_BANDS)
+    if not 2 <= phases <= 2 * len(PUSH) or phases % 2:
+        raise ValueError("The logo needs an even count of two to fourteen bands")
     jobs = [(model, phase, bitmap) for model in PROFILES for phase in range(phases)]
     with ProcessPoolExecutor(max_workers=6) as pool:
         programs = list(pool.map(compile_phase, jobs))
-    for index, model in enumerate(PROFILES):
-        pointer = 2 * phases  # Offsets relative to the start of the bundle.
-        offsets = bytearray()
+    layout = [f"MENU_LOGO_PHASES equ {phases}"]
+    # Bank 3 has room for five programs before the tracker and six after
+    # its song. Put the rest after the maps or above the shadow screen.
+    for index, (model, label, bank3_phases, overflow) in enumerate((
+        ("128k", "luminance128", 5, 1), ("plus", "luminancePlus", 6, 7),
+    )):
         images = programs[index * phases:(index + 1) * phases]
-        for image in images:
-            offsets += word(pointer)
-            pointer += len(image)
-        (output / f"luminance-{model}.bin").write_bytes(offsets + b"".join(images))
+        first = images[:bank3_phases]
+        extra = images[bank3_phases:]
+        (output / f"luminance-{model}.bin").write_bytes(b"".join(first))
+        (output / f"luminance-{model}-extra.bin").write_bytes(b"".join(extra))
         (output / f"copper-{model}.a80").write_text(compile_copper(model), encoding="ascii")
+        layout.append(f"{label}Programs:")
+        for bank, base, entries in ((3, label, first), (overflow, f"{label}Extra", extra)):
+            for phase, _ in enumerate(entries):
+                layout.extend((f"    db {bank}", f"    dw {base}+{phase}*{PROGRAM_BYTES + 2}"))
 
-    (output / "luminance-inks.bin").write_bytes(LUMINANCE_BANDS.ljust(12, b"\0"))
+    (output / "luminance-layout.a80").write_text("\n".join(layout) + "\n", encoding="ascii")
+    (output / "luminance-inks.bin").write_bytes(LUMINANCE_BANDS.ljust(14, b"\0"))
