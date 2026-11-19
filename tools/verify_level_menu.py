@@ -9,6 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
+from menu_luminance import LUMINANCE_BANDS
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -23,7 +24,7 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
     s = read_symbols(game / "main.sym")
     width, rows, left, top = (s["MENU_LOGO_" + name] for name in ("WIDTH", "ROWS", "LEFT", "TOP"))
     bitmap = (game / MENU_LOGO).read_bytes()
-    bands = logo_bands()
+    bands = LUMINANCE_BANDS if "luminance128" in s else logo_bands()
     if len(bands) != s["MENU_LOGO_PHASES"]:
         raise ValueError("The menu must scroll through the complete colour ribbon")
     if any(bands[i] == bands[i - 1] for i in range(len(bands))):
@@ -332,11 +333,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for arg in ("assembler", "emulator", "output-tap"):
         parser.add_argument(f"--{arg}", type=Path, required=arg != "output-tap")
+    parser.add_argument("--luminance-logo", action="store_true")
     args = parser.parse_args()
     assembler, emulator = (p.resolve(strict=True) for p in (args.assembler, args.emulator))
     with tempfile.TemporaryDirectory(prefix="shmup-levels-") as scratch:
         game = build(ARCHIVE, assembler, Path(scratch))
-        install(game, assembler, live=True)
+        install(game, assembler, live=True, luminance_logo=args.luminance_logo)
         corner_scratch = Path(scratch) / "corner-test"
         corner_scratch.mkdir()
         corner_game = build(ARCHIVE, assembler, corner_scratch)

@@ -1,0 +1,109 @@
+; Experimental menu raster. Generated code borrows the gameplay attribute
+; buffer while rendering is disabled. The three entry points have fixed addresses.
+menuLogoFrame:
+    jp runLuminanceFrame
+menuLogoRasterExit:
+    jp menuLogoHostStack
+menuLogoSeedExit:
+    jp menuLogoSeedStack
+    assert menuLogoRasterExit=#8003 && menuLogoSeedExit=#8006
+    assert MENU_LOGO_ATTRS=#5822 && MENU_LOGO_WIDTH=28 && MENU_LOGO_ROWS=4
+    assert renderTilesList-attrBuffer>=1024
+
+runLuminanceFrame:
+    call menuMusicPage
+    ld hl,luminance128
+    ld a,(2899)
+    cp 159                         ; 128K / grey +2 ROM identifier
+    jr z,.selectPhase
+    ld hl,luminancePlus
+.selectPhase:
+    ld a,(menuLogoPhase)
+    cp 6
+    ld de,menuLogoPalettes
+    jr c,.palette
+    sub 6
+    ld de,menuLogoPalettes+12
+.palette:
+    ld (menuLogoRasterPalette+1),de
+    ld (menuLogoSeedPalette+1),de
+    add a,a
+    ld e,a
+    ld d,0
+    push hl
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    pop hl
+    add hl,de
+    ; Each program stores its byte count and offset of the seed routine.
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    push hl
+    ld hl,attrBuffer
+    add hl,de
+    ld (menuLogoSeedStart+1),hl
+    pop hl
+    ld de,attrBuffer
+    ldir
+    xor a
+    call swapPage
+    call seedLuminanceRows
+    ei
+    halt
+    di
+    ld (menuLogoHostStack+1),sp
+    ld bc,15552
+    call DELAY
+    ld a,(#5800)                  ; Contention aligns the first raster instruction.
+menuLogoRasterPalette:
+    ld sp,0
+    pop bc : pop de : pop hl : pop af : pop ix : pop iy
+    jp attrBuffer
+
+menuLogoHostStack:
+    ld sp,0
+    ; Tick AY once per frame before preparing the next phase.
+    call menuMusicPage
+    call menuTrackTick
+    xor a
+    call swapPage
+    ld hl,menuLogoPhase
+    inc (hl)
+    ld a,(hl)
+    cp MENU_LOGO_PHASES
+    jr c,menuLogoFrameDone
+    ld (hl),0
+menuLogoFrameDone:
+    ei
+    ret
+
+seedLuminanceRows:
+    ld (menuLogoSeedStack+1),sp
+menuLogoSeedPalette:
+    ld sp,0
+    pop bc : pop de : pop hl : pop af : pop ix : pop iy
+menuLogoSeedStart:
+    jp 0
+menuLogoSeedStack:
+    ld sp,0
+    ret
+
+clearMenuRaster:
+    xor a
+    ld hl,attrBuffer
+    ld (hl),a
+    ld de,attrBuffer+1
+    ld bc,1024-1
+    ldir
+    ret
+
+menuLogoPhase: dw 0
+menuLogoPalettes: incbin "gfx/luminance-inks.bin"

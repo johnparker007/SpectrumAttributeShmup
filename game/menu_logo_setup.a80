@@ -7,7 +7,11 @@ MENU_LOGO_ATTRS equ #5800+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
 MENU_LOGO_PAIRS equ MENU_LOGO_WIDTH/2
 MENU_LOGO_LATE_PAIRS equ 9
 MENU_LOGO_EARLY_PAIRS equ MENU_LOGO_PAIRS-MENU_LOGO_LATE_PAIRS
+    ifdef LUMINANCE_LOGO
+MENU_LOGO_PHASES equ 12
+    else
 MENU_LOGO_PHASES equ 512
+    endif
 MENU_LOGO_EARLY_X equ MENU_LOGO_WIDTH-2
 MENU_LOGO_LATE_X equ 2*MENU_LOGO_LATE_PAIRS-2
 
@@ -33,6 +37,7 @@ drawMenuLogo:
     ld (menuLogoPhase),hl
     ret
 
+    ifndef LUMINANCE_LOGO
 ; Map strip position (phase + BC) to a right-to-left run of PUSH opcodes.
 menuLogoPatternStart:
     ld hl,(menuLogoPhase)
@@ -131,3 +136,4 @@ menuLogoInkPairs:
     align 256
 menuLogoPushPatterns: incbin "gfx/blokius-logo-raster.bin",24
     assert $-menuLogoPushPatterns=2*MENU_LOGO_PHASES
+    endif

@@ -14,6 +14,7 @@ import tempfile
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
 from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
+from menu_luminance import build_luminance
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -63,7 +64,9 @@ def star_force_music():
 
 
 def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None,
-            prototype_waves=False, solid_menu_logo=False):
+            prototype_waves=False, solid_menu_logo=False, luminance_logo=False):
+    if luminance_logo and (audio is not None or solid_menu_logo):
+        raise ValueError("The luminance raster needs the gameplay soundtrack and the logo bitmap")
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -206,6 +209,10 @@ doSinScroll equ barrelScroll_Update
             defines.append("LEVEL_MENU")
             for name in ("joystick.a80", "redefine_keys.a80", "menu_logo.a80", "menu_logo_setup.a80"):
                 shutil.copyfile(TESTS.parent / "game" / name, game / name)
+            if luminance_logo:
+                defines.append("LUMINANCE_LOGO")
+                build_luminance(game / "gfx", (game / MENU_LOGO).read_bytes())
+                shutil.copyfile(TESTS.parent / "game" / "menu_logo_luminance.a80", game / "menu_logo_luminance.a80")
         if audio is None:
             defines.append("LIVE_SFX")
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
@@ -235,7 +242,11 @@ doSinScroll equ barrelScroll_Update
         # The menu raster runs in fast RAM without moving the tile animation tables.
         data.write_bytes(code[:sine_start] + b"""
     ifdef LEVEL_MENU
-        include "menu_logo.a80"
+        ifdef LUMINANCE_LOGO
+            include "menu_logo_luminance.a80"
+        else
+            include "menu_logo.a80"
+        endif
         assert $ <= #8300
     endif
     org #8300
@@ -266,6 +277,11 @@ DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
     assert $ <= #10000
     ifdef LEVEL_MENU
         page 3
+        ifdef LUMINANCE_LOGO
+            org #c000
+luminance128: incbin "gfx/luminance-128k.bin"
+            assert $<=55000
+        endif
         org 55000
 menuTrackInit:
         incbin "music/player_55000.bin"
@@ -274,6 +290,9 @@ menuTrackMute equ menuTrackInit+8
         assert $ <= 57158
         org 57158
         incbin "music/song_57158.bin"
+        ifdef LUMINANCE_LOGO
+luminancePlus: incbin "gfx/luminance-plus.bin"
+        endif
         assert $ <= #10000
     endif
     page 0

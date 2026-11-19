@@ -82,6 +82,9 @@ menuSelected:
     halt
     djnz .hold
     di
+    ifdef LUMINANCE_LOGO
+        call clearMenuRaster
+    endif
     call fillScreens
     call fillPixels
     ei

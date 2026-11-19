@@ -1,0 +1,170 @@
+"""Compile the experimental 12-band logo into timed Z80 stack writes."""
+
+from concurrent.futures import ProcessPoolExecutor
+from functools import cache
+from struct import pack
+
+
+LUMINANCE_BANDS = bytes(range(0x41, 0x48)) + bytes(range(0x46, 0x41, -1))
+WIDTH, HEIGHT = 28, 32
+LINE_TSTATES = 228
+ATTRS = 0x5822
+EARLIEST_FETCH, LATEST_FETCH = 16191, 16198  # At the logo's left edge.
+RASTER_EXIT, SEED_EXIT = 0x8003, 0x8006
+PROFILES = {
+    # Contention start, wait pattern and calibrated first instruction T-state.
+    "128k": (16185, (6, 5, 4, 3, 2, 1, 0, 0), 16110),
+    "plus": (16189, (1, 0, 7, 6, 5, 4, 3, 2), 16109),
+}
+# BC, DE, HL, AF, IX, IY hold pairs 1, 2, 4, 5, 0, 3 respectively.
+PUSH = (b"\xdd\xe5", b"\xc5", b"\xd5", b"\xfd\xe5", b"\xe5", b"\xf5")
+
+
+def word(value):
+    return pack("<H", value)
+
+
+def load_sp(address):
+    return b"\x31" + word(address)
+
+
+def padding(cycles):
+    # Short jumps and NOPs preserve the palette. INC SP can supply six cycles
+    # at the end of a scanline where the next burst will reload SP.
+    tail = b"\x33" if cycles % 4 == 2 else b""
+    cycles -= 6 * len(tail)
+    return b"\x18\x00" * (cycles // 12) + b"\x00" * (cycles % 12 // 4) + tail
+
+
+def visible_cells(bitmap):
+    for y in range(HEIGHT):
+        start = ((y % 8) * (HEIGHT // 8) + y // 8) * WIDTH
+        yield {x for x, bits in enumerate(bitmap[start:start + WIDTH]) if bits}
+
+
+def schedule(model, phase, visible):
+    """Find a scanline schedule whose writes straddle the ULA fetch window."""
+    origin, waits, first = PROFILES[model]
+
+    def write_end(t):
+        slot = (t - origin) % LINE_TSTATES
+        return t + 3 + (waits[slot % 8] if slot < 128 else 0)
+
+    def parity(y):
+        return (y + phase) % 2
+
+    @cache
+    def columns(y, first_column, last_column):
+        cells = visible[y] & set(range(first_column, last_column))
+        if not cells:
+            return ()
+        high, low, p = max(cells), min(cells), parity(y)
+        return tuple(range(high - (high - p) % 2, low - (low - p) % 2 - 1, -2))
+
+    def cuts(y):
+        # Seed the entire first scanline of each character row ahead of time.
+        return (WIDTH + parity(y),) if y % 8 == 0 else range(parity(y) - 2, WIDTH + 2, 2)
+
+    @cache
+    def burst(y, pairs, t, early):
+        for x in pairs:
+            begin = t
+            t += 5 + 4 * (len(PUSH[((x + y + phase) % 12) // 2]) == 2)
+            t = write_end(write_end(t))
+            for cell in (x + 1, x):
+                if early and cell in visible[y] and begin > EARLIEST_FETCH + 4 * cell:
+                    return None
+                if cell in visible[y - 1]:
+                    previous_fetch = LATEST_FETCH + 4 * cell - (LINE_TSTATES if early else 0)
+                    if begin <= previous_fetch:
+                        return None
+        return t
+
+    # The left-side burst paints the following scanline. The state holds its
+    # cutover column, the next instruction time and the program to reach it.
+    first_start, last_start = 16032, 16257
+    states = {(cut, first): () for cut in cuts(0)}
+    for y in range(HEIGHT):
+        following = {}
+        for (cut, start), program in states.items():
+            right = columns(y, cut, WIDTH)
+            after_right = burst(y, right, start + 10, True) if right else start
+            if after_right is None:
+                continue
+            for next_cut in cuts(y + 1):
+                left = columns(y + 1, 0, next_cut) if (y + 1) % 8 else ()
+                shift, setup, delays = None, 0, (0,)
+                if left:
+                    shift = left[0] + 2 - right[-1] if right else None
+                    setup = 0 if shift == 0 else 6 if shift in (-1, 1) else 10
+                    delays = range(0, 54 if right else 225, 4)
+                for idle in delays:
+                    end = burst(y + 1, left, after_right + setup + idle, False) if left else after_right
+                    if end is None or end > LINE_TSTATES + last_start:
+                        continue
+                    next_line = end - LINE_TSTATES
+                    start_search = next_line + max(0, first_start - next_line + (first_start - next_line) % 2)
+                    for next_start in range(start_search, last_start + 1, 2):
+                        tail = next_start - next_line
+                        key = next_cut, next_start
+                        if tail != 2 and key not in following:
+                            following[key] = program + ((right, left, shift, idle, tail),)
+                    if left and next_line >= first_start:
+                        break
+        if not following:
+            raise ValueError(f"Luminance logo exceeds the {model} raster budget on line {y}, phase {phase}")
+        states = following
+    return next(iter(states.values()))
+
+
+def compile_phase(job):
+    model, phase, bitmap = job
+    visible = tuple(visible_cells(bitmap)) + (set(),)
+    raster = bytearray()
+    seed = bytearray()
+
+    def pushes(pairs, y):
+        return b"".join(PUSH[((x + y + phase) % 12) // 2] for x in pairs)
+
+    for y, (right, left, shift, idle, tail) in enumerate(schedule(model, phase, visible)):
+        target = ATTRS + 32 * (y // 8)
+        if right:
+            raster += load_sp(target + right[0] + 2) + pushes(right, y)
+        if left:
+            adjust = {-1: b"\x3b", 0: b"", 1: b"\x33"}
+            raster += adjust.get(shift, load_sp(target + left[0] + 2))
+            raster += padding(idle) + pushes(left, y + 1)
+        raster += padding(tail)
+        if y % 8 == 0 and visible[y]:
+            parity = (y + phase) % 2
+            high, low = max(visible[y]), min(visible[y])
+            pairs = range(high - (high - parity) % 2, low - (low - parity) % 2 - 1, -2)
+            seed += load_sp(target + pairs[0] + 2) + pushes(pairs, y)
+    raster += b"\xc3" + word(RASTER_EXIT)
+    seed += b"\xc3" + word(SEED_EXIT)
+    if len(raster) + len(seed) > 1024:
+        raise ValueError("Luminance logo exceeds its scratch buffer")
+    return word(len(raster) + len(seed)) + word(len(raster)) + raster + seed
+
+
+def build_luminance(output, bitmap):
+    # Phase n+6 has identical instruction timing to n: IX and IY swap words,
+    # as do the four unprefixed PUSH registers. Store only six programs.
+    jobs = [(model, phase, bitmap) for model in PROFILES for phase in range(6)]
+    with ProcessPoolExecutor(max_workers=6) as pool:
+        programs = list(pool.map(compile_phase, jobs))
+    for index, model in enumerate(PROFILES):
+        pointer = 12  # Six offsets relative to the start of this bundle.
+        offsets = bytearray()
+        images = programs[index * 6:index * 6 + 6]
+        for image in images:
+            offsets += word(pointer)
+            pointer += len(image)
+        (output / f"luminance-{model}.bin").write_bytes(offsets + b"".join(images))
+
+    palette = bytearray()
+    for offset in (0, 3):
+        for pair in (1, 2, 4, 5, 0, 3):
+            start = 2 * ((pair + offset) % 6)
+            palette += LUMINANCE_BANDS[start:start + 2]
+    (output / "luminance-inks.bin").write_bytes(palette)
