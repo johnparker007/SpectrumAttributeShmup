@@ -9,7 +9,10 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS
+from menu_luminance import (
+    COPPER_BANDS, COPPER_MENU_TEXT, COPPER_ROW_BANDS,
+    GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS,
+)
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -62,7 +65,7 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
             for y, colour in enumerate((*GOLD_BAR, 0, 0, 0)):
                 gold_rows[start + y] = ink(colour) * WIDTH
         for row, line in COPPER_MENU_TEXT.items():
-            for y, colour in enumerate(COPPER_BANDS):
+            for y, colour in enumerate(COPPER_ROW_BANDS.get(row, COPPER_BANDS)):
                 attributes = (font[8 * (ord(char) - 32) + y] for char in line.ljust(32))
                 copper_rows[8 * row + y] = b"".join(ink(colour) if mask & (128 >> bit) else bytes(3)
                                                     for mask in attributes for bit in range(8))

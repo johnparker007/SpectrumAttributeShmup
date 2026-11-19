@@ -19,6 +19,7 @@ RASTER_BYTES = 960
 PROGRAM_BYTES = 992  # The seed runs in its source bank and need not fit the raster copy.
 RASTER_END = 23364
 COPPER_BANDS = (0x01, 0x05, 0x05, 0x45, 0x47, 0x45, 0x05, 0x05)
+COPPER_ROW_BANDS = {10: (0x01, 0x06, 0x06, 0x46, 0x47, 0x46, 0x06, 0x06)}
 GOLD_BAR = (2, 6, 7, 6, 2)
 GOLD_BAR_TOP, GOLD_BAR_BOTTOM = 8, 51
 LOGO_LINE_SHIFT = 8 * LINE_TSTATES
@@ -260,6 +261,7 @@ def compile_copper(model):
             code.append("push hl")
 
     for row, text in COPPER_MENU_TEXT.items():
+        bands = COPPER_ROW_BANDS.get(row, COPPER_BANDS)
         cells = {x for x, char in enumerate(text) if char != " "}
         visible = (cells,) * 8 + (set(),)
         program, finish = schedule(model, 0, visible, copper=True)
@@ -271,7 +273,7 @@ def compile_copper(model):
         delay_until(seed_start)
         left, right = min(cells) & ~1, (max(cells) + 2) & ~1
         pairs = (right - left) // 2
-        code.extend((ink(COPPER_BANDS[0]), f"ld sp,{target + right}"))
+        code.extend((ink(bands[0]), f"ld sp,{target + right}"))
         code.extend(["push hl"] * pairs)
         code.append("ld sp,menuCopperStack")
         time = seed_start + 20
@@ -285,8 +287,8 @@ def compile_copper(model):
             if early:
                 code.append(f"ld sp,{target + early[0] + 2}")
                 push_ink(early, target)
-            if y + 1 < len(COPPER_BANDS):
-                code.append(ink(COPPER_BANDS[y + 1]))
+            if y + 1 < len(bands):
+                code.append(ink(bands[y + 1]))
             if late:
                 if shift != 0:
                     code.append(f"ld sp,{target + late[0] + 2}")
