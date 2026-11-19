@@ -1,6 +1,7 @@
 """Convert the editable artwork into the engine's binary formats."""
 
 import argparse
+from math import floor, sin, tau
 from pathlib import Path
 import re
 import shutil
@@ -16,6 +17,7 @@ ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
 MENU_LOGO = "gfx/blokius-logo.bin"
+MENU_LOGO_PALETTES = "gfx/blokius-logo-palettes.bin"
 DESTRUCTIBLE_TILE = 124
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
@@ -61,6 +63,20 @@ def logo_bitmap(source):
     # PBM uses 1 for black. Set the Spectrum's ink bits for the white logo.
     return bytes(value ^ 255 for scan in range(8) for y in range(scan, 32, 8)
                  for value in rows[y * 28:(y + 1) * 28])
+
+
+def logo_palettes():
+    """Bake four independently moving colour pairs for 256 shimmer steps."""
+    rainbow = (0x41, 0x41, 0x45, 0x45, 0x44, 0x44, 0x46, 0x47,
+               0x46, 0x46, 0x42, 0x42, 0x43, 0x43, 0x43, 0x01)
+    rows = bytearray()
+    for frame in range(256):
+        turn = frame / 256
+        for pair in range(4):
+            wave = 2 * sin(tau * ((pair + 1) * turn + pair / 7))
+            shade = floor(16 * (3 + 2 * pair) * turn + pair * 4 + wave)
+            rows.extend((rainbow[shade % 16], rainbow[(shade + 1) % 16]))
+    return bytes(rows)
 
 
 def convert_image(source, converter, output, size):
@@ -118,6 +134,7 @@ def build_art(output, *, sprite_dir=None):
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
     (output / MENU_LOGO).write_bytes(logo_bitmap(ART / "gfx/blokius-logo.pbm"))
+    (output / MENU_LOGO_PALETTES).write_bytes(logo_palettes())
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")

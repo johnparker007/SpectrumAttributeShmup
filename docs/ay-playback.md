@@ -35,7 +35,7 @@ The [combined renderer experiment](projectile-integration.md#with-50-hz-playback
 
 ## Meadows Edge menu music
 
-The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the bottom border. During the logo, the menu switches screens every two scanlines and writes the next band of logo colours into the hidden screen. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
+The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the bottom border. The logo writes 28 attributes right to left every scanline. The left nine attribute pairs are written for the following scanline because the ULA has already fetched them. Four colour pairs follow independent paths over a 256-step sequence, advancing once every four frames. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
 
 ## Star Force gameplay music
 

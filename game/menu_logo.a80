@@ -1,150 +1,36 @@
-; Menu-only beam timing in bank 2. Display each pair of scanlines while
-; preparing new attributes for the next pair in the hidden screen bank.
-MENU_LOGO_WIDTH equ 28
-MENU_LOGO_ROWS equ 4
-MENU_LOGO_LEFT equ (32-MENU_LOGO_WIDTH)/2
-MENU_LOGO_TOP equ 1
-MENU_LOGO_PIXELS equ #4000+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
-MENU_LOGO_ATTRS equ #5800+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
-MENU_LOGO_BANDS equ 4*MENU_LOGO_ROWS
-MENU_LOGO_PALETTE_LENGTH equ 12
-    assert MENU_LOGO_WIDTH=28
-
-drawMenuLogo:
-    di
-    ld de,MENU_LOGO_PIXELS
-    call copyMenuLogo
-    ld a,7
-    call swapPage
-    ; Gameplay may have left visible pixels beside the logo in the shadow screen.
-    ld hl,#d800+32*MENU_LOGO_TOP
-    ld de,#d800+32*MENU_LOGO_TOP+1
-    ld bc,32*MENU_LOGO_ROWS-1
-    xor a
-    ld (hl),a
-    ldir
-    ld de,MENU_LOGO_PIXELS+#8000
-    call copyMenuLogo
-    xor a
-    call swapPage
-    xor a
-    ld (menuLogoClock),a
-    ei
-    ret
-
-copyMenuLogo:
-    ld hl,menuLogoBitmap
-    ld a,8
-.scanline:
-    ld ixl,MENU_LOGO_ROWS
-.row:
-    ld bc,MENU_LOGO_WIDTH
-    ldir
-    dup 32-MENU_LOGO_WIDTH
-        inc de
-    edup
-    dec ixl
-    jr nz,.row
-    ld e,low MENU_LOGO_PIXELS
-    inc d
-    dec a
-    jr nz,.scanline
-    ret
-
+; Menu-only beam timing in uncontended bank 2.
 menuLogoFrame:
     halt
     di
     ld (menuLogoHostStack+1),sp
-    ; Keep CALL and RET off contended RAM while the beam crosses the logo.
-    ld sp,menuLogoRasterStack
-    ld a,7
-    call swapPage
-    ld a,(menuLogoClock)
-    srl a : srl a
-    ld c,a
-    ld b,0
-    ld iy,menuLogoPalette
-    add iy,bc
-    ld bc,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH
-    call paintMenuLogoBand
-    ; Aim the first switch at the left border of paper scanline 8.
-    ld bc,15168
+    call seedMenuLogoRows
+    ld bc,14916
     call DELAY
-    ld bc,#7ffd
+    ld sp,menuLogoPalette
+    pop bc : pop de : pop hl : pop af
 
-    ; Start generating the next band as soon as its screen is hidden.
-    dup MENU_LOGO_BANDS-1, band
-        ld a,#17+8*(band%2)
-        out (c),a
-        ; PUSH paints backwards from the far edge of the hidden row.
-        ld bc,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH+32*((band+1)/4)+#8000*((band+1)%2)
-        call paintMenuLogoBand
-        call menuLogoBandWait
-        ld bc,#7ffd
+menuLogoRaster:
+    dup 8*MENU_LOGO_ROWS, line
+        MENU_LOGO_LINE line,1
+        ; Pad one contended 28-byte transfer to a 228-T-state scanline.
+        jr $+2
+        inc sp
+        nop
     edup
-    ld a,#1f
-    out (c),a
-    ld bc,417
-    call DELAY
-    ld bc,#7ffd
-    ld a,#17
-    out (c),a
-menuLogoEnd:
-    ; The display has switched back to bank 5. Wait for the bottom border.
-    ld bc,34685
-    call DELAY
+
+menuLogoRasterEnd:
 menuLogoHostStack:
     ld sp,0
+    ld bc,34655
+    call DELAY
 menuLogoBorder:
     call menuMusicPage
     call menuTrackTick
     xor a
     call swapPage
-    ld a,(menuLogoClock)
-    inc a
-    cp 4*MENU_LOGO_PALETTE_LENGTH
-    jr c,.saveClock
-    xor a
-.saveClock:
-    ld (menuLogoClock),a
+    call advanceMenuLogoPalette
 menuLogoFrameDone:
     ei
     ret
 
-menuLogoBandWait:
-    ; Pad the transfer to one 456-T-state band, including video contention.
-    ld bc,0
-    dup 4
-        nop
-    edup
-    ret
-
-; Fetch six palette pairs from fast RAM. Store two repeats and the first
-; four colours of a third repeat with 14 word writes to the hidden bank.
-paintMenuLogoBand:
-    ld (.destination+1),bc
-    ld sp,iy
-    pop bc : pop de : pop hl
-    exx
-    pop bc : pop de : pop hl
-.destination:
-    ld sp,0
-    exx
-    push de : push bc
-    dup 2
-        exx
-        push hl : push de : push bc
-        exx
-        push hl : push de : push bc
-    edup
-    ld sp,menuLogoRasterStack-2
-    inc iy
-    ret
-
-    defs 2
-menuLogoRasterStack:
-menuLogoClock: db 0
-menuLogoPalette:
-    dup 4
-        db #41,#45,#45,#44,#44,#46,#46,#47,#46,#42,#43,#43
-    edup
+menuLogoPalette: defs MENU_LOGO_PAIR_BYTES

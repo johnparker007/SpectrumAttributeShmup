@@ -222,6 +222,7 @@ gameOverText: incbin "game_over.bin"
     assert $-gameOverText=GAME_OVER_WIDTH*GAME_OVER_ROWS
 
     include "redefine_keys.a80"
+    include "menu_logo_setup.a80"
 
 menuLogoBitmap: incbin "gfx/blokius-logo.bin"
     assert $-menuLogoBitmap=8*MENU_LOGO_WIDTH*MENU_LOGO_ROWS
