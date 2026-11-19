@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, SCREEN_FONT, ZX0, build_art, map_output
+from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -63,7 +63,7 @@ def star_force_music():
 
 
 def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None,
-            prototype_waves=False):
+            prototype_waves=False, solid_menu_logo=False):
     source = game / "main.asm"
     prefix, separator, rest = source.read_bytes().partition(b'\tinclude "hud.asm"')
     _, tail_start, tail = rest.partition(b"\tassert $<48830")
@@ -158,6 +158,9 @@ doSinScroll equ barrelScroll_Update
             shutil.copyfile(TESTS.parent / "game" / source_name, game / source_name)
         shutil.copyfile(ZX0 / "dzx0_standard.asm", game / "dzx0_standard.asm")
         build_art(game, sprite_dir=sprite_dir)
+        if solid_menu_logo:
+            bitmap = game / MENU_LOGO
+            bitmap.write_bytes(b"\xff" * bitmap.stat().st_size)
         font = (game / SCREEN_FONT).read_bytes()
         digits = "0123456789"
         game_over_text = GAME_OVER_TEXT + (("M TO MAIN MENU".center(16),) if menu else ())

@@ -7,15 +7,9 @@ MENU_LOGO_ATTRS equ #5800+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
 MENU_LOGO_PAIRS equ MENU_LOGO_WIDTH/2
 MENU_LOGO_LATE_PAIRS equ 9
 MENU_LOGO_EARLY_PAIRS equ MENU_LOGO_PAIRS-MENU_LOGO_LATE_PAIRS
-MENU_LOGO_PHASES equ 128
-
-    macro WRAP_MENU_LOGO_PATTERNS
-        ld a,h
-        sub iyl
-        and 3
-        add a,iyl
-        ld h,a
-    endm
+MENU_LOGO_PHASES equ 512
+MENU_LOGO_EARLY_X equ MENU_LOGO_WIDTH-2
+MENU_LOGO_LATE_X equ 2*MENU_LOGO_LATE_PAIRS-2
 
 drawMenuLogo:
     ld hl,menuLogoBitmap
@@ -35,67 +29,81 @@ drawMenuLogo:
     inc d
     dec a
     jr nz,.scanline
-    xor a
-    ld (menuLogoClock),a
-    ld (menuLogoPhase),a
+    ld hl,0
+    ld (menuLogoPhase),hl
     ret
 
-; Each four-page ring contains one parity of the moving pattern. A 16-byte
-; step advances one scanline along the ring.
+; Map strip position (phase + BC) to a right-to-left run of PUSH opcodes.
+menuLogoPatternStart:
+    ld hl,(menuLogoPhase)
+    add hl,bc
+    srl h : rr l
+    ld a,0
+    rla : add a,a
+    add a,high menuLogoPushPatterns
+    ld h,a
+    xor a : sub l
+    ld l,a
+    ret
+
+; Each pair of raster lines advances one source byte in the circular page.
+; LDI walks forwards through the reversed strip while PUSH paints right to left.
+    macro PATCH_MENU_LOGO_RUN dest,offset,pairs,stride,lines,step
+        ld bc,offset
+        call menuLogoPatternStart
+        ld de,dest
+        ld ixl,lines/2
+.row:
+        dup 2
+            push hl
+            dup pairs
+                ldi
+            edup
+            pop hl
+            dup step
+                dec l
+            edup
+            ex de,hl
+            ld bc,stride-pairs
+            add hl,bc
+            ex de,hl
+        edup
+        dec ixl
+        jr nz,.row
+    endm
+
 patchMenuLogoRows:
     ld a,(menuLogoPhase)
     and 1
-    add a,a : add a,a
-    add a,high menuLogoPushPatterns
-    ld iyl,a
-    ld a,(menuLogoPhase)
-    and #60
-    rlca : rlca : rlca
-    add a,iyl
-    ld h,a
-    ld a,(menuLogoPhase)
-    and #1e
     add a,a : add a,a : add a,a
-    ld l,a
-    push hl
-    ld de,menuLogoRaster+3
-    ld ixl,8*MENU_LOGO_ROWS
-.rasterRow:
-    dup MENU_LOGO_PAIRS
-        ldi
-    edup
-    inc hl : inc hl
-    WRAP_MENU_LOGO_PATTERNS
-    ; Skip the end-of-line padding and the next LD SP instruction.
-    ex de,hl
-    ld bc,7
-    add hl,bc
-    ex de,hl
-    dec ixl
-    jr nz,.rasterRow
-
-    pop hl
-    ld bc,MENU_LOGO_EARLY_PAIRS-16
-    add hl,bc
-    WRAP_MENU_LOGO_PATTERNS
-    ld de,menuLogoSeedCode+3
-    ld ixl,MENU_LOGO_ROWS
-.seedRow:
-    ; Take the previous line's late writes, which target this new row.
-    dup MENU_LOGO_LATE_PAIRS
-        ldi
-    edup
-    ld bc,8*16-MENU_LOGO_LATE_PAIRS
-    add hl,bc
-    WRAP_MENU_LOGO_PATTERNS
-    inc de : inc de : inc de
-    dec ixl
-    jr nz,.seedRow
+    ld e,a : ld d,0
+    ld hl,menuLogoInkPairs
+    add hl,de
+    ld (menuLogoOtherPalette+1),hl
+    ld de,8
+    add hl,de
+    ld de,menuLogoPalette
+    ld bc,8
+    ldir
+    ; The five rightmost pairs beat the beam. The left nine update the next line.
+    PATCH_MENU_LOGO_RUN menuLogoEarlyWrites,MENU_LOGO_EARLY_X,MENU_LOGO_EARLY_PAIRS,2*MENU_LOGO_LINE_BYTES,16,1
+menuLogoEarlyOdd:
+    PATCH_MENU_LOGO_RUN menuLogoEarlyWrites+MENU_LOGO_LINE_BYTES,MENU_LOGO_EARLY_X+1,MENU_LOGO_EARLY_PAIRS,2*MENU_LOGO_LINE_BYTES,16,1
+menuLogoLateEven:
+    PATCH_MENU_LOGO_RUN menuLogoLateWrites,MENU_LOGO_LATE_X+1,MENU_LOGO_LATE_PAIRS,2*MENU_LOGO_LINE_BYTES,16,1
+menuLogoLateOdd:
+    PATCH_MENU_LOGO_RUN menuLogoLateWrites+MENU_LOGO_LINE_BYTES,MENU_LOGO_LATE_X+2,MENU_LOGO_LATE_PAIRS,2*MENU_LOGO_LINE_BYTES,16,1
+menuLogoPatchSeed:
+    PATCH_MENU_LOGO_RUN menuLogoSeedCode+3,MENU_LOGO_LATE_X,MENU_LOGO_LATE_PAIRS,3+MENU_LOGO_LATE_PAIRS,MENU_LOGO_ROWS,4
     ret
 
 ; Seed the first scanline of each physical attribute row before the beam.
 seedMenuLogoRows:
     ld (menuLogoSeedStack+1),sp
+menuLogoOtherPalette:
+    ld sp,0
+    pop bc : pop de : pop hl : pop af
+    exx : ex af,af'
     ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af
 menuLogoSeedCode:
@@ -110,19 +118,18 @@ menuLogoSeedStack:
     ret
 
 advanceMenuLogoPhase:
-    ld hl,menuLogoClock
-    inc (hl)
-    ld a,(hl)
-    and 3
-    ret nz
-    ld a,(menuLogoPhase)
-    inc a
-    and MENU_LOGO_PHASES-1
-    ld (menuLogoPhase),a
+    ld hl,(menuLogoPhase)
+    inc hl
+    res 1,h
+    ld (menuLogoPhase),hl
     ret
 
-menuLogoClock: db 0
-menuLogoPhase: db 0
+menuLogoPhase: dw 0
+; Opposite parity first, then the parity needed for scanline zero.
+menuLogoInkPairs:
+    db #46,#42, #43,#42, #46,#45, #43,#45
+    db #42,#46, #42,#43, #45,#46, #45,#43
+    db #46,#42, #43,#42, #46,#45, #43,#45
     align 256
 menuLogoPushPatterns: incbin "gfx/blokius-logo-raster.bin"
-    assert $-menuLogoPushPatterns=16*MENU_LOGO_PHASES
+    assert $-menuLogoPushPatterns=2*MENU_LOGO_PHASES

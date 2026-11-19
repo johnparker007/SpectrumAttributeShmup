@@ -35,7 +35,9 @@ The [combined renderer experiment](projectile-integration.md#with-50-hz-playback
 
 ## Meadows Edge menu music
 
-The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the bottom border. The logo writes 28 attributes right to left every scanline. The left nine attribute pairs are written for the following scanline because the ULA has already fetched them. The top border prepares the writes for a ribbon of 64 fixed-colour, one-scanline bands. The ribbon scrolls up-left by half a scanline every four frames and repeats after 512 frames. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
+The title menu uses the archive's original 2,015-byte Meadows Edge PT3 and 1,617-byte tracker player in logical bank 3. The main menu calls it once per frame in the bottom border. The gameplay renderer is disabled throughout the menu. Choosing a level mutes the tracker while the ready screen loads the map. Gameplay initializes its packed AY player separately.
+
+The top border prepares 28 attribute cells per scanline for the logo. Each cell to the right samples the colour ribbon one scanline further along, so a band steps up one scanline every eight pixels. The ribbon advances one scanline every interrupt and wraps after 512 frames (about 10.2 seconds). Each stack write paints two different cells. The five rightmost pairs reach the screen before the ULA fetches them. The raster switches register sets to paint the other nine pairs for the following scanline. The menu test checks consecutive 50 Hz frames against the ribbon using both the logo artwork and a solid rectangle.
 
 ## Star Force gameplay music
 

@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+from random import Random
 import re
 import shutil
 import struct
@@ -17,16 +18,6 @@ LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
 MENU_LOGO = "gfx/blokius-logo.bin"
 MENU_LOGO_RASTER = "gfx/blokius-logo-raster.bin"
-MENU_LOGO_BANDS = (
-    0, 1, 2, 3, 0, 2, 3, 1,
-    2, 0, 3, 1, 2, 3, 0, 1,
-    3, 1, 2, 0, 3, 2, 1, 0,
-    2, 1, 3, 0, 1, 3, 2, 1,
-    0, 3, 2, 0, 1, 2, 3, 2,
-    1, 3, 0, 2, 1, 0, 3, 1,
-    2, 3, 0, 3, 2, 1, 0, 2,
-    3, 1, 0, 2, 3, 2, 0, 1,
-)
 DESTRUCTIBLE_TILE = 124
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
@@ -74,18 +65,29 @@ def logo_bitmap(source):
                  for value in rows[y * 28:(y + 1) * 28])
 
 
+def logo_bands():
+    """Alternate two pairs of bright inks so every neighbour differs, even at wrap."""
+    inks = ((0x42, 0x45), (0x46, 0x43))
+    rng = Random(0xB10)
+    return bytes(rng.choice(inks[i % 2]) for i in range(512))
+
+
 def logo_raster():
-    """Bake PUSH instructions for each position of the continuous colour ribbon."""
-    rows = bytearray()
+    """Index by parity and then by decreasing pairs, in stack write order."""
+    bands = logo_bands()
+    # BC, DE, HL and AF. The alternate register set holds each pair reversed.
+    push = {(0x42, 0x46): 0xC5, (0x42, 0x43): 0xD5,
+            (0x45, 0x46): 0xE5, (0x45, 0x43): 0xF5}
+    tables = bytearray()
     for parity in range(2):
-        for band in range(len(MENU_LOGO_BANDS)):
-            phase = 2 * band + parity
-            for pair in reversed(range(14)):
-                # The left nine pairs have already been fetched by the ULA.
-                position = (phase + 7 * pair) // 2 + (pair < 9)
-                rows.append(0xC5 + 16 * MENU_LOGO_BANDS[position % len(MENU_LOGO_BANDS)])
-            rows.extend((0, 0))
-    return bytes(rows)
+        page = bytearray()
+        for pair in range(256):
+            x = (parity - 2 * pair) % len(bands)
+            pair_inks = (bands[x], bands[(x + 1) % len(bands)])
+            page.append(push[pair_inks[::-1] if parity else pair_inks])
+        # A run of LDI instructions may cross the end of the page.
+        tables.extend(page * 2)
+    return bytes(tables)
 
 
 def convert_image(source, converter, output, size):

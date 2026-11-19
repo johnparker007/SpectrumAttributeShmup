@@ -15,12 +15,14 @@ def main():
     parser.add_argument("--assembler", type=Path, required=True)
     parser.add_argument("--archive", type=Path, default=ARCHIVE)
     parser.add_argument("--output-tap", type=Path, default=ARCHIVE.parent.parent / "build/game.tap")
+    parser.add_argument("--solid-menu-logo", action="store_true",
+                        help="Fill the logo rectangle to inspect all 28 raster cells")
     args = parser.parse_args()
     try:
         assembler = args.assembler.resolve(strict=True)
         with tempfile.TemporaryDirectory(prefix="shmup-build-") as scratch:
             game = build(args.archive.resolve(strict=True), assembler, Path(scratch))
-            install(game, assembler, live=True)
+            install(game, assembler, live=True, solid_menu_logo=args.solid_menu_logo)
             args.output_tap.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(game / "main.tap", args.output_tap)
         print(f"Built {args.output_tap.resolve()}")

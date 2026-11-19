@@ -5,7 +5,7 @@ menuLogoFrame:
     ld (menuLogoHostStack+1),sp
     call patchMenuLogoRows
     call seedMenuLogoRows
-    ld bc,3835
+    ld bc,1952
     call DELAY
     ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af
@@ -13,16 +13,27 @@ menuLogoFrame:
 menuLogoRaster:
     dup 8*MENU_LOGO_ROWS, line
         ld sp,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH+32*(line/8)
-        dup MENU_LOGO_PAIRS
+        if line=0
+menuLogoEarlyWrites:
+        endif
+        dup MENU_LOGO_EARLY_PAIRS
+            push bc
+        edup
+        exx
+        ex af,af'
+        if line=0
+menuLogoLateWrites:
+        endif
+        dup MENU_LOGO_LATE_PAIRS
             push bc
         edup
         ; Pad one contended 28-byte transfer to a 228-T-state scanline.
         jr $+2
-        inc sp
         nop
     edup
 
 menuLogoRasterEnd:
+MENU_LOGO_LINE_BYTES equ (menuLogoRasterEnd-menuLogoRaster)/(8*MENU_LOGO_ROWS)
 menuLogoHostStack:
     ld sp,0
     ld bc,34655
@@ -37,4 +48,4 @@ menuLogoFrameDone:
     ei
     ret
 
-menuLogoPalette: db #42,#42,#46,#46,#45,#45,#43,#43
+menuLogoPalette: ds 8
