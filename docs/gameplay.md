@@ -43,9 +43,9 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 
 ## Reproduce
 
-Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (**0**) to start Level 1 with that controller. A held fire button must be released when returning to the menu. **1–8** start a test map with the selected controller. The menu reserves those digits for level selection and **R** for redefining keys. Sinclair fire takes priority over its direction keys on the same keyboard row. Maps 3–8 rearrange scenery from the original test map and share its tile sheet. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
+Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (**0**) to start Level 1 with that controller. A held fire button must be released when returning to the menu. **1–9** start a test map with the current controller. Press **R** to redefine keys. Sinclair fire takes priority over its direction keys on the same keyboard row. The test maps share a tile sheet. Level 9 adds destructible scenery and shortens the gap between green and yellow waves. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
 
-| Map | Packed bytes | 128K unpack T-states | +2A unpack T-states |
+| Map | Packed bytes | 128K family unpack T-states | +2A unpack T-states |
 | --- | ---: | ---: | ---: |
 | 1 | 463 | 142,338 | 147,434 |
 | 2 | 477 | 142,980 | 148,038 |
@@ -55,8 +55,9 @@ Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (
 | 6 | 452 | 140,561 | 145,957 |
 | 7 | 466 | 142,336 | 147,389 |
 | 8 | 465 | 143,157 | 148,265 |
+| 9 | 485 | 144,624 (+2) | 149,625 |
 
-`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all eight keys on both models, screen text, sample map data, bank restoration, renderer startup, wave entrances, the yellow retreat and firing stages, and green shot aiming and speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
+`tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all nine level keys on both models, screen text, sample map data, bank restoration, renderer startup, wave entrances, the yellow retreat and firing stages, and green shot aiming and speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 
 ```powershell
 python tools/verify_gameplay.py --archive <blokius-wip.zip> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --output-tap <playable.tap>

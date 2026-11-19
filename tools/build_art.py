@@ -13,7 +13,7 @@ from verify_zesarux_raster import run
 
 ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
-LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
+LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 10)))
 SCREEN_FONT = "font/arcade-8.bin"
 MENU_LOGO = "gfx/blokius-logo.bin"
 MENU_LOGO_RASTER = "gfx/blokius-logo-raster.bin"

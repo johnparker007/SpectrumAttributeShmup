@@ -12,7 +12,7 @@ The playable build reads these files on every build.
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` | Test map 1 for Tiled, 256 by 6 tiles |
 | `maps/level-2.tmx` | Test map 2 for Tiled, 256 by 6 tiles |
-| `maps/level-3.tmx` through `level-8.tmx` | Test maps 3–8 for Tiled, 256 by 6 tiles |
+| `maps/level-3.tmx` through `level-9.tmx` | Test maps 3–9 for Tiled, 256 by 6 tiles |
 | `maps/tileSet.tsx` | Tiled tileset linked to `gfx/tileSet.png` |
 | `maps/destructible.tsx` | Tiled tileset for the destructible target and its explosion |
 | `gfx/destructible.png` | Four 8×8 tiles laid out as the intact target followed by three explosion frames |
@@ -48,7 +48,7 @@ python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
 
 The playable TAP is written to `build/game.tap`. Graphics are converted automatically. To inspect the converted graphics on their own, run `python tools/build_art.py`. Converted files appear in `build/art`.
 
-The build compresses all eight maps with the bundled ZX0 tool. Press **1–8** on the title screen to choose a level. Enter during gameplay restarts that level. Each difficulty uses the same green sine artwork.
+The build compresses all nine maps with the bundled ZX0 tool. Press **1–9** on the title screen to choose a test level. Enter during gameplay restarts that level. Each difficulty uses the same green sine artwork.
 
 The original Windows sprite and tile converters are included in `gfx`. Python 3 and Windows are required for this conversion workflow. The game build also needs SjASMPlus. The headless verifier additionally needs ZEsarUX.
 

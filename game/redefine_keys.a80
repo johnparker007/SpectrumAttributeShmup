@@ -101,8 +101,6 @@ applyCustomKeys:
     ld hl,readCustomControls
     ld (menuReaders),hl
     ld (controlReader+1),hl
-    xor a                        ; select Keyboard after a complete definition
-    ld (menuControl),a
     ret
 
 makeKeyReadPlan:

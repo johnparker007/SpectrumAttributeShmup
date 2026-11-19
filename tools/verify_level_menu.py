@@ -113,14 +113,9 @@ def verify_choice(emulator, game, model, choice):
     def peek(address):
         return f"PEEK({address:04X}H)"
 
-    input_page = 0x11 if model == "128k" else 0x14
-    controls, reader = {
-        2: ("j" * 8, "readKempston"),
-        3: ("s" * 8, "readSinclair"),
-        4: ("s" * 4 + "k" * 4, "readControls"),
-    }.get(choice, ("", "readControls"))
+    input_page = 0x11 if model in ("128k", "P2") else 0x14
     expect_at("menuWait", f"PEEKW({s['intProc'] + 1:04X}H)", s["nullProc"])
-    expect_at("firstFrameLogic", f"PEEKW({s['controlReader'] + 1:04X}H)", s[reader])
+    expect_at("firstFrameLogic", f"PEEKW({s['controlReader'] + 1:04X}H)", s["readControls"])
     expect_at("levelUnpackBegin", f"PEEKW({s['intProc'] + 1:04X}H)", s["nullProc"])
     expect_at("levelUnpackBegin", "HL", s[f"packedLevel{choice}"])
     expect_at("levelUnpackBegin", peek(s["pageTable"] + 1), input_page)
@@ -134,7 +129,7 @@ def verify_choice(emulator, game, model, choice):
     # The first gameplay frame has already drawn the level, lives and score.
     for column in range(0, 32, 2):
         expect_at("firstFrameLogic", f"PEEKW({0x50E0 + column:04X}H)", 0)
-    for name, address, char in (("menuWait", 0x4841, "P"), ("levelUnpackBegin", 0x4897, str(choice))):
+    for name, address, char in (("menuWait", 0x4846, "P"), ("levelUnpackBegin", 0x4897, str(choice))):
         for row in range(8):
             expect_at(name, peek(address + row * 256), font[(ord(char) - 32) * 8 + row])
     for address in (0x50E0, 0xD0E0):
@@ -151,7 +146,7 @@ def verify_choice(emulator, game, model, choice):
         expect_at("levelUnpackEnd", f"PEEKW({address:04X}H)", int.from_bytes(expected[offset:offset + 2], "little"))
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
     spool = game / f"menu-{model}-{choice}.txt"
-    spool.write_text(controls + str(choice) * 80, encoding="ascii")
+    spool.write_text(str(choice) * 80, encoding="ascii")
     boot_log = breakpoint_log(emulator, game / "main.tap", model, 20, watch,
                               fast_autoload=True, keyboard_spool=spool)
     hits = {}
@@ -326,11 +321,11 @@ def verify_redefined_keys(emulator, game, model):
                            for index, offset in enumerate((11, 29, 47)))
     watch = [(capture, "C"), (apply, "TSTATESP"), (select, "A"), (controls, "A"),
              (restart, "TSTATESP"), (halt1, "TSTATESP"), (halt2, "TSTATESP"),
-             (reader, f"PEEKW({s['controlReader'] + 1:04X}H)+PEEK({s['menuControl']:04X}H)*65536"),
+             (reader, f"PEEKW({s['controlReader'] + 1:04X}H)"),
              (cached, row_reloads)]
     spool = game / f"redefine-{model}.txt"
     # Ignore M and a second Z, then cancel a second definition after pressing A.
-    spool.write_bytes(b"n" * 45 + b"srmzzxasl" + b"b" * 5 + b"ra\r" + b"b" * 5 + b"sk8"
+    spool.write_bytes(b"n" * 45 + b"rmzzxasl" + b"b" * 5 + b"ra\r" + b"b" * 5 + b"8"
                       + b"b" * 12 + b"".join(bytes((key,)) * 6 for key in b"zxasl")
                       + b"\r" + b"b" * 3 + b"z" * 6 + b"b" * 55)
     log = breakpoint_log(emulator, game / "main.tap", model, 44, watch,

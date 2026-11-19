@@ -24,11 +24,10 @@ GOLD_BAR_TOP, GOLD_BAR_BOTTOM = 8, 51
 LOGO_LINE_SHIFT = 8 * LINE_TSTATES
 TOP_BAR_START = 15950
 COPPER_MENU_TEXT = {
-    10: " PRESS FIRE TO START   1-8 TEST",
-    16: ">K KEYBOARD     J KEMPSTON",
-    18: " S SINCLAIR     R REDEFINE KEYS",
+    10: "      PRESS FIRE TO START",
+    16: "        1-9 TEST LEVELS",
+    18: "        R REDEFINE KEYS",
 }
-COPPER_CONTROL_MARKS = {16: {0, 15}, 18: {0}}
 PROFILES = {
     # Contention start, wait pattern and calibrated first instruction T-state.
     "128k": (16185, (6, 5, 4, 3, 2, 1, 0, 0), 16110),
@@ -261,7 +260,7 @@ def compile_copper(model):
             code.append("push hl")
 
     for row, text in COPPER_MENU_TEXT.items():
-        cells = {x for x, char in enumerate(text) if char != " "} | COPPER_CONTROL_MARKS.get(row, set())
+        cells = {x for x, char in enumerate(text) if char != " "}
         visible = (cells,) * 8 + (set(),)
         program, finish = schedule(model, 0, visible, copper=True)
         row_time = (row * 8 - 8) * LINE_TSTATES

@@ -13,19 +13,18 @@ showLevelMenu:
 drawLevelMenu:
     call clearMenuScreen
     call drawMenuLogo
+    ld hl,menuStartPrompt
+    ld de,#4846               ; row 10, near centre of the character grid
+    call drawScreenText
     ld hl,menuLevels
-    ld de,#4841               ; row 10, column 1
+    ld de,#5008               ; row 16
     call drawScreenText
-    ld hl,menuControlChoices
-    ld de,#5001               ; row 16
-    call drawScreenText
-    ld hl,menuSinclairChoice
-    ld de,#5041               ; row 18
+    ld hl,menuRedefinePrompt
+    ld de,#5048               ; row 18
     call drawScreenText
     xor a
     ld (menuFireArmed),a
-    ld a,(menuControl)
-    jp showControlMark
+    ret
 
 menuWait:
     call menuLogoFrame
@@ -53,13 +52,12 @@ menuWait:
     bit 0,a                   ; Sinclair fire (0) wins over its direction keys.
     jr z,menuStartOnFire
     ld d,a
-    and #1c
-    cp #1c
+    and #1e
+    cp #1e
     jr z,.fire
     srl d
-    srl d
-    ld a,'8'
-    ld b,3
+    ld a,'9'
+    ld b,4
 .rightKeys:
     srl d
     jr nc,menuSelected
@@ -80,7 +78,6 @@ menuKempstonFire:
     jr z,menuStartOnFire
     ld a,1
     ld (menuFireArmed),a
-    call pollMenuControls
     jr menuWait
 
 menuStartOnFire:
@@ -178,39 +175,8 @@ menuMusicRestore:
     ei
     ret
 
-pollMenuControls:
-    ld bc,#bffe               ; Enter, L, K, J, H
-    in a,(c)
-    bit 2,a
-    ld e,0
-    jr z,selectControls
-    inc e
-    bit 3,a
-    jr z,selectControls
-    ld b,#fd                  ; A, S, D, F, G
-    in a,(c)
-    bit 1,a
-    ret nz
-    inc e
-selectControls:
-    ld a,(menuControl)
-    cp e
-    ret z
-    push de
-    call controlMarkAddress
-    ld hl,menuNoMark
-    call drawScreenText
-    pop de
-    call setMenuControl
-    ld a,(menuControl)
-showControlMark:
-    call controlMarkAddress
-    ld hl,menuMark
-    jp drawScreenText
-
 setMenuControl:
     ld a,e
-    ld (menuControl),a
     add a,a
     ld e,a
     ld d,0
@@ -220,17 +186,6 @@ setMenuControl:
     inc hl
     ld b,(hl)
     ld (controlReader+1),bc
-    ret
-
-controlMarkAddress:
-    add a,a
-    ld e,a
-    ld d,0
-    ld hl,menuMarkAddresses
-    add hl,de
-    ld e,(hl)
-    inc hl
-    ld d,(hl)
     ret
 
 clearMenuScreen:
@@ -248,14 +203,10 @@ clearMenuScreen:
     ldir
     ret
 
-menuLevels: db "PRESS FIRE TO START   1-8 TEST",0
-menuControlChoices: db "K KEYBOARD     J KEMPSTON",0
-menuSinclairChoice: db "S SINCLAIR     R REDEFINE KEYS",0
-menuMark: db ">",0
-menuNoMark: db " ",0
-menuControl: db 0
+menuStartPrompt: db "PRESS FIRE TO START",0
+menuLevels: db "1-9 TEST LEVELS",0
+menuRedefinePrompt: db "R REDEFINE KEYS",0
 menuFireArmed: db 0
-menuMarkAddresses: dw #5000,#500f,#5040
 menuReaders: dw readControls,readKempston,readSinclair
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "

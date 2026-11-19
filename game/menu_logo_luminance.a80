@@ -188,3 +188,8 @@ stepMenuStarCrossByte:
     xor (hl)
     ld (hl),a
     ret
+
+; Keep the odd-frame group in fixed RAM with the raster.
+stepMenuStarsOdd:
+    MENU_STAR_ODD_LAYOUT 0
+    ret

@@ -25,6 +25,13 @@ star:
         endif
     endm
 
+    macro MENU_STAR_ODD_LAYOUT initialise
+        MENU_STAR menuStar14,40,60,initialise
+        MENU_STAR menuStar15,211,69,initialise
+        MENU_STAR menuStar16,172,114,initialise
+        MENU_STAR menuStar17,150,162,initialise
+    endm
+
     macro MENU_STAR_LAYOUT initialise
         MENU_STAR menuStar0,43,63,initialise
         MENU_STAR menuStar1,136,94,initialise
@@ -42,19 +49,15 @@ star:
             assert MENU_LOGO_PHASES%2=0
             ld a,(menuLogoPhase)
             and 1
-            jp nz,menuStar14
+            jp nz,stepMenuStarsOdd
         endif
         MENU_STAR menuStar10,89,75,initialise
         MENU_STAR menuStar11,199,97,initialise
         MENU_STAR menuStar12,26,117,initialise
         MENU_STAR menuStar13,149,157,initialise
-        if !initialise
-            ret
+        if initialise
+            MENU_STAR_ODD_LAYOUT 1
         endif
-        MENU_STAR menuStar14,40,60,initialise
-        MENU_STAR menuStar15,211,69,initialise
-        MENU_STAR menuStar16,172,114,initialise
-        MENU_STAR menuStar17,150,162,initialise
     endm
 
 stepMenuStars:
