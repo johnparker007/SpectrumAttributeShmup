@@ -175,7 +175,7 @@ def schedule(model, phase, visible, *, copper=False):
 
 
 def compile_gold_bar(model, scanline, start, end):
-    origin, _, _ = PROFILES[model]
+    origin, waits, _ = PROFILES[model]
     code = []
     time = start
 
@@ -193,6 +193,12 @@ def compile_gold_bar(model, scanline, start, end):
             code.append(f"db {','.join(map(str, padding(cycles)))}")
         time = target
 
+    def sync_at(sample):
+        nonlocal time
+        advance(sample - 10)  # Opcode and address fetches precede the RAM read.
+        code.append("ld a,(#5800)")
+        time = attribute_write_end(sample, origin, waits)
+
     # The shadow screen supplies the yellow and white lines. The normal
     # screen supplies the red edges and the black after the bar.
     beam = origin + (scanline - 8) * LINE_TSTATES
@@ -207,6 +213,14 @@ def compile_gold_bar(model, scanline, start, end):
         if y in (1, len(GOLD_BAR) - 1):
             code.extend((f"ld a,{24 if y == 1 else 16}", "out (c),a"))
             time += 19
+        if model == "plus" and scanline == GOLD_BAR_TOP and y == len(GOLD_BAR) - 1:
+            # Near the end of contention, early arrivals wait while late
+            # arrivals run freely. Two such reads narrow the window to one
+            # wait group, and the third read locks it to a single cycle.
+            sync_at(line + 122)
+    if model == "plus" and scanline == GOLD_BAR_TOP:
+        sync_at(line + 130)
+        sync_at(line + LINE_TSTATES + 99)
     advance(end)
     return code
 
