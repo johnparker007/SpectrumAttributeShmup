@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, LUMINANCE_BANDS
+from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, GOLD_BAR, LUMINANCE_BANDS
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -18,7 +18,7 @@ from verify_blokius_integration import (
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
 from verify_luminance_writes import verify_luminance_writes
-from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, WIDTH, capture_video, paper_row
+from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, PAPER_X, PAPER_Y, WIDTH, capture_video, paper_row
 
 
 def verify_logo_video(emulator, game, model, frames_to_check=32):
@@ -53,10 +53,15 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
 
     phases = {b"".join(logo_rows(phase)): phase for phase in range(s["MENU_LOGO_PHASES"])}
     copper_rows = {}
+    gold_rows = {}
     if "menuCopperRows" in s:
         # Include the infrequent high-cost music ticks at steady state.
         frames_to_check = max(frames_to_check, 360)
         font = (game / SCREEN_FONT).read_bytes()
+        for start in (8, 56):
+            for y, colour in enumerate(GOLD_BAR):
+                edge = ink(colour & 7) * PAPER_X
+                gold_rows[start + y] = edge + ink(colour) * PAPER_WIDTH + edge
         for row, line in COPPER_MENU_TEXT.items():
             for y, colour in enumerate(COPPER_BANDS):
                 attributes = (font[8 * (ord(char) - 32) + y] for char in line.ljust(32))
@@ -81,6 +86,10 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
             for y, expected in copper_rows.items():
                 if paper_row(frame, y) != expected:
                     raise ValueError(f"{model}: menu text shading or glyph mismatch on scanline {y}")
+            for y, expected in gold_rows.items():
+                start = (PAPER_Y + y) * WIDTH * 3
+                if frame[start:start + WIDTH * 3] != expected:
+                    raise ValueError(f"{model}: gold bar mismatch on scanline {y}")
             previous = phase
     video.unlink()
 

@@ -7,13 +7,13 @@ menuLogoRasterExit:
 menuLogoSeedExit:
     jp menuLogoSeedStack
     assert menuLogoRasterExit=#8003 && menuLogoSeedExit=#8006
-    assert MENU_LOGO_ATTRS=#5822 && MENU_LOGO_WIDTH=28 && MENU_LOGO_ROWS=4
+    assert MENU_LOGO_ATTRS=#5842 && MENU_LOGO_WIDTH=28 && MENU_LOGO_ROWS=4
 MENU_LOGO_PREFIX equ 64
 MENU_LOGO_PROGRAM_SIZE equ 960
 menuCopperRows equ attrBuffer+MENU_LOGO_PROGRAM_SIZE
-menuCopperStack equ menuCopperRows+1024
-    assert menuCopper128SourceEnd-menuCopper128Source+16<=1024
-    assert menuCopperPlusSourceEnd-menuCopperPlusSource+16<=1024
+menuCopperStack equ menuCopperRows+2000
+    assert menuCopper128SourceEnd-menuCopper128Source+16<=2000
+    assert menuCopperPlusSourceEnd-menuCopperPlusSource+16<=2000
     assert menuCopperStack<=renderTilesList
 
 initMenuCopper:
@@ -21,10 +21,13 @@ initMenuCopper:
     cp 159
     ld hl,menuCopper128Source
     ld bc,menuCopper128SourceEnd-menuCopper128Source
+    ld de,menuCopperRows+menuGold128Source-menuCopper128Source
     jr z,.copy
     ld hl,menuCopperPlusSource
     ld bc,menuCopperPlusSourceEnd-menuCopperPlusSource
+    ld de,menuCopperRows+menuGoldPlusSource-menuCopperPlusSource
 .copy:
+    ld (menuLogoTopBar+1),de
     ld de,menuCopperRows
     ldir
     ret
@@ -32,12 +35,12 @@ initMenuCopper:
 runLuminanceFrame:
     di
     ld hl,luminance128Programs
-    ld bc,655
+    ld bc,595
     ld a,(2899)
     cp 159                         ; 128K / grey +2 ROM identifier
     jr z,.selectPhase
     ld hl,luminancePlusPrograms
-    ld bc,663
+    ld bc,604
 .selectPhase:
     ld (menuLogoDelay+1),bc
     ld a,(menuLogoPhase)
@@ -85,13 +88,31 @@ menuLogoCopySource:
     xor a
     call swapPage
 menuLogoDelay:
-    ld bc,0                      ; Wait after the fixed-size top-border copy.
+    ld bc,0
     call DELAY
+menuLogoTopBar:
+    jp 0
+menuLogoGate:
     ld a,(#5800)                  ; Contention aligns the first raster instruction.
     ld sp,menuLogoPalette
     ; Seed setup has already loaded the alternate colour pairs.
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
     jp attrBuffer
+
+seedMenuGoldBars:
+    ld (menuGoldSeedStack+1),sp
+    ld hl,#3232
+    ld sp,#5840
+    dup 16
+        push hl
+    edup
+    ld sp,#5900
+    dup 16
+        push hl
+    edup
+menuGoldSeedStack:
+    ld sp,0
+    ret
 
 menuLogoHostStack:
     ld sp,0
