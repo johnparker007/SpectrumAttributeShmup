@@ -30,7 +30,7 @@ initMenuCopper:
     ld (menuLogoTopBar+1),de
     ld de,menuCopperRows
     ldir
-    ret
+    jp initMenuStars
 
 runLuminanceFrame:
     di
@@ -112,6 +112,7 @@ menuCopperHostStack:
     call menuTrackTick
     xor a
     call swapPage
+    call stepMenuStars
     ld hl,menuLogoPhase
     inc (hl)
     ld a,(hl)
@@ -161,3 +162,29 @@ clearMenuRaster:
 
 menuLogoPhase: dw 0
 menuLogoPalette: incbin "gfx/luminance-inks.bin"
+
+initMenuStars:
+    MENU_STAR_LAYOUT 1
+    ret
+
+; C is the old pixel mask, HL its bitmap address and DE the address
+; operand to update. Moving left out of column zero wraps within the row.
+stepMenuStarCrossByte:
+    ld a,c
+    xor (hl)
+    ld (hl),a
+    dec l
+    ld a,l
+    and 31
+    cp 31
+    jr nz,.save
+    ld a,l
+    add a,32
+    ld l,a
+.save:
+    ld a,l
+    ld (de),a
+    ld a,1
+    xor (hl)
+    ld (hl),a
+    ret

@@ -1,0 +1,62 @@
+    ; Each star keeps its current screen address and bit in the two
+    ; immediate loads. Repaint those positions after a menu redraw.
+    macro MENU_STAR star,x,y,initialise
+        if initialise
+            ld hl,(star+1)
+            ld a,(star+4)
+            ld (hl),a
+        else
+star:
+            ld hl,#4000+(y&#c0)*32+(y&7)*256+(y&#38)*4+x/8
+            ld a,#80>>(x&7)
+            ld c,a
+            rlca
+            ld (star+4),a
+            jr nc,.sameByte
+            ld de,star+1
+            call stepMenuStarCrossByte
+            jr .done
+.sameByte:
+            ; Within the byte, one XOR erases the old bit and sets the new bit.
+            xor c
+            xor (hl)
+            ld (hl),a
+.done:
+        endif
+    endm
+
+    macro MENU_STAR_LAYOUT initialise
+        MENU_STAR menuStar0,43,63,initialise
+        MENU_STAR menuStar1,136,94,initialise
+        MENU_STAR menuStar2,206,105,initialise
+        MENU_STAR menuStar3,79,138,initialise
+        MENU_STAR menuStar4,185,174,initialise
+        MENU_STAR menuStar5,8,65,initialise
+        MENU_STAR menuStar6,36,107,initialise
+        MENU_STAR menuStar7,252,120,initialise
+        MENU_STAR menuStar8,29,141,initialise
+        MENU_STAR menuStar9,98,183,initialise
+
+        ; The phase count is even, so the two slow groups alternate at wrap.
+        if !initialise
+            assert MENU_LOGO_PHASES%2=0
+            ld a,(menuLogoPhase)
+            and 1
+            jp nz,menuStar14
+        endif
+        MENU_STAR menuStar10,89,75,initialise
+        MENU_STAR menuStar11,199,97,initialise
+        MENU_STAR menuStar12,26,117,initialise
+        MENU_STAR menuStar13,149,157,initialise
+        if !initialise
+            ret
+        endif
+        MENU_STAR menuStar14,40,60,initialise
+        MENU_STAR menuStar15,211,69,initialise
+        MENU_STAR menuStar16,172,114,initialise
+        MENU_STAR menuStar17,150,162,initialise
+    endm
+
+stepMenuStars:
+    MENU_STAR_LAYOUT 0
+    ret

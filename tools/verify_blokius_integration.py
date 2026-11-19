@@ -213,6 +213,7 @@ doSinScroll equ barrelScroll_Update
                 defines.append("LUMINANCE_LOGO")
                 build_luminance(game / "gfx", (game / MENU_LOGO).read_bytes())
                 shutil.copyfile(TESTS.parent / "game" / "menu_logo_luminance.a80", game / "menu_logo_luminance.a80")
+                shutil.copyfile(TESTS.parent / "game" / "menu_stars.a80", game / "menu_stars.a80")
         if audio is None:
             defines.append("LIVE_SFX")
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
