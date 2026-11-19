@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="32" viewBox="0 0 224 32">
+  <title>BLOKIUS — Interceptor</title>
+  <rect width="224" height="32" fill="black"/>
+  <g fill="white" fill-rule="evenodd" transform="matrix(.94 0 -.32 1 15 2)">
+    <path id="B" d="M0 0H30L35 5V11L30 14L34 17V23L28 28H2V9H10V22H23L25 20V17H12V11H24L26 9V6H7Z"/>
+    <path id="L" d="M39 0H48V21H65L59 28H39Z"/>
+    <path id="O" d="M73 0H91L97 6V21L90 28H72L66 22V7ZM78 6L75 9V19L78 22H86L89 19V9L86 6Z"/>
+    <path id="K" d="M101 0H110V11H114L125 0H137L121 15L132 28H120L112 18H110V28H101Z"/>
+    <path id="I" d="M140 0H149L146 5V28H137V5Z"/>
+    <path id="U" d="M153 0H162V19L165 22H173L176 19V0H185V21L178 28H160L153 21Z"/>
+    <path id="S" d="M195 0H213L208 6H198L195 9V11H205L210 16V22L204 28H182L188 22H199L201 20V18H191L186 13V8Z"/>
+  </g>
+</svg>

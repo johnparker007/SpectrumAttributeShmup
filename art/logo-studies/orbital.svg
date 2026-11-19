@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="32" viewBox="0 0 224 32">
+  <title>BLOKIUS — Orbital</title>
+  <rect width="224" height="32" fill="black"/>
+  <g transform="translate(8 1) scale(0.93488 1.15385)" fill="white" fill-rule="evenodd">
+    <path id="B" d="M0 0H20Q30 0 30 7Q30 11 25 13Q31 14 31 19Q31 26 21 26H0ZM8 6V10H19Q22 10 22 8Q22 6 19 6ZM8 16V20H20Q23 20 23 18Q23 16 20 16Z"/>
+    <path id="L" d="M34 0H42V15Q42 20 48 20H61L57 26H47Q34 26 34 16Z"/>
+    <g id="O">
+      <path d="M82 0Q99 0 99 13Q99 26 82 26Q65 26 65 13Q65 0 82 0ZM82 6Q73 6 73 13Q73 20 82 20Q91 20 91 13Q91 6 82 6Z"/>
+      <path fill="black" d="M61 20L101 3V8L61 25Z"/>
+      <path d="M59 23L101 5L96 10L62 25H55Z"/>
+    </g>
+    <path id="K" d="M103 0H111V11Q120 10 126 0H136Q132 8 122 14L137 26H125L114 17H111V26H103Z"/>
+    <path id="I" d="M139 0H147V26H139Z"/>
+    <path id="U" d="M152 0H160V14Q160 20 168 20Q176 20 176 14V0H184V15Q184 26 168 26Q152 26 152 15Z"/>
+    <path id="S" d="M215 0L211 6H198Q194 6 194 8Q194 10 198 10H204Q215 10 215 18Q215 26 204 26H184L188 20H203Q207 20 207 18Q207 16 203 16H197Q186 16 186 8Q186 0 198 0Z"/>
+  </g>
+</svg>
