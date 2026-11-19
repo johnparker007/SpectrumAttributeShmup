@@ -143,16 +143,10 @@ menuLogoPushPatterns: incbin "gfx/blokius-logo-raster.bin",24
     endif
 
     ifdef LUMINANCE_LOGO
-MENU_COPPER_FIRST_ROW equ MENU_LOGO_TOP+MENU_LOGO_ROWS
-MENU_COPPER_ATTR equ #5800+32*MENU_COPPER_FIRST_ROW
-MENU_COPPER_ROWS equ 24-MENU_COPPER_FIRST_ROW
-MENU_COPPER_ROW_BYTES equ 16*3+1
-menuCopperSource:
-    dup MENU_COPPER_ROWS,row
-        dup 16,pair
-            ld (MENU_COPPER_ATTR+32*row+2*pair),hl
-        edup
-        ret
-    edup
-menuCopperSourceEnd:
+menuCopper128Source:
+    include "gfx/copper-128k.a80"
+menuCopper128SourceEnd:
+menuCopperPlusSource:
+    include "gfx/copper-plus.a80"
+menuCopperPlusSourceEnd:
     endif

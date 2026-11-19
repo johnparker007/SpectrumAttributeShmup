@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from menu_luminance import LUMINANCE_BANDS
+from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, LUMINANCE_BANDS
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -56,14 +56,9 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
     if "menuCopperRows" in s:
         # Include the infrequent high-cost music ticks at steady state.
         frames_to_check = max(frames_to_check, 360)
-        text = {
-            10: "      1-8  START LEVEL 1-8",
-            16: ">K KEYBOARD     J KEMPSTON",
-            18: " S SINCLAIR     R REDEFINE KEYS",
-        }
         font = (game / SCREEN_FONT).read_bytes()
-        for row, line in text.items():
-            for y, colour in enumerate((0x45, 0x45, 0x47, 0x47, 0x45, 0x45, 0x41, 0x41)):
+        for row, line in COPPER_MENU_TEXT.items():
+            for y, colour in enumerate(COPPER_BANDS):
                 attributes = (font[8 * (ord(char) - 32) + y] for char in line.ljust(32))
                 copper_rows[8 * row + y] = b"".join(ink(colour) if mask & (128 >> bit) else bytes(3)
                                                     for mask in attributes for bit in range(8))

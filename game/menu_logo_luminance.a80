@@ -10,17 +10,22 @@ menuLogoSeedExit:
     assert MENU_LOGO_ATTRS=#5822 && MENU_LOGO_WIDTH=28 && MENU_LOGO_ROWS=4
 MENU_LOGO_PREFIX equ 64
 MENU_LOGO_PROGRAM_SIZE equ 960
-MENU_COPPER_CYAN equ #4545
-MENU_COPPER_WHITE equ #4747
-MENU_COPPER_BLUE equ #4141
 menuCopperRows equ attrBuffer+MENU_LOGO_PROGRAM_SIZE
-menuCopperStack equ menuCopperRows+menuCopperSourceEnd-menuCopperSource+16
+menuCopperStack equ menuCopperRows+1024
+    assert menuCopper128SourceEnd-menuCopper128Source+16<=1024
+    assert menuCopperPlusSourceEnd-menuCopperPlusSource+16<=1024
     assert menuCopperStack<=renderTilesList
 
 initMenuCopper:
-    ld hl,menuCopperSource
+    ld a,(2899)
+    cp 159
+    ld hl,menuCopper128Source
+    ld bc,menuCopper128SourceEnd-menuCopper128Source
+    jr z,.copy
+    ld hl,menuCopperPlusSource
+    ld bc,menuCopperPlusSourceEnd-menuCopperPlusSource
+.copy:
     ld de,menuCopperRows
-    ld bc,menuCopperSourceEnd-menuCopperSource
     ldir
     ret
 
@@ -70,8 +75,6 @@ runLuminanceFrame:
     ld (menuLogoCopySource+1),hl
     xor a
     call swapPage
-    ld hl,MENU_COPPER_CYAN
-    call menuCopperRows           ; Preset cyan for the first row under the logo.
     ei
 menuLogoWaitRaster:
     halt
@@ -98,67 +101,11 @@ menuLogoHostStack:
     ld sp,0
     ld (menuCopperHostStack+1),sp
     ld sp,menuCopperStack
-    ld ix,menuCopperRows
-    ld de,MENU_COPPER_ROW_BYTES
-    ld iy,MENU_COPPER_ROWS
-    ld a,(2899)
-    cp 159
-    jp z,copper128
-    jp copperPlus
-
-    macro COPPER_PAD cycles
-copperPadCycles = cycles
-        if copperPadCycles%2
-            ld a,0
-copperPadCycles = copperPadCycles-7
-        endif
-        if copperPadCycles%4
-            inc bc
-copperPadCycles = copperPadCycles-6
-        endif
-        dup copperPadCycles/4
-            nop
-        edup
-    endm
-
-    ; The 32 cells are written left to right between fetches, with one start
-    ; every 456 T-states. The first cyan band was set in the bottom border.
-    macro COPPER_ROWS initial,gap
-        ld bc,initial
-        call DELAY
-        jr .white
-.cyan:
-        ld hl,MENU_COPPER_CYAN
-        call copperStoreRow
-        COPPER_PAD gap
-.white:
-        ld hl,MENU_COPPER_WHITE
-        call copperStoreRow
-        COPPER_PAD gap
-        ld hl,MENU_COPPER_CYAN
-        call copperStoreRow
-        COPPER_PAD gap
-        ld hl,MENU_COPPER_BLUE
-        call copperStoreRow
-        add ix,de
-        dec iyl
-        jp z,menuCopperDone
-        COPPER_PAD (gap-45)
-        jr .cyan
-    endm
-
-copper128:
-    COPPER_ROWS 173,83           ; Row store takes 328 T-states with contention.
-copperPlus:
-    COPPER_ROWS 161,74           ; Row store takes 337 T-states with contention.
-copperStoreRow:
-    jp (ix)
+    jp menuCopperRows
 
 menuCopperDone:
 menuCopperHostStack:
     ld sp,0
-    ld bc,200
-    call DELAY
     call menuMusicPage
     call menuTrackTick
     xor a
