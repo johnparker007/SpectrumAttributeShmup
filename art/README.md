@@ -29,7 +29,7 @@ Blokius Arcade 8 adapts ASCII 32–95 from Cody “CodeMan38” Boisclair’s Pr
 
 ## Build
 
-Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap`. It uses `SJASMPLUS` if set, then searches PATH, then tries John's existing Desktop installation. The window stays open to show the result or any errors.
+Double-click `Build-TAP.bat` in the repository root to rebuild `build/game.tap` with the 50 Hz logo and cyan copper menu text. It uses `SJASMPLUS` if set, then searches PATH, then tries John's existing Desktop installation. The window stays open to show the result or any errors.
 
 From the repository root, using your installed SjASMPlus executable:
 

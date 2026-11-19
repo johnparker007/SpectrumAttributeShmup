@@ -16,16 +16,17 @@ def main():
     parser.add_argument("--archive", type=Path, default=ARCHIVE)
     parser.add_argument("--output-tap", type=Path, default=ARCHIVE.parent.parent / "build/game.tap")
     logo = parser.add_mutually_exclusive_group()
-    logo.add_argument("--solid-menu-logo", action="store_true",
+    logo.add_argument("--solid-menu-logo", dest="luminance_logo", action="store_false",
                       help="Fill the logo rectangle to inspect all 28 raster cells")
     logo.add_argument("--luminance-logo", action="store_true",
-                      help="Try the 12-band luminance loop on the existing logo bitmap")
+                      help="Use the 50 Hz luminance logo and cyan copper text (default)")
+    parser.set_defaults(luminance_logo=True)
     args = parser.parse_args()
     try:
         assembler = args.assembler.resolve(strict=True)
         with tempfile.TemporaryDirectory(prefix="shmup-build-") as scratch:
             game = build(args.archive.resolve(strict=True), assembler, Path(scratch))
-            install(game, assembler, live=True, solid_menu_logo=args.solid_menu_logo,
+            install(game, assembler, live=True, solid_menu_logo=not args.luminance_logo,
                     luminance_logo=args.luminance_logo)
             args.output_tap.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(game / "main.tap", args.output_tap)
