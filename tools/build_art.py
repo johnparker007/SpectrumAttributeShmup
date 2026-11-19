@@ -152,7 +152,7 @@ def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
     font = output / SCREEN_FONT
     font.parent.mkdir(exist_ok=True)
-    font.write_bytes(arcade_font(ART / "fonts/PressStart2P-8.bdf"))
+    font.write_bytes(arcade_font(ART / "fonts/Blokius-Arcade-8.bdf"))
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
     (output / MENU_LOGO).write_bytes(logo_bitmap(ART / "gfx/blokius-logo.pbm"))

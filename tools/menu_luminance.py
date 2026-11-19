@@ -14,7 +14,7 @@ ATTRIBUTE_WRITE_DEADLINE = 16194  # Three T-states before the nominal 128K fetch
 RASTER_EXIT, SEED_EXIT = 0x8003, 0x8006
 PROGRAM_BYTES = 960
 RASTER_END = 23364
-COPPER_BANDS = (0x01, 0x41, 0x05, 0x45, 0x47, 0x45, 0x05, 0x41)  # Blue to white and back.
+COPPER_BANDS = (0x01, 0x05, 0x05, 0x45, 0x47, 0x45, 0x05, 0x05)
 COPPER_MENU_TEXT = {
     10: "      1-8  START LEVEL 1-8",
     16: ">K KEYBOARD     J KEMPSTON",

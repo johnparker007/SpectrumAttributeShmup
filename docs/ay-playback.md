@@ -41,7 +41,7 @@ The top border prepares 28 attribute cells per scanline for the logo. Each cell 
 
 The optional `--luminance-logo` build runs the 12-band brightness loop at the same scroll rate. Its generated raster covers the inked cells of the logo, seeds the first scanline of each character row ahead of the beam, and uses IX and IY for the two additional colour pairs. The menu borrows the gameplay attribute buffer for the current raster program and clears the borrowed space before starting a level.
 
-Below that logo, the menu shades the text and control markers one scanline at a time. Each character starts in normal blue, ramps through bright blue and the two cyan shades to bright white, then steps back down. The copper program skips empty character pairs to fit the one-scanline writes. AY playback runs in the bottom border. The menu copies the next logo program across the bottom and top borders.
+Below that logo, the menu shades the text and control markers one scanline at a time. The sequence is normal blue, normal cyan twice, bright cyan, bright white, bright cyan, then normal cyan twice. The font's blank first scanline leaves the blue band hidden. The copper program skips empty character pairs to fit the one-scanline writes. AY playback runs in the bottom border. The menu copies the next logo program across the bottom and top borders.
 
 ## Star Force gameplay music
 
