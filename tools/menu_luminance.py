@@ -20,6 +20,7 @@ PROGRAM_BYTES = 992  # The seed runs in its source bank and need not fit the ras
 RASTER_END = 23364
 COPPER_BANDS = (0x01, 0x05, 0x05, 0x45, 0x47, 0x45, 0x05, 0x05)
 GOLD_BAR = (2, 6, 7, 6, 2)
+GOLD_BAR_TOP, GOLD_BAR_BOTTOM = 8, 51
 LOGO_LINE_SHIFT = 8 * LINE_TSTATES
 TOP_BAR_START = 15950
 COPPER_MENU_TEXT = {
@@ -173,7 +174,7 @@ def schedule(model, phase, visible, *, copper=False):
     return program, height * LINE_TSTATES + finish
 
 
-def compile_gold_bar(model, row, start, end):
+def compile_gold_bar(model, scanline, start, end):
     origin, _, _ = PROFILES[model]
     code = []
     time = start
@@ -194,7 +195,7 @@ def compile_gold_bar(model, row, start, end):
 
     # The shadow screen supplies the yellow and white lines. The normal
     # screen supplies the red edges and the black after the bar.
-    beam = origin + (row * 8 - 8) * LINE_TSTATES
+    beam = origin + (scanline - 8) * LINE_TSTATES
     advance(beam - 85)
     code.append("ld bc,#7ffd")
     time += 10
@@ -217,7 +218,7 @@ def compile_copper(model):
     # the copper's private stack and jumps to this program.
     time = RASTER_END + LOGO_LINE_SHIFT + 70
     # Leave the stack ready for DELAY after the last timed write.
-    code = compile_gold_bar(model, 7, time, 27000 + LINE_TSTATES * 8)
+    code = compile_gold_bar(model, GOLD_BAR_BOTTOM, time, 27000 + LINE_TSTATES * 8)
     time = 27000 + LINE_TSTATES * 8
     code.append("ld sp,menuCopperStack")
     time += 10
@@ -330,6 +331,9 @@ def build_luminance(output, bitmap):
     with ProcessPoolExecutor(max_workers=6) as pool:
         programs = list(pool.map(compile_phase, jobs))
     layout = [f"MENU_LOGO_PHASES equ {phases}"]
+    for name, line in (("TOP", GOLD_BAR_TOP), ("BOTTOM", GOLD_BAR_BOTTOM)):
+        layout.append(f"MENU_GOLD_{name}_PIXELS equ {0x4000 + 32 * (line // 8) + 256 * (line % 8)}")
+        layout.append(f"MENU_GOLD_{name}_ATTRS equ {0x5800 + 32 * (line // 8)}")
     # Bank 3 has room for five programs before the tracker and six after
     # its song. Put the rest after the maps or above the shadow screen.
     for index, (model, label, bank3_phases, overflow) in enumerate((
@@ -342,7 +346,7 @@ def build_luminance(output, bitmap):
         (output / f"luminance-{model}-extra.bin").write_bytes(b"".join(extra))
         (output / f"copper-{model}.a80").write_text(compile_copper(model), encoding="ascii")
         gate = PROFILES[model][2] + LOGO_LINE_SHIFT - 111  # JP, read, palette loads and JP.
-        top = compile_gold_bar(model, 1, TOP_BAR_START, gate)
+        top = compile_gold_bar(model, GOLD_BAR_TOP, TOP_BAR_START, gate)
         (output / f"gold-{model}.a80").write_text(
             "\n".join(f"    {line}" for line in (*top, "jp menuLogoGate")) + "\n", encoding="ascii")
         layout.append(f"{label}Programs:")

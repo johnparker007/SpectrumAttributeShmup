@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, GOLD_BAR, LUMINANCE_BANDS
+from menu_luminance import COPPER_BANDS, COPPER_MENU_TEXT, GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -58,7 +58,7 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
         # Include the infrequent high-cost music ticks at steady state.
         frames_to_check = max(frames_to_check, 360)
         font = (game / SCREEN_FONT).read_bytes()
-        for start in (8, 56):
+        for start in (GOLD_BAR_TOP, GOLD_BAR_BOTTOM):
             for y, colour in enumerate((*GOLD_BAR, 0, 0, 0)):
                 gold_rows[start + y] = ink(colour) * WIDTH
         for row, line in COPPER_MENU_TEXT.items():
