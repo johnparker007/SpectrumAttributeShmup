@@ -127,9 +127,7 @@ advanceMenuLogoPhase:
 menuLogoPhase: dw 0
 ; Opposite parity first, then the parity needed for scanline zero.
 menuLogoInkPairs:
-    db #46,#42, #43,#42, #46,#45, #43,#45
-    db #42,#46, #42,#43, #45,#46, #45,#43
-    db #46,#42, #43,#42, #46,#45, #43,#45
+    incbin "gfx/blokius-logo-raster.bin",0,24
     align 256
-menuLogoPushPatterns: incbin "gfx/blokius-logo-raster.bin"
+menuLogoPushPatterns: incbin "gfx/blokius-logo-raster.bin",24
     assert $-menuLogoPushPatterns=2*MENU_LOGO_PHASES

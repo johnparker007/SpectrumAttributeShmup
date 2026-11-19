@@ -2,7 +2,6 @@
 
 import argparse
 from pathlib import Path
-from random import Random
 import re
 import shutil
 import struct
@@ -18,6 +17,12 @@ LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
 MENU_LOGO = "gfx/blokius-logo.bin"
 MENU_LOGO_RASTER = "gfx/blokius-logo-raster.bin"
+# Both four-band runs return to green. Red and magenta are always separated.
+MENU_LOGO_WARM = (0x44, 0x46, 0x42, 0x47)  # Green, yellow, red, white.
+MENU_LOGO_COOL = (0x44, 0x45, 0x41, 0x43)  # Green, cyan, blue, magenta.
+# Each six-bit window in this circular order is unique, so nearby sections
+# of the ribbon keep changing even when only part of the strip is visible.
+MENU_LOGO_RUN_ORDER = bytes.fromhex("69 cb 66 24 28 fd 5d e0")
 DESTRUCTIBLE_TILE = 124
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
@@ -66,25 +71,31 @@ def logo_bitmap(source):
 
 
 def logo_bands():
-    """Alternate two pairs of bright inks so every neighbour differs, even at wrap."""
-    inks = ((0x42, 0x45), (0x46, 0x43))
-    rng = Random(0xB10)
-    return bytes(rng.choice(inks[i % 2]) for i in range(512))
+    """Build a 512-band ring with equal warm and cool runs."""
+    runs = (MENU_LOGO_WARM + MENU_LOGO_COOL, MENU_LOGO_COOL + MENU_LOGO_WARM)
+    return b"".join(bytes(runs[(order >> bit) & 1])
+                    for order in MENU_LOGO_RUN_ORDER for bit in range(7, -1, -1))
 
 
 def logo_raster():
-    """Index by parity and then by decreasing pairs, in stack write order."""
+    """Pack the palette words followed by the right-to-left PUSH tables."""
     bands = logo_bands()
-    # BC, DE, HL and AF. The alternate register set holds each pair reversed.
-    push = {(0x42, 0x46): 0xC5, (0x42, 0x43): 0xD5,
-            (0x45, 0x46): 0xE5, (0x45, 0x43): 0xF5}
-    tables = bytearray()
+    # Each parity has four distinct ink pairs, one per PUSH register.
+    palette = []
+    opcodes = []
+    for parity in range(2):
+        pairs = dict.fromkeys((bands[x], bands[(x + 1) % len(bands)])
+                              for x in range(parity, len(bands), 2))
+        opcodes.append(dict(zip(pairs, (0xC5, 0xD5, 0xE5, 0xF5), strict=True)))
+        palette.append(bytes(ink for pair in pairs for ink in pair))
+    even, odd = palette
+    tables = bytearray(odd + even + odd)
     for parity in range(2):
         page = bytearray()
         for pair in range(256):
             x = (parity - 2 * pair) % len(bands)
             pair_inks = (bands[x], bands[(x + 1) % len(bands)])
-            page.append(push[pair_inks[::-1] if parity else pair_inks])
+            page.append(opcodes[parity][pair_inks])
         # A run of LDI instructions may cross the end of the page.
         tables.extend(page * 2)
     return bytes(tables)
