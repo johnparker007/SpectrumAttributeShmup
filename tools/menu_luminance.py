@@ -298,9 +298,7 @@ def compile_copper(model):
                 code.append(f"db {','.join(map(str, padding(tail)))}")
         code.append("ld sp,menuCopperStack")
         time = finish + row_time + 10
-    # Start the tracker on blank paper below the controls. Waiting for
-    # the bottom border leaves much less room for the longest PT3 ticks.
-    delay_until(first + (156 - 8) * LINE_TSTATES)
+    delay_until(58160)
     code.append("jp menuCopperDone")
     return "\n".join(f"    {line}" for line in code) + "\n"
 
