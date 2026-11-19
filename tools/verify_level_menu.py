@@ -25,7 +25,8 @@ def verify_logo_video(emulator, game, model):
     bitmap = (game / MENU_LOGO).read_bytes()
     # The SNA starts with a 27-byte header and dumps addresses #4000–#ffff in order.
     offset = 27 + s["menuLogoPalette"] - 0x4000
-    palette = (game / "main.sna").read_bytes()[offset:offset + 16]
+    length = s["MENU_LOGO_PALETTE_LENGTH"]
+    palette = (game / "main.sna").read_bytes()[offset:offset + length]
 
     def ink(attr):
         intensity = 255 if attr & 64 else 192
@@ -37,12 +38,12 @@ def verify_logo_video(emulator, game, model):
             start = (scan * rows + character_row) * width
             pixels = bytearray(3 * left * 8)
             for column, value in enumerate(bitmap[start:start + width]):
-                colour = ink(palette[(phase + column + 2 * character_row + scan % 2) % 16])
+                colour = ink(palette[(phase + column + y // 2) % length])
                 for bit in range(7, -1, -1):
                     pixels += colour if value & (1 << bit) else b"\0\0\0"
             yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")
 
-    phases = {b"".join(logo_rows(phase)): phase for phase in range(16)}
+    phases = {b"".join(logo_rows(phase)): phase for phase in range(length)}
     video = game / f"menu-logo-{model}.raw"
     capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 8)
     frame_bytes = WIDTH * HEIGHT * 3

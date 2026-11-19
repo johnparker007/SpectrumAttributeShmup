@@ -1,11 +1,14 @@
-; Menu-only beam timing in bank 2. The ULA alternates between the two
-; screen banks on each logo scanline, starting on bank 5.
+; Menu-only beam timing in bank 2. Display each pair of scanlines while
+; preparing new attributes for the next pair in the hidden screen bank.
 MENU_LOGO_WIDTH equ 28
 MENU_LOGO_ROWS equ 4
 MENU_LOGO_LEFT equ (32-MENU_LOGO_WIDTH)/2
 MENU_LOGO_TOP equ 1
 MENU_LOGO_PIXELS equ #4000+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
 MENU_LOGO_ATTRS equ #5800+32*MENU_LOGO_TOP+MENU_LOGO_LEFT
+MENU_LOGO_BANDS equ 4*MENU_LOGO_ROWS
+MENU_LOGO_PALETTE_LENGTH equ 12
+    assert MENU_LOGO_WIDTH=28
 
 drawMenuLogo:
     di
@@ -26,7 +29,6 @@ drawMenuLogo:
     call swapPage
     xor a
     ld (menuLogoClock),a
-    call updateMenuLogoColours
     ei
     ret
 
@@ -52,83 +54,97 @@ copyMenuLogo:
 menuLogoFrame:
     halt
     di
-    ; Aim the first switch at the left border of paper scanline 9.
-    ld bc,15911
+    ld (menuLogoHostStack+1),sp
+    ; Keep CALL and RET off contended RAM while the beam crosses the logo.
+    ld sp,menuLogoRasterStack
+    ld a,7
+    call swapPage
+    ld a,(menuLogoClock)
+    srl a : srl a
+    ld c,a
+    ld b,0
+    ld iy,menuLogoPalette
+    add iy,bc
+    ld bc,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH
+    call paintMenuLogoBand
+    ; Aim the first switch at the left border of paper scanline 8.
+    ld bc,15168
     call DELAY
     ld bc,#7ffd
-    ld d,8*MENU_LOGO_ROWS
-    ld a,#18
-menuLogoSwitch:
-    out (c),a
-    dec d
-    jr z,menuLogoEnd
-    ; 228 T-states between writes, including both paging and loop overhead.
-    ld b,13
-    djnz $
-    ld b,#7f
-    xor 8
-    nop
-    nop
-    jr menuLogoSwitch
 
+    ; Start generating the next band as soon as its screen is hidden.
+    dup MENU_LOGO_BANDS-1, band
+        ld a,#17+8*(band%2)
+        out (c),a
+        ; PUSH paints backwards from the far edge of the hidden row.
+        ld bc,MENU_LOGO_ATTRS+MENU_LOGO_WIDTH+32*((band+1)/4)+#8000*((band+1)%2)
+        call paintMenuLogoBand
+        call menuLogoBandWait
+        ld bc,#7ffd
+    edup
+    ld a,#1f
+    out (c),a
+    ld bc,417
+    call DELAY
+    ld bc,#7ffd
+    ld a,#17
+    out (c),a
 menuLogoEnd:
     ; The display has switched back to bank 5. Wait for the bottom border.
     ld bc,34685
     call DELAY
+menuLogoHostStack:
+    ld sp,0
 menuLogoBorder:
     call menuMusicPage
     call menuTrackTick
     xor a
     call swapPage
-    ld hl,menuLogoClock
-    inc (hl)
-    ld a,(hl)
-    and 3
-    jr nz,menuLogoFrameDone
-    call updateMenuLogoColours
+    ld a,(menuLogoClock)
+    inc a
+    cp 4*MENU_LOGO_PALETTE_LENGTH
+    jr c,.saveClock
+    xor a
+.saveClock:
+    ld (menuLogoClock),a
 menuLogoFrameDone:
     ei
     ret
 
-updateMenuLogoColours:
-    ld a,(menuLogoClock)
-    rrca : rrca
-    and 15
-    push af
-    ld de,MENU_LOGO_ATTRS
-    call fillMenuLogoColours
-    ld a,7
-    call swapPage
-    pop af
-    inc a
-    ld de,MENU_LOGO_ATTRS+#8000
-    call fillMenuLogoColours
-    xor a
-    jp swapPage
-
-fillMenuLogoColours:
-    ld ixl,MENU_LOGO_ROWS
-.row:
-    and 15
-    push af
-    ld c,a
-    ld b,0
-    ld hl,menuLogoPalette
-    add hl,bc
-    dup MENU_LOGO_WIDTH
-        ldi
+menuLogoBandWait:
+    ; Pad the transfer to one 456-T-state band, including video contention.
+    ld bc,0
+    dup 4
+        nop
     edup
-    dup 32-MENU_LOGO_WIDTH
-        inc de
-    edup
-    pop af
-    add a,2
-    dec ixl
-    jr nz,.row
     ret
 
+; Fetch six palette pairs from fast RAM. Store two repeats and the first
+; four colours of a third repeat with 14 word writes to the hidden bank.
+paintMenuLogoBand:
+    ld (.destination+1),bc
+    ld sp,iy
+    pop bc : pop de : pop hl
+    exx
+    pop bc : pop de : pop hl
+.destination:
+    ld sp,0
+    exx
+    push de : push bc
+    dup 2
+        exx
+        push hl : push de : push bc
+        exx
+        push hl : push de : push bc
+    edup
+    ld sp,menuLogoRasterStack-2
+    inc iy
+    ret
+
+    defs 2
+menuLogoRasterStack:
 menuLogoClock: db 0
 menuLogoPalette:
-    dup 3
-        db #41,#41,#43,#43,#42,#42,#46,#46,#47,#47,#44,#44,#45,#45,#05,#01
+    dup 4
+        db #41,#45,#45,#44,#44,#46,#46,#47,#46,#42,#43,#43
     edup
