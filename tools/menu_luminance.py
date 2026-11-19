@@ -1,11 +1,11 @@
-"""Compile the experimental 12-band logo into timed Z80 stack writes."""
+"""Compile the luminance logo and menu text into timed Z80 stack writes."""
 
 from concurrent.futures import ProcessPoolExecutor
 from functools import cache
 from struct import pack
 
 
-LUMINANCE_BANDS = bytes(range(0x41, 0x48)) + bytes(range(0x46, 0x41, -1))
+LUMINANCE_BANDS = bytes((0x01, 0x05, 0x45, 0x47, 0x45, 0x05))
 WIDTH, HEIGHT = 28, 32
 LINE_TSTATES = 228
 ATTRS = 0x5822
@@ -26,8 +26,8 @@ PROFILES = {
     "128k": (16185, (6, 5, 4, 3, 2, 1, 0, 0), 16110),
     "plus": (16189, (1, 0, 7, 6, 5, 4, 3, 2), 16109),
 }
-# BC, DE, HL, AF, IX, IY hold pairs 1, 2, 4, 5, 0, 3 respectively.
-PUSH = (b"\xdd\xe5", b"\xc5", b"\xd5", b"\xfd\xe5", b"\xe5", b"\xf5")
+# BC, DE and HL hold the three consecutive two-cell pairs.
+PUSH = (0xC5, 0xD5, 0xE5)
 
 
 def word(value):
@@ -87,8 +87,7 @@ def schedule(model, phase, visible, *, copper=False):
             if i and x != pairs[i - 1] - 2:
                 t += 10  # Reload SP to skip a gap in the text.
             begin = t
-            prefixed = not copper and len(PUSH[((x + y + phase) % 12) // 2]) == 2
-            t += 5 + 4 * prefixed
+            t += 5
             for cell in (x + 1, x):
                 t = attribute_write_end(t, origin, waits)
                 if cell in visible[y]:
@@ -219,7 +218,7 @@ def compile_phase(job):
     seed = bytearray()
 
     def pushes(pairs, y):
-        return b"".join(PUSH[((x + y + phase) % 12) // 2] for x in pairs)
+        return bytes(PUSH[((x + y + phase) % len(LUMINANCE_BANDS)) // 2] for x in pairs)
 
     program, finish = schedule(model, phase, visible)
     for y, (right, left, shift, idle, tail) in enumerate(program):
@@ -249,24 +248,18 @@ def compile_phase(job):
 
 
 def build_luminance(output, bitmap):
-    # Phase n+6 has identical instruction timing to n: IX and IY swap words,
-    # as do the four unprefixed PUSH registers. Store only six programs.
-    jobs = [(model, phase, bitmap) for model in PROFILES for phase in range(6)]
+    phases = len(LUMINANCE_BANDS)
+    jobs = [(model, phase, bitmap) for model in PROFILES for phase in range(phases)]
     with ProcessPoolExecutor(max_workers=6) as pool:
         programs = list(pool.map(compile_phase, jobs))
     for index, model in enumerate(PROFILES):
-        pointer = 12  # Six offsets relative to the start of this bundle.
+        pointer = 2 * phases  # Offsets relative to the start of the bundle.
         offsets = bytearray()
-        images = programs[index * 6:index * 6 + 6]
+        images = programs[index * phases:(index + 1) * phases]
         for image in images:
             offsets += word(pointer)
             pointer += len(image)
         (output / f"luminance-{model}.bin").write_bytes(offsets + b"".join(images))
         (output / f"copper-{model}.a80").write_text(compile_copper(model), encoding="ascii")
 
-    palette = bytearray()
-    for offset in (0, 3):
-        for pair in (1, 2, 4, 5, 0, 3):
-            start = 2 * ((pair + offset) % 6)
-            palette += LUMINANCE_BANDS[start:start + 2]
-    (output / "luminance-inks.bin").write_bytes(palette)
+    (output / "luminance-inks.bin").write_bytes(LUMINANCE_BANDS.ljust(12, b"\0"))

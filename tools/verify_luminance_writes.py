@@ -10,10 +10,8 @@ from menu_luminance import ATTRS, LINE_TSTATES, LUMINANCE_BANDS, PROGRAM_BYTES, 
 FIRST_FETCH = {"128k": 16197, "plus": 16200}
 
 
-def attribute_stores(program, phase, time, model):
+def attribute_stores(program, palette, time, model):
     origin, waits, _ = PROFILES[model]
-    palette = {opcode: bytes(LUMINANCE_BANDS[2 * pair:2 * pair + 2])
-               for opcode, pair in zip(PUSH, ((i + 3 * (phase // 6)) % 6 for i in range(6)))}
     sp = 0
     pc = 0
     while program[pc] != 0xC3:  # Jump back to the fixed-bank menu code.
@@ -36,10 +34,9 @@ def attribute_stores(program, phase, time, model):
             pc += 1
             time += 6
         else:
-            size = 2 if opcode in (0xDD, 0xFD) else 1
-            pair = palette[program[pc:pc + size]]
-            pc += size
-            time += 5 + 4 * (size - 1)
+            pair = palette[opcode]
+            pc += 1
+            time += 5
             for ink in reversed(pair):
                 slot = (time - origin) % LINE_TSTATES
                 time += 3 + (waits[slot % 8] if slot < 128 else 0)
@@ -49,17 +46,19 @@ def attribute_stores(program, phase, time, model):
 
 def verify_luminance_writes(gfx, bitmap):
     cells = [sorted(row) for row in visible_cells(bitmap)]
+    inks = (gfx / "luminance-inks.bin").read_bytes()
+    palette = {opcode: inks[2 * index:2 * index + 2] for index, opcode in enumerate(PUSH)}
     for model, first_fetch in FIRST_FETCH.items():
         bundle = (gfx / f"luminance-{model}.bin").read_bytes()
         frames = []
         for phase in range(len(LUMINANCE_BANDS)):
-            offset = unpack_from("<H", bundle, 2 * (phase % 6))[0]
+            offset = unpack_from("<H", bundle, 2 * phase)[0]
             seed_offset = unpack_from("<H", bundle, offset)[0]
             start = offset + 2
             seed = bundle[start + seed_offset:start + PROGRAM_BYTES]
             raster = bundle[start:start + seed_offset]
-            frames.append((list(attribute_stores(seed, phase, 0, model)),
-                           list(attribute_stores(raster, phase, PROFILES[model][2], model))))
+            frames.append((list(attribute_stores(seed, palette, 0, model)),
+                           list(attribute_stores(raster, palette, PROFILES[model][2], model))))
 
         for phase, (seed, raster) in enumerate(frames):
             # Begin with the preceding frame's final attributes, then preseed.

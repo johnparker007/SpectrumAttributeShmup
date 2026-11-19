@@ -41,14 +41,6 @@ runLuminanceFrame:
 .selectPhase:
     ld (menuLogoDelay+1),bc
     ld a,(menuLogoPhase)
-    cp 6
-    ld de,menuLogoPalettes
-    jr c,.palette
-    sub 6
-    ld de,menuLogoPalettes+12
-.palette:
-    ld (menuLogoRasterPalette+1),de
-    ld (menuLogoSeedPalette+1),de
     add a,a
     ld e,a
     ld d,0
@@ -92,8 +84,8 @@ menuLogoDelay:
     ld bc,0                      ; Wait after the fixed-size top-border copy.
     call DELAY
     ld a,(#5800)                  ; Contention aligns the first raster instruction.
-menuLogoRasterPalette:
-    ld sp,0
+    ld sp,menuLogoPalette
+    ; Only BC, DE and HL supply ink pairs. Keep the calibrated load time.
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
     jp attrBuffer
 
@@ -129,8 +121,7 @@ copyMenuProgram:
 
 seedLuminanceRows:
     ld (menuLogoSeedStack+1),sp
-menuLogoSeedPalette:
-    ld sp,0
+    ld sp,menuLogoPalette
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
 menuLogoSeedStart:
     jp 0
@@ -148,4 +139,4 @@ clearMenuRaster:
     ret
 
 menuLogoPhase: dw 0
-menuLogoPalettes: incbin "gfx/luminance-inks.bin"
+menuLogoPalette: incbin "gfx/luminance-inks.bin"
