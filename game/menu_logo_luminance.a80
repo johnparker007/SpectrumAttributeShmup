@@ -164,11 +164,12 @@ menuLogoPhase: dw 0
 menuLogoPalette: incbin "gfx/luminance-inks.bin"
 
 initMenuStars:
+    call colourMenuStarRows
     MENU_STAR_LAYOUT 1
     ret
 
-; C is the old pixel mask, HL its bitmap address and DE the address
-; operand to update. Moving left out of column zero wraps within the row.
+; C and B hold the old and new masks, HL the bitmap address and DE the
+; address operand to update. Wrap to the last byte of the same row.
 stepMenuStarCrossByte:
     ld a,c
     xor (hl)
@@ -184,12 +185,49 @@ stepMenuStarCrossByte:
 .save:
     ld a,l
     ld (de),a
-    ld a,1
+    ld a,b
     xor (hl)
     ld (hl),a
     ret
 
-; Keep the odd-frame group in fixed RAM with the raster.
-stepMenuStarsOdd:
-    MENU_STAR_ODD_LAYOUT 0
+; The last four star updates live in fixed RAM to fit the menu banks.
+stepMenuStarsFixed:
+    MENU_STAR_FIXED_LAYOUT 0
     ret
+
+; Set the ink on star-only character rows once per menu redraw.
+colourMenuStarRows:
+    ld hl,menuStarRowColours
+.next:
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld a,d
+    or a
+    ret z
+    ld a,(hl)
+    inc hl
+    ld b,32
+.fill:
+    ld (de),a
+    inc e
+    djnz .fill
+    jr .next
+menuStarRowColours:
+    ; Attribute address and bright ink on black paper.
+    dw #5800+7*32 : db #45
+    dw #5800+8*32 : db #42
+    dw #5800+9*32 : db #47
+    dw #5800+11*32 : db #41
+    dw #5800+12*32 : db #44
+    dw #5800+13*32 : db #43
+    dw #5800+14*32 : db #46
+    dw #5800+15*32 : db #45
+    dw #5800+17*32 : db #47
+    dw #5800+19*32 : db #42
+    dw #5800+20*32 : db #46
+    dw #5800+21*32 : db #41
+    dw #5800+22*32 : db #43
+    dw #5800+23*32 : db #44
+    dw 0

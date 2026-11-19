@@ -1,6 +1,6 @@
     ; Each star keeps its current screen address and bit in the two
     ; immediate loads. Repaint those positions after a menu redraw.
-    macro MENU_STAR star,x,y,initialise
+    macro MENU_STAR star,x,y,initialise,step
         if initialise
             ld hl,(star+1)
             ld a,(star+4)
@@ -11,13 +11,21 @@ star:
             ld a,#80>>(x&7)
             ld c,a
             rlca
+            if step=2
+                rlca
+            endif
             ld (star+4),a
+            ; A two-pixel step crosses a byte when the new bit is 0 or 1.
+            if step=2
+                cp 4
+            endif
             jr nc,.sameByte
+            ld b,a
             ld de,star+1
             call stepMenuStarCrossByte
             jr .done
 .sameByte:
-            ; Within the byte, one XOR erases the old bit and sets the new bit.
+            ; Combine old and new bits before touching the bitmap.
             xor c
             xor (hl)
             ld (hl),a
@@ -25,41 +33,29 @@ star:
         endif
     endm
 
-    macro MENU_STAR_ODD_LAYOUT initialise
-        MENU_STAR menuStar14,40,60,initialise
-        MENU_STAR menuStar15,211,69,initialise
-        MENU_STAR menuStar16,172,114,initialise
-        MENU_STAR menuStar17,150,162,initialise
+    macro MENU_STAR_FIXED_LAYOUT initialise
+        MENU_STAR menuStar10,26,117,initialise,1
+        MENU_STAR menuStar11,149,157,initialise,1
+        MENU_STAR menuStar12,60,162,initialise,1
+        MENU_STAR menuStar13,213,186,initialise,1
     endm
 
     macro MENU_STAR_LAYOUT initialise
-        MENU_STAR menuStar0,43,63,initialise
-        MENU_STAR menuStar1,136,94,initialise
-        MENU_STAR menuStar2,206,105,initialise
-        MENU_STAR menuStar3,79,138,initialise
-        MENU_STAR menuStar4,185,174,initialise
-        MENU_STAR menuStar5,8,65,initialise
-        MENU_STAR menuStar6,36,107,initialise
-        MENU_STAR menuStar7,252,120,initialise
-        MENU_STAR menuStar8,29,141,initialise
-        MENU_STAR menuStar9,98,183,initialise
-
-        ; The phase count is even, so the two slow groups alternate at wrap.
-        if !initialise
-            assert MENU_LOGO_PHASES%2=0
-            ld a,(menuLogoPhase)
-            and 1
-            jp nz,stepMenuStarsOdd
-        endif
-        MENU_STAR menuStar10,89,75,initialise
-        MENU_STAR menuStar11,199,97,initialise
-        MENU_STAR menuStar12,26,117,initialise
-        MENU_STAR menuStar13,149,157,initialise
+        MENU_STAR menuStar0,43,63,initialise,2
+        MENU_STAR menuStar1,136,94,initialise,2
+        MENU_STAR menuStar2,206,105,initialise,2
+        MENU_STAR menuStar3,79,138,initialise,2
+        MENU_STAR menuStar4,185,174,initialise,2
+        MENU_STAR menuStar5,12,65,initialise,2
+        MENU_STAR menuStar6,250,120,initialise,2
+        MENU_STAR menuStar7,101,183,initialise,2
+        MENU_STAR menuStar8,89,75,initialise,1
+        MENU_STAR menuStar9,199,97,initialise,1
         if initialise
-            MENU_STAR_ODD_LAYOUT 1
+            MENU_STAR_FIXED_LAYOUT 1
         endif
     endm
 
 stepMenuStars:
     MENU_STAR_LAYOUT 0
-    ret
+    jp stepMenuStarsFixed
