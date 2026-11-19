@@ -41,7 +41,7 @@ The top border prepares 28 attribute cells per scanline for the logo. Each cell 
 
 The default build runs a 14-band luminance loop at 50 Hz, alternating a blue and cyan ramp with a red and yellow ramp. Its generated raster covers the inked cells of the logo and seeds the first scanline of each character row ahead of the beam. The menu borrows the gameplay attribute buffer for the current raster program and clears the borrowed space before starting a level.
 
-Below the logo, the menu shades the text one scanline at a time. The two secondary lines use normal cyan twice, bright cyan, bright white, bright cyan, then normal cyan twice. The fire prompt uses yellow at the same brightnesses in place of cyan. The font's blank first scanline leaves the initial blue band hidden. The copper program skips empty character pairs to fit the one-scanline writes. AY playback runs in the bottom border. The menu copies the next logo program across the bottom and top borders.
+Below the logo, the menu shades the text one scanline at a time. The two secondary lines use normal cyan, bright cyan twice, bright white, bright cyan twice, then normal cyan. The fire prompt uses yellow at the same brightnesses in place of cyan. The font's blank first scanline leaves the initial blue band hidden. The copper program skips empty character pairs to fit the one-scanline writes. AY playback runs in the bottom border. The menu copies the next logo program across the bottom and top borders.
 
 ## Star Force gameplay music
 
