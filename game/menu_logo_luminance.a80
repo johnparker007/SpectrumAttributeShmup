@@ -99,21 +99,6 @@ menuLogoGate:
     pop bc : pop de : pop hl : pop af : pop ix : pop iy
     jp attrBuffer
 
-seedMenuGoldBars:
-    ld (menuGoldSeedStack+1),sp
-    ld hl,#3232
-    ld sp,#5840
-    dup 16
-        push hl
-    edup
-    ld sp,#5900
-    dup 16
-        push hl
-    edup
-menuGoldSeedStack:
-    ld sp,0
-    ret
-
 menuLogoHostStack:
     ld sp,0
     ld (menuCopperHostStack+1),sp

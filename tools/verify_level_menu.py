@@ -18,7 +18,7 @@ from verify_blokius_integration import (
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
 from verify_luminance_writes import verify_luminance_writes
-from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, PAPER_X, PAPER_Y, WIDTH, capture_video, paper_row
+from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, PAPER_Y, WIDTH, capture_video, paper_row
 
 
 def verify_logo_video(emulator, game, model, frames_to_check=32):
@@ -59,9 +59,8 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
         frames_to_check = max(frames_to_check, 360)
         font = (game / SCREEN_FONT).read_bytes()
         for start in (8, 56):
-            for y, colour in enumerate(GOLD_BAR):
-                edge = ink(colour & 7) * PAPER_X
-                gold_rows[start + y] = edge + ink(colour) * PAPER_WIDTH + edge
+            for y, colour in enumerate((*GOLD_BAR, 0, 0, 0)):
+                gold_rows[start + y] = ink(colour) * WIDTH
         for row, line in COPPER_MENU_TEXT.items():
             for y, colour in enumerate(COPPER_BANDS):
                 attributes = (font[8 * (ord(char) - 32) + y] for char in line.ljust(32))

@@ -19,7 +19,7 @@ RASTER_BYTES = 960
 PROGRAM_BYTES = 992  # The seed runs in its source bank and need not fit the raster copy.
 RASTER_END = 23364
 COPPER_BANDS = (0x01, 0x05, 0x05, 0x45, 0x47, 0x45, 0x05, 0x05)
-GOLD_BAR = (2, 6, 0x46, 0x47, 0x46, 6, 2, 0)
+GOLD_BAR = (2, 6, 7, 6, 2)
 LOGO_LINE_SHIFT = 8 * LINE_TSTATES
 TOP_BAR_START = 15950
 COPPER_MENU_TEXT = {
@@ -174,7 +174,7 @@ def schedule(model, phase, visible, *, copper=False):
 
 
 def compile_gold_bar(model, row, start, end):
-    origin, waits, _ = PROFILES[model]
+    origin, _, _ = PROFILES[model]
     code = []
     time = start
 
@@ -192,58 +192,20 @@ def compile_gold_bar(model, row, start, end):
             code.append(f"db {','.join(map(str, padding(cycles)))}")
         time = target
 
-    # The shadow screen supplies the three bright lines. The normal
-    # screen holds the dark red and yellow lines.
+    # The shadow screen supplies the yellow and white lines. The normal
+    # screen supplies the red edges and the black after the bar.
     beam = origin + (row * 8 - 8) * LINE_TSTATES
     advance(beam - 85)
     code.append("ld bc,#7ffd")
     time += 10
-    for y, colour in enumerate(GOLD_BAR[:7]):
+    for y, colour in enumerate((*GOLD_BAR, 0)):
         line = beam + y * LINE_TSTATES
-        changed = y == 0 or (colour & 7) != (GOLD_BAR[y - 1] & 7)
-        swap = y in (2, 5)
-        if changed or swap:
-            advance(line - 65)
-        if changed:
-            code.extend((f"ld a,{colour & 7}", "out (#fe),a"))
-            time += 18
-        if swap:
-            code.extend((f"ld a,{24 if y == 2 else 16}", "out (c),a"))
+        advance(line - 65)
+        code.extend((f"ld a,{colour}", "out (#fe),a"))
+        time += 18
+        if y in (1, len(GOLD_BAR) - 1):
+            code.extend((f"ld a,{24 if y == 1 else 16}", "out (c),a"))
             time += 19
-
-    # Changing the paper to black leaves the red ink on line 6 intact.
-    # Interrupt the stack writes during retrace to turn the border black.
-    code.extend(("ld hl,#0202", f"ld sp,{0x5820 + 32 * row}"))
-    time += 20
-    blank = beam + 7 * LINE_TSTATES
-
-    def push_end(t):
-        t = attribute_write_end(t + 5, origin, waits)
-        return attribute_write_end(t, origin, waits)
-
-    split_end = time
-    for split in range(17):
-        for border in range(blank - 68, blank - 44):
-            gap = border - split_end
-            if gap not in (0, 4, 6, 7, 8) and gap < 10:
-                continue
-            finish = border + 18
-            for _ in range(16 - split):
-                finish = push_end(finish)
-            if finish <= blank - 8:
-                break
-        else:
-            split_end = push_end(split_end)
-            continue
-        break
-    else:
-        raise ValueError(f"Cannot blank the gold bar on {model}")
-    code.extend(["push hl"] * split)
-    time = split_end
-    advance(border)
-    code.extend(("ld a,0", "out (#fe),a"))
-    code.extend(["push hl"] * (16 - split))
-    time = finish
     advance(end)
     return code
 
@@ -313,9 +275,6 @@ def compile_copper(model):
                 code.append(f"db {','.join(map(str, padding(tail)))}")
         code.append("ld sp,menuCopperStack")
         time = finish + row_time + 10
-    delay_until(57500)
-    code.append("call seedMenuGoldBars")
-    time = 57500 + 439
     delay_until(58160)
     code.append("jp menuCopperDone")
     return "\n".join(f"    {line}" for line in code) + "\n"

@@ -42,9 +42,9 @@ drawMenuLogo:
     ifdef LUMINANCE_LOGO
         ld a,#ff
         dup 2, bar
-            dup 4, stripe
-                ; Select ink on lines 0, 2, 4 and 6.
-                ld hl,#4020+bar*6*32+stripe*#200
+            dup 2, stripe
+                ; The normal screen supplies the red lines at 0 and 4.
+                ld hl,#4020+bar*6*32+stripe*#400
                 ld (hl),a
                 ld d,h
                 ld e,l
@@ -53,7 +53,7 @@ drawMenuLogo:
                 ldir
             edup
         edup
-        ld a,#32
+        ld a,#02
         dup 2, bar
             ld hl,#5820+bar*6*32
             ld (hl),a
@@ -69,9 +69,9 @@ drawMenuLogo:
             dup 4, stripe
                 if stripe=0
                     ld hl,#d820+bar*6*32
-                    ld a,#7e
+                    ld a,#3e     ; Normal yellow ink and normal white paper.
                 else
-                    ld hl,#c020+bar*6*32+(stripe+1)*#100
+                    ld hl,#c020+bar*6*32+stripe*#100
                     ld a,#ff
                     if stripe=2
                         xor a
