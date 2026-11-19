@@ -12,6 +12,8 @@ ATTRS = 0x5822
 EARLIEST_FETCH, LATEST_FETCH = 16191, 16198  # At the logo's left edge.
 ATTRIBUTE_WRITE_DEADLINE = 16194  # Three T-states before the nominal 128K fetch.
 RASTER_EXIT, SEED_EXIT = 0x8003, 0x8006
+PROGRAM_BYTES = 960
+RASTER_END = 23364
 PROFILES = {
     # Contention start, wait pattern and calibrated first instruction T-state.
     "128k": (16185, (6, 5, 4, 3, 2, 1, 0, 0), 16110),
@@ -122,7 +124,8 @@ def schedule(model, phase, visible):
         if not following:
             raise ValueError(f"Luminance logo exceeds the {model} raster budget on line {y}, phase {phase}")
         states = following
-    return next(iter(states.values()))
+    (_, finish), program = next(iter(states.items()))
+    return program, HEIGHT * LINE_TSTATES + finish
 
 
 def compile_phase(job):
@@ -134,7 +137,8 @@ def compile_phase(job):
     def pushes(pairs, y):
         return b"".join(PUSH[((x + y + phase) % 12) // 2] for x in pairs)
 
-    for y, (right, left, shift, idle, tail) in enumerate(schedule(model, phase, visible)):
+    program, finish = schedule(model, phase, visible)
+    for y, (right, left, shift, idle, tail) in enumerate(program):
         target = ATTRS + 32 * (y // 8)
         if right:
             raster += load_sp(target + right[0] + 2) + pushes(right, y)
@@ -148,11 +152,16 @@ def compile_phase(job):
             high, low = max(visible[y]), min(visible[y])
             pairs = range(high - (high - parity) % 2, low - (low - parity) % 2 - 1, -2)
             seed += load_sp(target + pairs[0] + 2) + pushes(pairs, y)
-    raster += b"\xc3" + word(RASTER_EXIT)
+    cycles = RASTER_END - finish
+    if cycles % 2:
+        raster += b"\x3e\0"  # LD A,0. The logo has finished using the palette.
+        cycles -= 7
+    assert cycles >= 4
+    raster += padding(cycles) + b"\xc3" + word(RASTER_EXIT)
     seed += b"\xc3" + word(SEED_EXIT)
-    if len(raster) + len(seed) > 1024:
+    if len(raster) + len(seed) > PROGRAM_BYTES:
         raise ValueError("Luminance logo exceeds its scratch buffer")
-    return word(len(raster) + len(seed)) + word(len(raster)) + raster + seed
+    return word(len(raster)) + (raster + seed).ljust(PROGRAM_BYTES, b"\0")
 
 
 def build_luminance(output, bitmap):

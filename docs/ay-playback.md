@@ -41,6 +41,8 @@ The top border prepares 28 attribute cells per scanline for the logo. Each cell 
 
 The optional `--luminance-logo` build runs the 12-band brightness loop at the same scroll rate. Its generated raster covers the inked cells of the logo, seeds the first scanline of each character row ahead of the beam, and uses IX and IY for the two additional colour pairs. The menu borrows the gameplay attribute buffer for the current raster program and clears the borrowed space before starting a level.
 
+Below that logo, the menu writes all 32 attributes in each character row from left to right. Writing between display fetches gives each row two scanlines each of bright cyan, white, cyan and blue. AY playback returns to the bottom border. The menu copies the next logo program across the bottom and top borders.
+
 ## Star Force gameplay music
 
 The gameplay build uses the packed Star Force cover in `game/music`. It plays on channels A and B and loops after 1,280 AY ticks. The 759-byte recipe and 695-byte literal pool were generated from `MainLoop.pt3` (SHA-256 `2e4d488e6070f127f911adbe4f5707043c9145a1c78f681dc154b62a187daa97`). Capture the export with `benchmark_ay.py --pt3 MainLoop.pt3 --through-loop` and pack the resulting JSON with `verify_ay_phrases.py`. The recipe and first literal bank are the gameplay assets.

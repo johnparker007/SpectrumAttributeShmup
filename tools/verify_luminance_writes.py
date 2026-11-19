@@ -2,7 +2,7 @@
 
 from struct import unpack_from
 
-from menu_luminance import ATTRS, LINE_TSTATES, LUMINANCE_BANDS, PROFILES, PUSH, visible_cells
+from menu_luminance import ATTRS, LINE_TSTATES, LUMINANCE_BANDS, PROGRAM_BYTES, PROFILES, PUSH, visible_cells
 
 
 # First attribute fetch at the logo, including its eight-line and two-cell inset.
@@ -25,6 +25,9 @@ def attribute_stores(program, phase, time, model):
         elif opcode == 0x00:
             pc += 1
             time += 4
+        elif opcode == 0x3E:
+            pc += 2
+            time += 7
         elif opcode == 0x18 and program[pc + 1] == 0:
             pc += 2
             time += 12
@@ -51,9 +54,9 @@ def verify_luminance_writes(gfx, bitmap):
         frames = []
         for phase in range(len(LUMINANCE_BANDS)):
             offset = unpack_from("<H", bundle, 2 * (phase % 6))[0]
-            length, seed_offset = unpack_from("<HH", bundle, offset)
-            start = offset + 4
-            seed = bundle[start + seed_offset:start + length]
+            seed_offset = unpack_from("<H", bundle, offset)[0]
+            start = offset + 2
+            seed = bundle[start + seed_offset:start + PROGRAM_BYTES]
             raster = bundle[start:start + seed_offset]
             frames.append((list(attribute_stores(seed, phase, 0, model)),
                            list(attribute_stores(raster, phase, PROFILES[model][2], model))))

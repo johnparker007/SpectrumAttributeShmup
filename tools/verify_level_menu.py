@@ -52,6 +52,21 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
             yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")
 
     phases = {b"".join(logo_rows(phase)): phase for phase in range(s["MENU_LOGO_PHASES"])}
+    copper_rows = {}
+    if "menuCopperRows" in s:
+        # Include the infrequent high-cost music ticks at steady state.
+        frames_to_check = max(frames_to_check, 360)
+        text = {
+            10: "      1-8  START LEVEL 1-8",
+            16: ">K KEYBOARD     J KEMPSTON",
+            18: " S SINCLAIR     R REDEFINE KEYS",
+        }
+        font = (game / SCREEN_FONT).read_bytes()
+        for row, line in text.items():
+            for y, colour in enumerate((0x45, 0x45, 0x47, 0x47, 0x45, 0x45, 0x41, 0x41)):
+                attributes = (font[8 * (ord(char) - 32) + y] for char in line.ljust(32))
+                copper_rows[8 * row + y] = b"".join(ink(colour) if mask & (128 >> bit) else bytes(3)
+                                                    for mask in attributes for bit in range(8))
     video = game / f"menu-logo-{model}.raw"
     capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload",
                                     "--frameskip", "0", "--disable-autoframeskip", "--vofilefps", "50"],
@@ -68,6 +83,9 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
                 raise ValueError(f"{model}: menu logo bands are misaligned")
             if previous is not None and phase != (previous + 1) % len(bands):
                 raise ValueError(f"{model}: expected one scanline per frame, got phases {previous}, {phase}")
+            for y, expected in copper_rows.items():
+                if paper_row(frame, y) != expected:
+                    raise ValueError(f"{model}: menu text shading or glyph mismatch on scanline {y}")
             previous = phase
     video.unlink()
 

@@ -8,16 +8,33 @@ menuLogoSeedExit:
     jp menuLogoSeedStack
     assert menuLogoRasterExit=#8003 && menuLogoSeedExit=#8006
     assert MENU_LOGO_ATTRS=#5822 && MENU_LOGO_WIDTH=28 && MENU_LOGO_ROWS=4
-    assert renderTilesList-attrBuffer>=1024
+MENU_LOGO_PREFIX equ 64
+MENU_LOGO_PROGRAM_SIZE equ 960
+MENU_COPPER_CYAN equ #4545
+MENU_COPPER_WHITE equ #4747
+MENU_COPPER_BLUE equ #4141
+menuCopperRows equ attrBuffer+MENU_LOGO_PROGRAM_SIZE
+menuCopperStack equ menuCopperRows+menuCopperSourceEnd-menuCopperSource+16
+    assert menuCopperStack<=renderTilesList
+
+initMenuCopper:
+    ld hl,menuCopperSource
+    ld de,menuCopperRows
+    ld bc,menuCopperSourceEnd-menuCopperSource
+    ldir
+    ret
 
 runLuminanceFrame:
     call menuMusicPage
     ld hl,luminance128
+    ld bc,655
     ld a,(2899)
     cp 159                         ; 128K / grey +2 ROM identifier
     jr z,.selectPhase
     ld hl,luminancePlus
+    ld bc,663
 .selectPhase:
+    ld (menuLogoDelay+1),bc
     ld a,(menuLogoPhase)
     cp 6
     ld de,menuLogoPalettes
@@ -37,30 +54,39 @@ runLuminanceFrame:
     ld d,(hl)
     pop hl
     add hl,de
-    ; Each program stores its byte count and offset of the seed routine.
-    ld c,(hl)
-    inc hl
-    ld b,(hl)
-    inc hl
+    ; Seed the first scanlines from the banked program during the bottom border.
     ld e,(hl)
     inc hl
     ld d,(hl)
     inc hl
     push hl
-    ld hl,attrBuffer
     add hl,de
     ld (menuLogoSeedStart+1),hl
+    call seedLuminanceRows
     pop hl
     ld de,attrBuffer
-    ldir
+    ld bc,MENU_LOGO_PREFIX
+    call copyMenuProgram
+    ld (menuLogoCopySource+1),hl
     xor a
     call swapPage
-    call seedLuminanceRows
+    ld hl,MENU_COPPER_CYAN
+    call menuCopperRows           ; Preset cyan for the first row under the logo.
     ei
+menuLogoWaitRaster:
     halt
     di
     ld (menuLogoHostStack+1),sp
-    ld bc,15552
+    call menuMusicPage
+menuLogoCopySource:
+    ld hl,0
+    ld de,attrBuffer+MENU_LOGO_PREFIX
+    ld bc,MENU_LOGO_PROGRAM_SIZE-MENU_LOGO_PREFIX
+    call copyMenuProgram
+    xor a
+    call swapPage
+menuLogoDelay:
+    ld bc,0                      ; Wait after the fixed-size top-border copy.
     call DELAY
     ld a,(#5800)                  ; Contention aligns the first raster instruction.
 menuLogoRasterPalette:
@@ -70,7 +96,69 @@ menuLogoRasterPalette:
 
 menuLogoHostStack:
     ld sp,0
-    ; Tick AY once per frame before preparing the next phase.
+    ld (menuCopperHostStack+1),sp
+    ld sp,menuCopperStack
+    ld ix,menuCopperRows
+    ld de,MENU_COPPER_ROW_BYTES
+    ld iy,MENU_COPPER_ROWS
+    ld a,(2899)
+    cp 159
+    jp z,copper128
+    jp copperPlus
+
+    macro COPPER_PAD cycles
+copperPadCycles = cycles
+        if copperPadCycles%2
+            ld a,0
+copperPadCycles = copperPadCycles-7
+        endif
+        if copperPadCycles%4
+            inc bc
+copperPadCycles = copperPadCycles-6
+        endif
+        dup copperPadCycles/4
+            nop
+        edup
+    endm
+
+    ; The 32 cells are written left to right between fetches, with one start
+    ; every 456 T-states. The first cyan band was set in the bottom border.
+    macro COPPER_ROWS initial,gap
+        ld bc,initial
+        call DELAY
+        jr .white
+.cyan:
+        ld hl,MENU_COPPER_CYAN
+        call copperStoreRow
+        COPPER_PAD gap
+.white:
+        ld hl,MENU_COPPER_WHITE
+        call copperStoreRow
+        COPPER_PAD gap
+        ld hl,MENU_COPPER_CYAN
+        call copperStoreRow
+        COPPER_PAD gap
+        ld hl,MENU_COPPER_BLUE
+        call copperStoreRow
+        add ix,de
+        dec iyl
+        jp z,menuCopperDone
+        COPPER_PAD (gap-45)
+        jr .cyan
+    endm
+
+copper128:
+    COPPER_ROWS 173,83           ; Row store takes 328 T-states with contention.
+copperPlus:
+    COPPER_ROWS 161,74           ; Row store takes 337 T-states with contention.
+copperStoreRow:
+    jp (ix)
+
+menuCopperDone:
+menuCopperHostStack:
+    ld sp,0
+    ld bc,200
+    call DELAY
     call menuMusicPage
     call menuTrackTick
     xor a
@@ -83,6 +171,13 @@ menuLogoHostStack:
     ld (hl),0
 menuLogoFrameDone:
     ei
+    ret
+
+copyMenuProgram:
+    dup 32
+        ldi
+    edup
+    jp pe,copyMenuProgram
     ret
 
 seedLuminanceRows:
@@ -101,7 +196,7 @@ clearMenuRaster:
     ld hl,attrBuffer
     ld (hl),a
     ld de,attrBuffer+1
-    ld bc,1024-1
+    ld bc,menuCopperStack-attrBuffer-1
     ldir
     ret
 
