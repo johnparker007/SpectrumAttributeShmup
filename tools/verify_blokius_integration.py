@@ -201,7 +201,7 @@ doSinScroll equ barrelScroll_Update
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu:
             defines.append("LEVEL_MENU")
-            for name in ("joystick.a80", "redefine_keys.a80"):
+            for name in ("joystick.a80", "redefine_keys.a80", "menu_logo.a80"):
                 shutil.copyfile(TESTS.parent / "game" / name, game / name)
         if audio is None:
             defines.append("LIVE_SFX")
@@ -229,8 +229,14 @@ doSinScroll equ barrelScroll_Update
         code = data.read_bytes()
         sine_start = code.index(b"\nsin:")
         frames_start = code.index(b"\ntileFrames:", sine_start)
-        # Leave #8000–#82ff available without moving the tile animation tables.
-        data.write_bytes(code[:sine_start] + b"\n    org #8300\n" + code[frames_start:])
+        # The menu raster runs in fast RAM without moving the tile animation tables.
+        data.write_bytes(code[:sine_start] + b"""
+    ifdef LEVEL_MENU
+        include "menu_logo.a80"
+        assert $ <= #8300
+    endif
+    org #8300
+""" + code[frames_start:])
 
         resources = game / "gfx" / "resources.a80"
         code = resources.read_bytes()

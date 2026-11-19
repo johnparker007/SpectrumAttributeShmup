@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from build_art import LEVEL_MAPS, SCREEN_FONT, map_output
+from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, map_output
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
@@ -16,6 +16,50 @@ from verify_blokius_integration import (
     GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, YELLOW_FIRE_COUNTS, install,
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
+from verify_zesarux_raster import HEIGHT, PAPER_WIDTH, WIDTH, capture_video, paper_row
+
+
+def verify_logo_video(emulator, game, model):
+    s = read_symbols(game / "main.sym")
+    width, rows, left, top = (s["MENU_LOGO_" + name] for name in ("WIDTH", "ROWS", "LEFT", "TOP"))
+    bitmap = (game / MENU_LOGO).read_bytes()
+    # The SNA starts with a 27-byte header and dumps addresses #4000–#ffff in order.
+    offset = 27 + s["menuLogoPalette"] - 0x4000
+    palette = (game / "main.sna").read_bytes()[offset:offset + 16]
+
+    def ink(attr):
+        intensity = 255 if attr & 64 else 192
+        return bytes(intensity if attr & channel else 0 for channel in (1, 4, 2))
+
+    def logo_rows(phase):
+        for y in range(rows * 8):
+            character_row, scan = divmod(y, 8)
+            start = (scan * rows + character_row) * width
+            pixels = bytearray(3 * left * 8)
+            for column, value in enumerate(bitmap[start:start + width]):
+                colour = ink(palette[(phase + column + 2 * character_row + scan // 4) % 16])
+                for bit in range(7, -1, -1):
+                    pixels += colour if value & (1 << bit) else b"\0\0\0"
+            yield bytes(pixels).ljust(3 * PAPER_WIDTH, b"\0")
+
+    phases = {b"".join(logo_rows(phase)): phase for phase in range(16)}
+    video = game / f"menu-logo-{model}.raw"
+    capture_video(emulator, model, ["--tape", game / "main.tap", "--fastautoload", "--vofilefps", "25"], video, 8)
+    frame_bytes = WIDTH * HEIGHT * 3
+    frames_to_check = 32
+    seen = set()
+    with video.open("rb") as recording:
+        recording.seek(-frames_to_check * frame_bytes, 2)
+        for _ in range(frames_to_check):
+            frame = recording.read(frame_bytes)
+            logo = b"".join(paper_row(frame, y) for y in range(top * 8, (top + rows) * 8))
+            phase = phases.get(logo)
+            if phase is None:
+                raise ValueError(f"{model}: menu logo bands are misaligned")
+            seen.add(phase)
+    if len(seen) < 2:
+        raise ValueError(f"{model}: the rainbow did not animate")
+    video.unlink()
 
 
 def verify_choice(emulator, game, model, choice):
@@ -54,7 +98,7 @@ def verify_choice(emulator, game, model, choice):
     expect_at("firstFrameLogic", f"PEEKW({s['intProc'] + 1:04X}H)", s["renderFrame2"])
 
     font = (game / SCREEN_FONT).read_bytes()
-    for name, address, char in (("menuWait", 0x480c, "B"), ("levelUnpackBegin", 0x4897, str(choice))):
+    for name, address, char in (("menuWait", 0x4846, "1"), ("levelUnpackBegin", 0x4897, str(choice))):
         for row in range(8):
             expect_at(name, peek(address + row * 256), font[(ord(char) - 32) * 8 + row])
     for address in (0x50E0, 0xD0E0):
@@ -72,7 +116,7 @@ def verify_choice(emulator, game, model, choice):
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(controls + str(choice) * 80, encoding="ascii")
-    boot_log = breakpoint_log(emulator, game / "main.tap", model, 14, watch,
+    boot_log = breakpoint_log(emulator, game / "main.tap", model, 20, watch,
                               fast_autoload=True, keyboard_spool=spool)
     hits = {}
     for condition, value in HIT.findall(boot_log):
@@ -291,6 +335,9 @@ def main():
         replay = [LEFT | UP] * 24 + [0] * 96 + [RESTART] + [LEFT | DOWN] * 24 + [0] * 115
         install(corner_game, assembler, live=True, replay=replay)
         with ThreadPoolExecutor(max_workers=4) as pool:
+            logos = [pool.submit(verify_logo_video, emulator, game, model) for model in MODELS]
+            for check in logos:
+                check.result()
             corners = [pool.submit(verify_green_corners, emulator, corner_game, model) for model in MODELS]
             keys = [pool.submit(verify_redefined_keys, emulator, game, model) for model in MODELS]
             checks = [pool.submit(verify_choice, emulator, game, model, choice)

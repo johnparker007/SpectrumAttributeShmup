@@ -15,6 +15,7 @@ ART = Path(__file__).resolve().parents[1] / "art"
 ZX0 = ART.parent / "vendor" / "zx0"
 LEVEL_MAPS = ("level.tmx", *(f"level-{number}.tmx" for number in range(2, 9)))
 SCREEN_FONT = "font/arcade-8.bin"
+MENU_LOGO = "gfx/blokius-logo.bin"
 DESTRUCTIBLE_TILE = 124
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
@@ -48,6 +49,18 @@ def arcade_font(source):
     if len(glyphs) != len(codes):
         raise ValueError("The arcade font must supply ASCII glyphs 32 through 95")
     return b"".join(glyphs[number] for number in codes)
+
+
+def logo_bitmap(source):
+    """Pack a black and white 224×32 PBM in Spectrum screen order."""
+    data = source.read_bytes()
+    header = re.match(rb"P4\s+(?:#[^\n]*\n\s*)*224\s+32\r?\n", data)
+    if header is None or len(data) - header.end() != 28 * 32:
+        raise ValueError(f"{source} must be a 224 by 32 binary PBM")
+    rows = data[header.end():]
+    # PBM uses 1 for black. Set the Spectrum's ink bits for the white logo.
+    return bytes(value ^ 255 for scan in range(8) for y in range(scan, 32, 8)
+                 for value in rows[y * 28:(y + 1) * 28])
 
 
 def convert_image(source, converter, output, size):
@@ -104,6 +117,7 @@ def build_art(output, *, sprite_dir=None):
     font.write_bytes(arcade_font(ART / "fonts/PressStart2P-8.bdf"))
     gfx = output / "gfx"
     gfx.mkdir(exist_ok=True)
+    (output / MENU_LOGO).write_bytes(logo_bitmap(ART / "gfx/blokius-logo.pbm"))
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")

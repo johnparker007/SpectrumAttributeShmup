@@ -12,33 +12,21 @@ showLevelMenu:
 
 drawLevelMenu:
     call clearMenuScreen
-    ld hl,menuTitle
-    ld de,#480c               ; row 8, column 12
+    call drawMenuLogo
+    ld hl,menuLevels
+    ld de,#4846               ; row 10, centered
     call drawScreenText
-    ld ix,menuChoices
-    ld b,8
-.drawChoices:
-    push bc
-    ld e,(ix)
-    ld d,(ix+1)
-    ld l,(ix+2)
-    ld h,(ix+3)
-    call drawScreenText
-    ld de,4
-    add ix,de
-    pop bc
-    djnz .drawChoices
     ld hl,menuControlChoices
-    ld de,#5081               ; row 20
+    ld de,#5001               ; row 16
     call drawScreenText
     ld hl,menuSinclairChoice
-    ld de,#50c1               ; row 22
+    ld de,#5041               ; row 18
     call drawScreenText
     ld a,(menuControl)
     jp showControlMark
 
 menuWait:
-    call menuFrame
+    call menuLogoFrame
     ld bc,#fbfe                ; Q, W, E, R, T
     in a,(c)
     bit 3,a
@@ -218,24 +206,13 @@ clearMenuScreen:
     ldir
     ret
 
-menuTitle: db "BLOKIUS",0
-menuChoices:
-    dw #4860,menuLevel1, #48a0,menuLevel2, #48e0,menuLevel3, #5020,menuLevel4
-    dw #4871,menuLevel5, #48b1,menuLevel6, #48f1,menuLevel7, #5031,menuLevel8
-menuLevel1: db "1 START LEVEL 1",0
-menuLevel2: db "2 START LEVEL 2",0
-menuLevel3: db "3 START LEVEL 3",0
-menuLevel4: db "4 START LEVEL 4",0
-menuLevel5: db "5 START LEVEL 5",0
-menuLevel6: db "6 START LEVEL 6",0
-menuLevel7: db "7 START LEVEL 7",0
-menuLevel8: db "8 START LEVEL 8",0
+menuLevels: db "1-8  START LEVEL 1-8",0
 menuControlChoices: db "K KEYBOARD     J KEMPSTON",0
 menuSinclairChoice: db "S SINCLAIR     R REDEFINE KEYS",0
 menuMark: db ">",0
 menuNoMark: db " ",0
 menuControl: db 0
-menuMarkAddresses: dw #5080,#508f,#50c0
+menuMarkAddresses: dw #5000,#500f,#5040
 menuReaders: dw readControls,readKempston,readSinclair
 readyTitle: db "GET READY",0
 readyCaption: db "ENTERING LEVEL "
@@ -245,3 +222,6 @@ gameOverText: incbin "game_over.bin"
     assert $-gameOverText=GAME_OVER_WIDTH*GAME_OVER_ROWS
 
     include "redefine_keys.a80"
+
+menuLogoBitmap: incbin "gfx/blokius-logo.bin"
+    assert $-menuLogoBitmap=8*MENU_LOGO_WIDTH*MENU_LOGO_ROWS

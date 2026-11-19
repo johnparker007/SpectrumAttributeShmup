@@ -16,6 +16,7 @@ The playable build reads these files on every build.
 | `maps/tileSet.tsx` | Tiled tileset linked to `gfx/tileSet.png` |
 | `maps/destructible.tsx` | Tiled tileset for the destructible target and its explosion |
 | `gfx/destructible.png` | Four 8×8 tiles laid out as the intact target followed by three explosion frames |
+| `gfx/blokius-logo.pbm` | Main menu wordmark, 224 by 32 screen pixels, white on black. Export as binary PBM |
 | `fonts/PressStart2P-8.bdf` | Source for the menu, HUD and GAME OVER lettering |
 
 Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Ship collision boxes stay 5 by 5 dots.
