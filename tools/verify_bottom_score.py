@@ -6,11 +6,16 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from trace_zesarux import trace
+from trace_zesarux import read_symbols, trace
 from verify_scenery import FLAGS, MODELS
 from verify_zesarux_raster import run
 
 PROBE = Path(__file__).resolve().parents[1] / "tests/hud/bottom_score.asm"
+
+
+def first_bonus_points(game):
+    bcd = read_symbols(game / "main.sym")["FIRST_BONUS_HUNDREDS"]
+    return int(f"{bcd:04x}") * 100
 
 
 def life_pixels(sprite, font):
@@ -60,9 +65,10 @@ def build_cases(game):
     previous = 0
     # Include all extra lives, consecutive awards across boundaries, and
     # the non-award at 50k. Each actual +100 passes through the enemy kill path's counter.
-    milestones = range(20000, 1000000, 50000)
-    scores = sorted({0, 100, 900, 1000, 9900, 10000, 19900, 20100, 50000, 69900,
-                     100000, 101000, 999900, *milestones})
+    first = first_bonus_points(game)
+    milestones = (first, *range(70000, 1000000, 50000))
+    scores = sorted({0, 100, 900, 1000, 1100, 9900, 10000, 19900, 20000, 20100, 50000, 69900,
+                     100000, 101000, 999900, first-100, first+100, *milestones})
     for score in scores:
         if score > previous:
             cases.extend((f"ld bc,{(score - previous) // 100}", "call awardMany"))
@@ -73,9 +79,9 @@ def build_cases(game):
     cases.append("call resetEncounter")
     check(16, 0, 3)
     # Reverse the newly earned icon before its incremental draw has finished.
-    cases.extend(("ld bc,200", "call awardMany", "call hudStep", "call hudStep",
+    cases.extend((f"ld bc,{first//100}", "call awardMany", "call hudStep", "call hudStep",
                   "ld a,1", "ld (player_hit),a", "call updatePlayerLife"))
-    check(16, 20000, 3)
+    check(16, first, 3)
     cases.extend(("call resetEncounter", "call hudAward", "call hudStep", "call resetEncounter"))
     check(16, 0, 3)
     # Lose the 19th spare with the second of its three cells partially drawn.

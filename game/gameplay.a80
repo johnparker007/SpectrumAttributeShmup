@@ -6,6 +6,9 @@ PLAYER_BOTTOM equ PLAYFIELD_HEIGHT-5
 HIDDEN_BOX equ 96           ; outside the domain of every real projectile
     ifdef BOTTOM_HUD
 WAVE_ENEMIES equ 15
+    ifdef LIVE_SFX
+        define BONUS_AUDIO
+    endif
     else
 WAVE_ENEMIES equ 12
     endif
@@ -22,7 +25,11 @@ INVINCIBLE_TICKS equ 75       ; three seconds at the 25 Hz game rate
 gameInit:
     call resetEncounter
     call hudInit
+    ifdef BONUS_AUDIO
+    jp initGameSoundAndActors
+    else
     jp syncActors
+    endif
 
 scrollScenery:
     ld a,(gameTick)

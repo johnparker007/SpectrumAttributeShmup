@@ -52,9 +52,38 @@ soundPageIn:
     out (c),a
     ld hl,(phrase_packet)
     ld c,#fd
+    ifdef BONUS_AUDIO
+        ld d,high soundMusicRegisters
+    endif
 sound_packet_next:
     ld a,(hl)
     inc hl
+    ifdef BONUS_AUDIO
+    cp 16                       ; ordinary registers go straight to the chip
+    jr c,sound_music_select
+    cp #ff
+    jr z,sound_packet_end
+    and 15
+    cp 7
+    jr z,sound_music_mixer
+    ld e,a                      ; remember B's current music even during a chime
+    ld a,(hl)
+    ld (de),a
+soundMusicRoute:
+    jr sound_music_b            ; patched to sound_music_skip while B is borrowed
+sound_music_skip:
+    inc hl
+    jr sound_packet_next
+sound_music_b:
+    ld a,e
+    jr sound_music_select
+sound_music_mixer:
+    ld a,(hl)
+    ld (soundMusicMixer),a
+    ld (soundMixerWritten),a
+    ld a,7
+sound_music_select:
+    else
     cp #ff
     jr z,sound_packet_end
     ifdef LIVE_SFX
@@ -66,6 +95,7 @@ sound_packet_next:
         ld a,7
 sound_music_select:
     endif
+    endif
     ld b,#ff
 soundSelect:
     out (c),a
@@ -74,7 +104,9 @@ soundSelect:
     inc hl
 soundWrite:
     out (c),a
+    ifndef BONUS_AUDIO
     inc de                      ; 96 Ts per register, independent of the value
+    endif
     jr sound_packet_next
 sound_packet_end:
     ld (phrase_packet),hl

@@ -14,6 +14,7 @@ import tempfile
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
 from build_art import BLAST_TILE, DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
+from bonus_chime import bake_bonus, tag_music_bank
 from menu_luminance import build_luminance
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -234,6 +235,8 @@ doSinScroll equ barrelScroll_Update
             shutil.copyfile(TESTS.parent / "game" / "sound_effects.a80", game / "sound_effects.a80")
             for effect in ("shot-sound.bin", "explosion-noise.bin"):
                 shutil.copyfile(MUSIC / effect, game / "gfx" / effect)
+            if not prototype_waves:
+                (game / "gfx/extra-ship.bin").write_bytes(bake_bonus(MUSIC / "extra-ship.vt2"))
         if replay is not None:
             controls = bytearray()
             for command, group in groupby(replay):
@@ -249,7 +252,11 @@ doSinScroll equ barrelScroll_Update
         (game / "enemy_boxes.bin").write_bytes(bytes(axis for box in ENEMY_BOXES for axis in box))
         (game / "player_box.bin").write_bytes(bytes(PLAYER_BOX))
         (game / "collision_expected.bin").write_bytes(phases()[0].hits)
-    install_audio(game, audio, phrases=True, packed_audio=star_force_music() if audio is None else None)
+    packed_audio = star_force_music() if audio is None else None
+    if live and not prototype_waves and packed_audio is not None:
+        recipe, *banks = packed_audio
+        packed_audio = (recipe, *(tag_music_bank(bank) for bank in banks))
+    install_audio(game, audio, phrases=True, packed_audio=packed_audio)
     if live:
         data = game / "data.asm"
         code = data.read_bytes()

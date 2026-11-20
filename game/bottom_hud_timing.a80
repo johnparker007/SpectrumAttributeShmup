@@ -34,4 +34,8 @@ hudTilePlus2a:
     ld a,0
     jp hudTileDone
 
+    ifdef LIVE_SFX
+        align 256
+soundMusicRegisters: defs 14    ; indexed by AY register while the literal bank is mapped
+    endif
     assert $<=#be00             ; IM 2 builds its vector table here at startup

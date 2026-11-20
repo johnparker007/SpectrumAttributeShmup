@@ -1,5 +1,13 @@
 ; Bank 0 is mapped when a kill is scored or a new HUD cell is selected.
 ; hudAward is called from inside the enemy loop and must preserve BC and DE.
+    if low FIRST_BONUS_HUNDREDS
+hudFirstBonus:
+    ld a,(hudScore+1)
+    cp high FIRST_BONUS_HUNDREDS
+    ret nz
+    jr hudScoreAwarded.extraLife
+    endif
+
 hudScoreAwarded:
     or a
     jr z,.tenThousand
@@ -10,6 +18,12 @@ hudScoreAwarded:
     ret
 .tenThousand:
     ld a,(hudScore+1)
+    if low FIRST_BONUS_HUNDREDS = 0
+    cp high FIRST_BONUS_HUNDREDS
+    jr z,.extraLife
+    endif
+    cp #07                      ; subsequent awards start at 70,000
+    ret c
     and 15                      ; tens of thousands digit, packed BCD
     cp 2
     jr z,.extraLife
@@ -19,7 +33,11 @@ hudScoreAwarded:
     set HUD_LIVES_DIRTY,(hl)
     ld hl,playerLives
     inc (hl)
+    ifdef LIVE_SFX
+    jp startBonusSound
+    else
     ret
+    endif
 
 hudFormatScore:
     ld de,(hudScore)

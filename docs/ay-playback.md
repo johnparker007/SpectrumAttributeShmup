@@ -52,3 +52,7 @@ The gameplay build uses the packed Star Force cover in `game/music`. It plays on
 Capture `SoundEffects.pt3` with `benchmark_ay.py --pt3 SoundEffects.pt3 --through-loop`, then run `python tools/extract_ay_effects.py SoundEffects.vt2 <reference.json> game/music`. The extractor uses the sample 3 notes to cut pattern 0 (enemy explosion) and pattern 1 (player fire). The effects occupy 90 bytes in total.
 
 A launched shot pair starts the tone sweep on channel C. An enemy entering its explosion animation starts the 27-tick noise sequence on C. Each effect follows its captured volume when it plays alone. While both play, the AY noise gates the shot tone and channel C uses the higher of the two volumes for that tick. The music stays on A and B. A new event of the same kind restarts its effect, and a game restart clears both effects while the music continues.
+
+An extra ship borrows B for a rising D–F–A–D chime. The bass on A and both effects on C keep playing. The music player follows B's pitch and volume in the background and restores the current arpeggio note when the chime ends or the player restarts.
+
+Edit `game/music/extra-ship.vt2` in Vortex Tracker and run `Build-TAP.bat`. The build reads pattern 0 directly. Use channel B, plain tone sample 1, pattern volume and the module speed to shape the phrase. A note with silent sample 3 marks the end. The current seven sounding rows at speed 3 last 21 AY ticks (0.42 seconds). The gameplay stream stores only the registers that change at each step.

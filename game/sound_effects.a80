@@ -15,12 +15,65 @@ resetSoundEffects:
     ld hl,0
     ld (explosionNoiseCursor),hl
     ld (shotSoundCursor),hl
+    ifdef BOTTOM_HUD
+    ld hl,soundEffectsTick      ; an award can be pending before its first AY tick
+    ld (soundEffectsCall+1),hl
+    ld a,(soundMusicRoute+1)
+    cp sound_music_b-soundMusicRoute-2
+    jp nz,endBonusSound
+    endif
     ret
 
+    ifdef BOTTOM_HUD
+    ; soundTickBody returns with C=#fd. OUTI decrements B before the port
+    ; write, so #c0 selects #bffd and advances the packed effect cursor.
+    macro FX_BYTE reg
+        ld b,#ff
+        ld a,reg
+        out (c),a
+        ld b,#c0
+        outi
+    endm
+    endif
+
 soundEffectsTick:
+    ifdef BOTTOM_HUD
+    ld d,0
+    ld hl,(shotSoundCursor)
+    ld a,h
+    or a
+    jr z,.explosion
+    FX_BYTE 4
+    FX_BYTE 5
+    ld d,(hl)
+    inc hl
+    ld a,l
+    cp low shotSoundEnd
+    jr nz,.shotNext
+    ld hl,0
+.shotNext:
+    ld (shotSoundCursor),hl
+.explosion:
+    ld e,0
+    ld hl,(explosionNoiseCursor)
+    ld a,h
+    or a
+    jr z,.mix
+    FX_BYTE 6
+    ld e,(hl)
+    inc hl
+    ld a,l
+    cp low explosionNoiseEnd
+    jr nz,.explosionNext
+    ld hl,0
+.explosionNext:
+    ld (explosionNoiseCursor),hl
+.mix:
+    else
     call advanceShotSound
     ld d,e                      ; shot volume
     call advanceExplosionSound ; explosion volume in E
+    endif
     ld a,(soundMusicMixer)
     or #24                      ; disable both generators on C when idle
     inc d
@@ -39,7 +92,14 @@ soundEffectsTick:
     ld e,d                      ; use the louder effect's volume on C
 .writeVolume:
     ld a,10
+    ifdef BOTTOM_HUD
+    ld b,#ff
+    out (c),a
+    ld b,#bf
+    out (c),e
+    else
     call writeSoundEffect
+    endif
     ld a,h
     ld hl,soundMixerWritten
     cp (hl)
@@ -49,6 +109,7 @@ soundEffectsTick:
     ld a,7
     jp writeSoundEffect
 
+    ifndef BOTTOM_HUD
 advanceExplosionSound:
     ld hl,(explosionNoiseCursor)
     ld e,0
@@ -92,6 +153,7 @@ advanceShotSound:
 .save:
     ld (shotSoundCursor),hl
     ret
+    endif
 
 writeSoundEffect:
     ld bc,#fffd
@@ -110,3 +172,85 @@ shotSoundEnd:
 explosionNoise: incbin "gfx/explosion-noise.bin"
 explosionNoiseEnd:
     assert explosionNoiseEnd-explosionNoise < 256
+
+    ifdef BOTTOM_HUD
+; Consume the initial all-register packet before enabling the renderer.
+; The first gameplay frame, like every later frame, plays one music tick.
+initGameSoundAndActors:
+    ld a,(sound_initialized)
+    or a
+    jp nz,syncActors
+    inc a
+    ld (sound_initialized),a
+    call soundTickBody
+    jp syncActors
+
+; The score path preserves BC/DE. Only an actual award switches the AY tick
+; to the chime handler. The packed music continues to advance on every tick.
+startBonusSound:
+    ld hl,beginBonusSound
+    ld (soundEffectsCall+1),hl
+    ret
+
+beginBonusSound:
+    ld hl,soundEffectsWithBonus
+    ld (soundEffectsCall+1),hl
+    ld a,sound_music_skip-soundMusicRoute-2
+    ld (soundMusicRoute+1),a
+    ld hl,bonusSound
+    ld a,(hl)
+    ld (bonusWait),a
+    inc hl                      ; first event always supplies all three registers
+    inc hl
+    FX_BYTE 2
+    FX_BYTE 3
+    FX_BYTE 9
+    jr bonusCursor.done
+
+soundEffectsWithBonus:
+    ld hl,bonusWait
+    dec (hl)
+    jp nz,soundEffectsTick
+bonusCursor:
+    ld hl,bonusSound
+    ld a,(hl)                   ; duration, changed-register mask, new values
+    or a
+    jr z,.end
+    ld (bonusWait),a
+    inc hl
+    ld d,(hl)
+    inc hl
+    bit 0,d
+    jr z,.high
+    FX_BYTE 2
+.high:
+    bit 1,d
+    jr z,.volume
+    FX_BYTE 3
+.volume:
+    bit 2,d
+    jr z,.done
+    FX_BYTE 9
+.done:
+    ld (bonusCursor+1),hl
+    jp soundEffectsTick
+.end:
+    call endBonusSound
+    jp soundEffectsTick
+
+endBonusSound:
+    ld hl,soundEffectsTick
+    ld (soundEffectsCall+1),hl
+    ld a,sound_music_b-soundMusicRoute-2
+    ld (soundMusicRoute+1),a
+    ld c,#fd
+    ld hl,soundMusicRegisters+2
+    FX_BYTE 2
+    FX_BYTE 3
+    ld l,low (soundMusicRegisters+9)
+    FX_BYTE 9
+    ret
+
+bonusSound: incbin "gfx/extra-ship.bin"
+bonusWait: db 0
+    endif
