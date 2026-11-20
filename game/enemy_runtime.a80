@@ -378,16 +378,12 @@ resetLevelWaves:
     xor #40                      ; a retry starts with the opposite entrance
     ld (greenStartPhase),a
     ld (waveIndex),a
-    xor a
-    ld (waveKind),a
-    ld a,9
-    ld (stepWave.spawnDelay+1),a
     ld a,#ff
     ld (moveCatalogShip.shotMask+1),a
     ld (greenShot),a
     ld (yellowMidShot),a
     ld (yellowEndShot),a
-    ret
+    jp startWaveOrder
 
 greenStartPhase: db #40
 greenShot: dw #ff

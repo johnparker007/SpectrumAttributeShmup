@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 
+from enemy_catalog import FIRST_ORDER, wave_orders
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_scenery import FLAGS, MODELS
@@ -53,9 +54,11 @@ def verify(game, emulator, model, key, ticks):
     card = pc("menuTrackInitHL") + f" AND HL={s['attrBuffer']:04X}H"
     volumes = playing + " AND 1=1"  # R8-R10 in the archived player's AY output buffer
     level = pc("gameInit")
+    retry_order = level + " AND 1=1"
     checks = [(death, "TSTATESP"), (playing, "TSTATESP"), (title_song, "TSTATESP"),
               (menu, "TSTATESP"), (restart, "TSTATESP"),
               (level, f"PEEK({s['selectedLevel']:04X}H)+256*PEEKW({s['hudScore']:04X}H)"),
+              (retry_order, f"PEEK({s['nextWaveOrder'] + 7:04X}H)"),
               (card, "PEEK(5948H)+256*PEEK(5800H)+65536*PEEK(5AFFH)"),
               (volumes, "PEEK(DD8EH)+256*PEEK(DD8FH)+65536*PEEK(DD90H)"),
               (pc("showGameOver"), f"PEEKW({s['hudScore']:04X}H)")]
@@ -91,6 +94,8 @@ def verify(game, emulator, model, key, ticks):
         assert 0 < len(frames) < ticks
     if key == "enter":
         assert values(restart) and not values(menu) and values(level)[:2] == [7, 7]
+        first = FIRST_ORDER[7]
+        assert values(retry_order)[:2] == [first, (first + 1) % len(wave_orders(8))]
     else:
         assert values(menu) and not values(restart) and values(title_song)[-1] > values(menu)[0]
     print(f"{model} {key}: 100-frame death delay, {len(frames)} tracker calls, "

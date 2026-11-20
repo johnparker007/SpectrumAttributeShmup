@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from enemy_catalog import FLIERS, ROSTERS, spawn_lane
+from enemy_catalog import FIRST_ORDER, FLIERS, ROSTERS, spawn_lane, wave_orders
 from menu_luminance import (
     COPPER_BANDS, COPPER_MENU_TEXT, COPPER_ROW_BANDS,
     GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS,
@@ -97,6 +97,12 @@ def verify_logo_video(emulator, game, model, frames_to_check=32):
     video.unlink()
 
 
+def classic_restarts(level):
+    # Reach the green/yellow opening with the original (top) green entrance.
+    count = len(wave_orders(level))
+    return next(n for n in range(0, count * 2, 2) if (FIRST_ORDER[level - 1] + n) % count == 0)
+
+
 def verify_choice(emulator, game, model, choice):
     s = read_symbols(game / "main.sym")
     if (s["PLAYFIELD_HEIGHT"], s["ENEMY_COUNT"], s["WAVE_ENEMIES"]) != (46, 24, 15):
@@ -172,7 +178,8 @@ def verify_choice(emulator, game, model, choice):
 
     # Use a sparse trace for sustained gameplay. The emulator tests every
     # breakpoint at each instruction, even after the startup probes pass.
-    spool.write_text(str(choice) * 80, encoding="ascii")
+    retries = classic_restarts(choice)
+    spool.write_bytes(str(choice).encode("ascii") * 50 + b"\rn" * retries)
     frame2_halt = f"PC={s['halt1']:04X}H"
     watch = [(points["halt2"], "TSTATESP"), (frame2_halt, "TSTATESP")]
     wave_probe = f"PC={s['stepWave.saveSlot']:04X}H"
@@ -192,9 +199,16 @@ def verify_choice(emulator, game, model, choice):
     yellow_queue_clock = yellow_queue + " AND 1=1"
     catalog_shot = f"PC={s['catalogShotReady']:04X}H"
     watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP"), (catalog_shot, "D")))
-    log = breakpoint_log(emulator, game / "main.tap", model, 50 if 2 <= choice <= 5 else 32, watch,
+    restart = f"PC={s['restartGame']:04X}H"
+    watch.append((restart, "A"))
+    log = breakpoint_log(emulator, game / "main.tap", model, 50 if retries or 2 <= choice <= 5 else 32, watch,
                          fast_autoload=True, keyboard_spool=spool)
     rows = [(condition, int(value)) for condition, value in HIT.findall(log)]
+    restarts = [i for i, (condition, _) in enumerate(rows) if condition == restart]
+    if len(restarts) != retries:
+        raise ValueError(f"{model} map {choice}: reached {len(restarts)} of {retries} requested restarts")
+    if restarts:
+        rows = rows[restarts[-1] + 1:]
     halts = {points["halt2"]: 0, frame2_halt: 1}
     timing = [(halts[condition], value) for condition, value in rows if condition in halts]
     frame_pairs = len(timing) // 2
@@ -285,7 +299,7 @@ def check_yellow_path(rows, probe, fire_count, spawns, queued, shots):
 
 
 def verify_green_corners(emulator, game, model):
-    """Park at the top left, restart, then park at the bottom left on level 8."""
+    """Park in each left corner on successive green-first attempts at level 8."""
     s = read_symbols(game / "main.sym")
     player, shot, contact, restart = (f"PC={s[name]:04X}H" for name in (
         "updatePlayerLife.checkPlayer", "enemyShotEmitted", "checkPlayerContact.hit", "restartGame",
@@ -301,9 +315,11 @@ def verify_green_corners(emulator, game, model):
             runs.append([])
         else:
             runs[-1].append((point, int(value)))
-    if len(runs) != 2:
-        raise ValueError(f"{model}: expected an Enter restart between green wave entrances")
-    for y, events in zip((0, s["PLAYER_BOTTOM"]), runs):
+    first = classic_restarts(8)
+    second = first + len(wave_orders(8))
+    if len(runs) != second + 1:
+        raise ValueError(f"{model}: failed to reach both green wave entrances")
+    for y, events in ((0, runs[first]), (s["PLAYER_BOTTOM"], runs[second])):
         corner = packed((0, y))
         entry_shot = packed((63, y + 2))  # bearing zero means straight left
         fired_at_corner = False
@@ -384,7 +400,9 @@ def main():
         corner_scratch = Path(scratch) / "corner-test"
         corner_scratch.mkdir()
         corner_game = build(ARCHIVE, assembler, corner_scratch)
-        replay = [LEFT | UP] * 24 + [0] * 96 + [RESTART] + [LEFT | DOWN] * 24 + [0] * 115
+        retry = [0, RESTART]
+        replay = (retry * classic_restarts(8) + [LEFT | UP] * 24 + [0] * 96
+                  + retry * len(wave_orders(8)) + [LEFT | DOWN] * 24 + [0] * 115)
         install(corner_game, assembler, live=True, replay=replay, solid_menu_logo=True)
         with ThreadPoolExecutor(max_workers=4) as pool:
             menu_models = (*MODELS, "P341") if args.luminance_logo else MODELS

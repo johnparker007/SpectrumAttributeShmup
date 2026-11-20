@@ -19,9 +19,11 @@ The level loader selects the green flier's firing column and the level's bullet 
 | 4 | One slow shot on entry |
 | 6–9 | One shot on entry at the original speed |
 
-Each level cycles through its roster in order, with seven ships of one type per wave. Level 1 has only the green flier. Levels 2–9 open with green and yellow waves, followed by the additional types below. Yellow ships enter five ticks apart when a slot is free. Early levels give each wave time to clear. Levels 6–9 shorten the gaps so waves can overlap. Two full waves and the player use fifteen of the sixteen sprite slots.
+Every wave contains seven ships of one type. Level 1 has only the green flier. Each mixed level has three wave orders, and each new attempt advances to the next order for that level. On level 9 the opening pairs are Polar Wraith / Azure Hopper, Ruby Crown / Silver Splitter and Green Sine / Yellow Z. The order chosen for an attempt repeats during that run.
 
-| Level | Additional waves in flight order | Resident types |
+Levels 2–5 give every resident type one wave per rotation. From level 6 the two newest types get a second wave, rising to the newest three on level 7 and the newest four on levels 8–9. Yellow ships enter five ticks apart when a slot is free. Early levels give each wave time to clear. Levels 6–9 shorten the gaps so waves can overlap. Two full waves and the player use fifteen of the sixteen sprite slots.
+
+| Level | Additional resident types | Resident types |
 | --- | --- | ---: |
 | 1 | Green sine only | 1 |
 | 2 | Cobalt Skimmer, Scarlet Hook | 4 |
@@ -33,7 +35,7 @@ Each level cycles through its roster in order, with seven ships of one type per 
 | 8 | Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
 | 9 | Azure Hopper, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
 
-Each of the fourteen additional waves uses seven entry heights. Cobalt Skimmers fly straight across in evenly spaced lanes. Scarlet Hooks enter from alternating edges and turn back towards their starting height. Azure Hoppers accelerate through two parts of a double hop, and Silver Splitters break inward after a long straight approach. The next pass reflects each formation vertically.
+Each of the fourteen additional waves uses seven entry heights. Cobalt Skimmers fly straight across in evenly spaced lanes. Scarlet Hooks enter from alternating edges and turn back towards their starting height. Azure Hoppers accelerate through two parts of a double hop, and Silver Splitters break inward after a long straight approach. Each completed green wave flips the vertical orientation for subsequent formations.
 
 Each new type has an aimed shot from its first appearance. Levels 2 through 9 enable **1, 2, 2, 3, 3, 4, 5 and 6** firing positions per ship respectively. Later waves enter closer together and can fire near the right edge, then aim again farther across. Some ships interleave aimed and fixed-angle shots. When several of the new ships reach a firing position on the same tick, one gets the shot. This keeps the cost of a simultaneous volley bounded. All waves share the 24-bullet pool.
 
@@ -48,9 +50,9 @@ The sixteen compressed ship packets occupy 2,313 bytes in bank 6. Bank 0 reserve
 | Longest enemy load, levels 1–9 | 101.3 ms | 104.1 ms |
 | Longest map and enemy load together | 128.2 ms | 132.7 ms |
 
-The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full rotation of the roster, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there.
+The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full wave order, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there. Use `--restarts --levels 9` to check the four successive openings on the playable TAP.
 
-With the player idle, level 2 averaged 0.87 live enemy bullets over its first wave rotation and peaked at 4. Level 5 averaged 4.41 and peaked at 17. Level 9 averaged 12.20 and peaked at 22 of the 24 slots. Both models produced the same counts.
+With the player idle, level 2 averaged 0.87 live enemy bullets over its first wave rotation and peaked at 4. Level 5 averaged 4.41 and peaked at 17. With the new wave orders level 6 averaged 5.49 and peaked at 13. Level 9 averaged 13.20 and filled all 24 slots. Both models produced the same counts.
 
 Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 

@@ -60,6 +60,27 @@ ROSTERS = (
 )
 MAX_RESIDENT = 8  # One 256-byte art page per resident species in bank 0.
 
+# Each number picks a resident art/path slot for one complete wave. Levels
+# with the same roster size can share the orders even when the art differs.
+ORDERS = {
+    1: ((0,),) * 3,
+    4: ((0, 1, 2, 3), (2, 0, 3, 1), (3, 2, 1, 0)),
+    6: ((0, 1, 2, 3, 4, 5), (4, 2, 5, 0, 3, 1), (5, 3, 1, 4, 0, 2)),
+    7: ((0, 1, 2, 5, 4, 3, 6, 4, 6, 5), (5, 3, 6, 1, 4, 2, 5, 0, 6, 4),
+        (6, 4, 0, 5, 3, 6, 1, 4, 2, 5)),
+    8: ((0, 1, 2, 6, 4, 7, 3, 5, 6, 4, 5, 7), (6, 2, 4, 1, 7, 5, 3, 6, 0, 4, 7, 5),
+        (7, 4, 0, 5, 2, 6, 3, 7, 1, 5, 4, 6)),
+}
+# Level 6 has the same number of residents as levels 3–5, but its two
+# newest ships each get a second wave in the rotation.
+LEVEL_SIX_ORDERS = ((0, 1, 2, 4, 3, 5, 4, 5), (4, 2, 5, 0, 4, 3, 5, 1), (5, 3, 4, 1, 5, 0, 4, 2))
+FIRST_ORDER = (0, 0, 0, 0, 0, 1, 1, 2, 1)
+ORDER_COUNT = 3
+
+
+def wave_orders(level):
+    return LEVEL_SIX_ORDERS if level == 6 else ORDERS[len(ROSTERS[level - 1])]
+
 
 # The on-screen path ends at sample 135. Negative X uses samples 248..255.
 BEARINGS = 142
@@ -136,6 +157,7 @@ def pack_catalog(output, compressor, run):
         f"CATALOG_BEARINGS equ {BEARINGS}",
         f"CATALOG_ENTRIES equ {ENTRIES}",
         f"CATALOG_GATES equ {GATES}",
+        f"WAVE_ORDER_COUNT equ {ORDER_COUNT}",
         "enemyManifests: dw " + ",".join(f"enemyLevel{n}" for n in range(1, len(ROSTERS) + 1)),
     ]
     for i, name in enumerate(NAMES):
@@ -159,14 +181,29 @@ def pack_catalog(output, compressor, run):
         raw.write_bytes(data)
         run([compressor, "-f", raw.resolve(), raw.with_suffix(".zx0").resolve()], output)
         resource_lines.append(f'enemyPacket{i}: incbin "enemy_packet_{i}.zx0"')
+    order_tables = {}
     for level, roster in enumerate(ROSTERS, 1):
         if (not 1 <= len(roster) <= MAX_RESIDENT or len(set(roster)) != len(roster)
                 or roster[:2] != (0, 1)[:len(roster)]):
             raise ValueError(f"Invalid enemy roster on level {level}")
-        manifests.append(f"enemyLevel{level}: db {len(roster)}")
+        orders = wave_orders(level)
+        if len(orders) != ORDER_COUNT or not 0 <= FIRST_ORDER[level - 1] < ORDER_COUNT:
+            raise ValueError(f"Invalid starting wave order on level {level}")
+        if any(set(order) != set(range(len(roster))) or sorted(order) != sorted(orders[0])
+               or (len(order) > 1 and any(slot == order[i-1] for i, slot in enumerate(order)))
+               for order in orders):
+            raise ValueError(f"Invalid wave order on level {level}")
+        table = order_tables.setdefault(orders, f"waveOrders{level}")
+        manifests.extend((f"enemyLevel{level}: db {len(roster)}", f"    dw {table}"))
         for species in roster:
             wait, guns = settings(level, species)
             manifests.append(f"    dw enemyPacket{species}")
             manifests.append(f"    db {wait},{len(guns)}")
+    manifests.append("nextWaveOrder: db " + ",".join(map(str, FIRST_ORDER)))
+    for orders, table in order_tables.items():
+        labels = {order: f"{table}_{i}" for i, order in enumerate(dict.fromkeys(orders))}
+        manifests.append(f"{table}: dw " + ",".join(labels[order] for order in orders))
+        for order, label in labels.items():
+            manifests.append(f"{label}: db " + ",".join(map(str, (*order, 255))))
     (output / "enemy_packets.a80").write_text("\n".join(resource_lines)+"\n", encoding="ascii")
     (output / "enemy_manifests.a80").write_text("\n".join(manifests)+"\n", encoding="ascii")

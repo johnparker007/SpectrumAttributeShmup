@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
 
-from enemy_catalog import FLIERS, ROSTERS, flight_steps, settings, spawn_lane
+from enemy_catalog import FIRST_ORDER, FLIERS, NAMES, ROSTERS, flight_steps, settings, spawn_lane, wave_orders
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_gameplay import aim
@@ -128,19 +128,23 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     aimed = 0
     pressure_at_corner = 0
     corner_losses = 0
-    wave_length = 7 * len(roster)
+    order = wave_orders(level)[FIRST_ORDER[level - 1]]
+    wave_length = 7 * len(order)
+    reflected = False
     for point, raw in HIT.findall(log):
         value = int(raw)
         if point == spawn:
             slot, pose = divmod(value, 65536)
             row, page = divmod(pose, 256)
             member = spawns % 7
-            kind = spawns // 7 % len(roster)
+            wave = spawns // 7
+            kind = order[wave % len(order)]
+            if member == 0 and wave and order[(wave - 1) % len(order)] == 0:
+                reflected = not reflected
             assert page == s["enemyArt"] // 256 + kind, (model, level, spawns, page)
             if kind >= 2:
                 species = roster[kind]
                 ship = FLIERS[species - 2]
-                reflected = spawns // wave_length % 2 == 0
                 assert row == spawn_lane(ship, member, reflected)[0], (model, level, ship.name, member, row)
                 slots[slot] = expected_flight(ship, member, reflected, settings(level, species)[1])
             spawns += 1
@@ -170,7 +174,7 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
                 counts.append(0)
         elif point == bullet and counts and spawns <= wave_length:
             counts[-1] += 1
-        elif point == hit and value == s["PLAYER_RIGHT"] and (spawns - 1) // 7 % len(roster) >= 2:
+        elif point == hit and value == s["PLAYER_RIGHT"] and order[(spawns - 1) // 7 % len(order)] >= 2:
             corner_losses += 1
         elif point in halts:
             times.append((point, value))
@@ -189,6 +193,35 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
           f"{sum(counts)/len(counts):.2f} mean / {max(counts)} peak bullets over the first rotation", flush=True)
 
 
+def verify_restarts(emulator, game, model, level, scratch):
+    """Trace actual ship art across three Enter presses on the playable TAP."""
+    s = read_symbols(game / "main.sym")
+    reset, spawn = (f"PC={s[name]:04X}H" for name in ("resetLevelWaves", "writeSpawnArt"))
+    spool = scratch / f"restarts-{model}-{level}.txt"
+    orders = wave_orders(level)
+    wait = b"n" * 27
+    spool.write_bytes(str(level).encode("ascii") * 50 + (wait + b"\r") * len(orders) + wait)
+    log = breakpoint_log(emulator, game / "main.tap", model, 62,
+                         [(reset, "A"), (spawn, "B")], True, spool)
+    runs = []
+    for point, raw in HIT.findall(log):
+        if point == reset:
+            runs.append([])
+        elif runs:
+            runs[-1].append(int(raw) - s["enemyArt"] // 256)
+    assert len(runs) == len(orders) + 1, (model, level, "attempts", list(map(len, runs)))
+    # Slow early formations can still be entering at the next keypress.
+    # Check at least one wave boundary and the actual art of every ship seen.
+    assert max(map(len, runs)) >= 8, (model, level, "no complete wave")
+    for retry, ships in enumerate(runs):
+        order = orders[(FIRST_ORDER[level - 1] + retry) % len(orders)]
+        assert len(ships) >= 3, (model, level, retry, "too few spawns", len(ships))
+        assert all(slot == order[i // 7 % len(order)] for i, slot in enumerate(ships)), (model, level, retry, ships)
+    openers = [NAMES[ROSTERS[level - 1][ships[0]]] for ships in runs]
+    assert len(set(openers)) == min(len(orders), len(ROSTERS[level - 1]))
+    print(f"{model} level {level} openers: {', '.join(openers)}", flush=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game", type=Path, required=True)
@@ -197,12 +230,15 @@ if __name__ == "__main__":
     parser.add_argument("--levels", type=int, nargs="+", choices=range(1, len(ROSTERS) + 1),
                         default=range(1, len(ROSTERS) + 1))
     parser.add_argument("--camp", action="store_true", help="Hold fire in the upper right during the wave check")
+    parser.add_argument("--restarts", action="store_true", help="Exercise repeated Enter restarts on the playable TAP")
     args = parser.parse_args()
     if args.camp and (not args.waves or 1 in args.levels):
         parser.error("--camp needs --waves and armed levels")
+    if args.restarts and args.waves:
+        parser.error("--restarts checks the playable TAP directly")
     with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=4) as workers:
         game = args.game.resolve()
-        check = verify_load
+        check = verify_restarts if args.restarts else verify_load
         if args.waves:
             game = Path(tmp) / "waves"
             wave_probe(args.game.resolve(), args.waves.resolve(), game, args.camp)

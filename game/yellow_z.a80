@@ -70,22 +70,9 @@ advanceLevelWave:
     ld a,(waveIndex)
     xor #40                      ; alternate the green wave's entrance
     ld (waveIndex),a
-    xor a
 .next:
-    inc a
     ld (hl),GREEN_WAVE_SIZE
-    ld hl,residentCount
-    cp (hl)
-    jr c,.save
-    xor a
-.save:
-    ld (waveKind),a
-    ld e,a
-    ld d,0
-    ld hl,residentDelays
-    add hl,de
-    ld a,(hl)
-    ld (stepWave.spawnDelay+1),a
+    call nextWave
     ld a,e
     cp 1
     ld a,(levelWaveGaps)

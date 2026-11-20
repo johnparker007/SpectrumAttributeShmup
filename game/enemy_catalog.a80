@@ -20,6 +20,11 @@ loadEnemyRoster:
     ld a,(hl)
     ld (residentCount),a
     inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld (startWaveOrder.table+1),de
     push hl
     pop ix
     ld iyh,high enemyArt
@@ -89,6 +94,55 @@ loadEnemyRoster:
     ld bc,511
     ld (hl),0
     ldir
+    ret
+
+; Select once per attempt. The next choice survives both a level reload
+; and visits to other levels. Ordinary spawns only read the current kind.
+startWaveOrder:
+    ld a,(selectedLevel)
+    ld e,a
+    ld d,0
+    ld hl,nextWaveOrder
+    add hl,de
+    ld a,(hl)
+    ld e,a
+    inc a
+    cp WAVE_ORDER_COUNT
+    jr c,.save
+    xor a
+.save:
+    ld (hl),a
+.table:
+    ld hl,0
+    add hl,de
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ex de,hl
+    ld (nextWave.loop+1),hl
+    jr nextWave.take
+
+nextWave:
+.cursor:
+    ld hl,0
+    ld a,(hl)
+    cp #ff
+    jr nz,.select
+.loop:
+    ld hl,0
+.take:
+    ld a,(hl)
+.select:
+    inc hl
+    ld (.cursor+1),hl
+    ld (waveKind),a
+    ld e,a
+    ld d,0
+    ld hl,residentDelays
+    add hl,de
+    ld a,(hl)
+    ld (stepWave.spawnDelay+1),a
     ret
 
 spawnCatalogShip:
