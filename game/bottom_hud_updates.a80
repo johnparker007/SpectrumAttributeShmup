@@ -1,0 +1,116 @@
+; Bank 0 is mapped when a kill is scored or a new HUD cell is selected.
+; hudAward is called from inside the enemy loop and must preserve BC and DE.
+hudScoreAwarded:
+    or a
+    jr z,.tenThousand
+    ld a,(hudScore+1)
+    or a
+    ret nz
+    set HUD_TENS_DIRTY,(hl)     ; 0 -> 100 makes the tens zero visible
+    ret
+.tenThousand:
+    ld a,(hudScore+1)
+    and 15                      ; tens of thousands digit, packed BCD
+    cp 2
+    jr z,.extraLife
+    cp 7
+    ret nz
+.extraLife:
+    set HUD_LIVES_DIRTY,(hl)
+    ld hl,playerLives
+    inc (hl)
+    ret
+
+hudFormatScore:
+    ld de,(hudScore)
+    ld hl,hudPending
+    bit HUD_TENS_DIRTY,(hl)
+    jr z,.significant
+    res HUD_TENS_DIRTY,(hl)
+    ld a,d
+    or e
+    ld hl,hudLifeBlank
+    jr z,.tens
+    ld hl,hudDigits             ; zero glyph
+.tens:
+    ld b,30
+    call hudQueueGlyph
+    scf
+    ret
+.significant:
+    ld a,d
+    or a
+    jr z,.lowPair
+    cp #10
+    jr nc,.ready
+    or #f0
+    ld d,a
+    jr .ready
+.lowPair:
+    dec d                       ; both upper digits blank
+    ld a,e
+    or a
+    jr nz,.lowNonzero
+    dec e                       ; score zero has only its fixed units glyph
+    jr .ready
+.lowNonzero:
+    cp #10
+    jr nc,.ready
+    or #f0
+    ld e,a
+.ready:
+    or a                        ; carry clear: compare and queue a significant digit
+    ret
+
+; Four five-pixel ships at six-pixel intervals occupy three character cells.
+; A ship crossing a byte boundary takes two ordinary glyph updates. Tracking
+; the individual changes lets a loss reverse a partially drawn award cleanly.
+hudSelectPackedLife:
+    ld a,(playerLives)
+    ld e,a
+    ld d,0
+    ld hl,hudLifeEndpoints
+    add hl,de
+    ld a,(hudLivesDrawn)
+    cp (hl)
+    jr z,.settled
+    jr c,.add
+    dec a
+    ld (hudLivesDrawn),a
+    ld c,2                      ; glyph after removing this segment
+    jr .select
+.add:
+    ld hl,hudLivesDrawn
+    inc (hl)
+    ld c,1                      ; glyph after adding this segment
+.select:
+    ld e,a
+    add a,a
+    add a,e
+    ld e,a
+    ld hl,hudLifeChanges
+    add hl,de
+    ld b,(hl)                   ; column
+    ld e,c
+    add hl,de
+    ld e,(hl)
+    ld hl,hudLifeGlyphs
+    add hl,de
+    jp hudQueueGlyph
+.settled:
+    ld hl,hudPending
+    res HUD_LIVES_DIRTY,(hl)
+    ret
+
+hudLifeEndpoints:
+    dup 6,group
+        db group*6,group*6+1,group*6+3,group*6+5
+    edup
+    db 36
+hudLifeChanges:
+    dup 6,group
+        db HUD_LIFE_X+group*3,    8,0, HUD_LIFE_X+group*3,  16,8
+        db HUD_LIFE_X+group*3+1, 24,0, HUD_LIFE_X+group*3+1,32,24
+        db HUD_LIFE_X+group*3+2, 40,0, HUD_LIFE_X+group*3+2,48,40
+    edup
+hudLifeGlyphs: incbin "hud_life_cells.bin"

@@ -52,4 +52,10 @@ sectorSeed:
         ld a,((i%4)*8)
         ld (enemy_records+3*i+2),a
     edup
+    ifdef STRESS_BONUS_LIFE
+        ld hl,#0199              ; first enemy hit takes 19,900 to 20,000
+        ld (hudScore),hl
+        ld a,1
+        ld (collision_actual),a
+    endif
     jp syncActors

@@ -145,10 +145,14 @@ returnToMenu:
     ld h,a
     ld l,a
     ld (hudScore),hl
+    ifndef BOTTOM_HUD
     ld (hudDrawn),hl
+    endif
     ld a,STARTING_LIVES
     ld (playerLives),a
+    ifndef BOTTOM_HUD
     ld (hudLivesDrawn),a
+    endif
     ld a,8
     ld (hudRow),a
     ld a,#40

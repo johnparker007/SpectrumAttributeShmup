@@ -121,7 +121,11 @@ firstFrameLogic:
     call soundScroll
     call motionStep
     ifdef LIVE_SHMUP
+        ifdef BOTTOM_HUD
+        nop : nop : nop        ; retain the raster entry addresses
+        else
         call hudStep
+        endif
 hudFrame1Done:
     endif
 halt2 equ $+7
@@ -178,6 +182,24 @@ doSinScroll equ barrelScroll_Update
         (game / "hud_life_icon.bin").write_bytes(icon)
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
+        # Four five-pixel silhouettes, one clear pixel between ships. Keep the
+        # two successive filled states of each byte for incremental HUD writes.
+        cell_glyphs = [bytearray() for _ in range(7)]
+        initial = bytearray()
+        for ship, zero in zip(icon, glyphs["0"]):
+            shape = ship >> 2
+            strip = 0
+            states = [0]
+            for x in (0, 6, 12, 18):
+                strip |= shape << (19 - x)
+                current = strip.to_bytes(3, "big")
+                states.extend(current[col] for col in range(x // 8, (x + 4) // 8 + 1))
+                if x == 12:
+                    initial.extend((*current, zero))
+            for glyph, bits in zip(cell_glyphs, states, strict=True):
+                glyph.append(bits)
+        (game / "hud_life_cells.bin").write_bytes(b"".join(cell_glyphs))
+        (game / "hud_initial_bottom.bin").write_bytes(initial)
         (game / "incoming_x.bin").write_bytes(bytes(shot_steps(0)))
         (game / "incoming_y.bin").write_bytes(bytes(shot_steps(1)))
         # Minimum minor-axis distance to cross each of the four angular
@@ -190,7 +212,8 @@ doSinScroll equ barrelScroll_Update
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
-            for filename in ("bottom_hud.a80", "bottom_hud_timing.a80", "sky_stars.a80", "scenery_stream.a80"):
+            for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
+                             "sky_stars.a80", "scenery_stream.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -262,6 +285,7 @@ doSinScroll equ barrelScroll_Update
 DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
 BLAST_TILE equ {BLAST_TILE}
         include "destructible.a80"
+        include "bottom_hud_updates.a80"
     endif
     assert $ <= #cb00
 

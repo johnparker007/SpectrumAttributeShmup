@@ -19,7 +19,7 @@ FLAGS = ("OVERLAY_MOTION OVERLAY_FAST_PLOT SCHEDULE_COLLISION OVERLAY_AUDIO OVER
          "BARREL_SCENERY LIVE_SHMUP LEVEL_WAVES BOTTOM_HUD LEVEL_MENU LUMINANCE_LOGO LIVE_SFX").split()
 
 
-def make_probe(game, directory, assembler):
+def make_probe(game, directory, assembler, *, bonus=False):
     shutil.copytree(game, directory)
     source = directory / "main.asm"
     marker = b"            call gameInit"
@@ -33,10 +33,11 @@ def make_probe(game, directory, assembler):
     shutil.copyfile(FIXTURE, directory / FIXTURE.name)
     for name in ("main.sna", "main.tap"):
         (directory / name).unlink()
-    run([assembler, *("-D" + flag + "=1" for flag in FLAGS), "--sym=main.sym", "main.asm"], directory)
+    flags = FLAGS + (["STRESS_BONUS_LIFE"] if bonus else [])
+    run([assembler, *("-D" + flag + "=1" for flag in flags), "--sym=main.sym", "main.asm"], directory)
 
 
-def verify(emulator, game, model, level):
+def verify(emulator, game, model, level, *, bonus=False):
     symbols = read_symbols(game / "main.sym")
 
     def pc(name):
@@ -57,6 +58,13 @@ def verify(emulator, game, model, level):
     for slot in range(5):
         checks.append((end + f" AND {slot+2}={slot+2}",
                        peek(mount+slot) + "+256*" + peek(mount+10+slot)))
+    # Observe the actual colours after the plotter has selected its active
+    # ink and paper immediates. Both lanes must alternate every composition.
+    colours = pc("overlayEnd")
+    checks.append((colours, peek(symbols["plotIncomingDot.ink"]+1) + "+256*" +
+                   peek(symbols["plotIncomingDot.paperColour"]+1)))
+    if bonus:
+        checks.append((pc("hudScoreAwarded.extraLife"), "TSTATESP"))
     spool = game / f"sector-{model}-{level}.txt"
     spool.write_text(str(level)*80, encoding="ascii")
     log = breakpoint_log(emulator, game / "main.tap", model, 22, checks, True, spool)
@@ -85,11 +93,14 @@ def verify(emulator, game, model, level):
     assert [v for k, v in play if k == end][:7] == [5]*6 + [0]
     assert [v for k, v in play if k == checks[7][0]][:3] == [79, 79, 0]
     stages = (121, 121, 122, 122, 123, 123, symbols["SCENERY_MOUNT"])
-    for watch, _ in checks[8:]:
+    for watch, _ in checks[8:13]:
         assert [v for k, v in play if k == watch][:7] == [stage*257 for stage in stages]
+    assert [v for k, v in play if k == colours][:12] == [7 + 256*56, 6 + 256*48]*6
+    if bonus:
+        assert any(k == checks[-1][0] for k, _ in play)
     margins = [min(FRAME - v % FRAME for k, v in halts if k == pc(phase))
                for phase in ("halt2", "halt1")]
-    print(f"{model} level {level}: {len(writes)} streamed cells, {len(halts)} frames, "
+    print(f"{model} level {level}{' + bonus' if bonus else ''}: {len(writes)} streamed cells, {len(halts)} frames, "
           f"minimum margins {margins} T", flush=True)
 
 
@@ -111,9 +122,13 @@ def main():
             install(game, assembler, live=True, luminance_logo=True)
         probe = root / "probe"
         make_probe(game, probe, assembler)
+        bonus = root / "bonus"
+        make_probe(game, bonus, assembler, bonus=True)
         with ThreadPoolExecutor(max_workers=4) as pool:
             jobs = [pool.submit(verify, emulator, probe, model, n)
                     for n in range(1, 10) for model in MODELS]
+            jobs.extend(pool.submit(verify, emulator, bonus, model, n, bonus=True)
+                        for n in (1, 9) for model in MODELS)
             for job in jobs:
                 job.result()
 

@@ -355,6 +355,9 @@ resetEncounter:
     ld (hudScore),hl
     ld hl,hudPending
     set HUD_SCORE_DIRTY,(hl)
+    ifdef BOTTOM_HUD
+        set HUD_TENS_DIRTY,(hl)
+    endif
 .scoreReady:
     xor a
     ld (waveIndex),a

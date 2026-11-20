@@ -171,6 +171,14 @@ row_offsets:
 ; Leave room in Frame 2 for a dense bay of targets to explode while the
 ; projectile pool is full. Load the common viewport once for all 24 dots.
 drawIncomingDots:
+    ; The active overlay is composed once every two video frames. Patch both
+    ; lanes together so all dots change colour on every composition.
+    ld a,(gameTick)
+    and 1
+    or YELLOW
+    ld (plotIncomingDot.ink+1),a
+    add a,a : add a,a : add a,a
+    ld (plotIncomingDot.paperColour+1),a
     ld bc,(attrPointer)
     ld d,0
     dup ENEMY_COUNT, slot

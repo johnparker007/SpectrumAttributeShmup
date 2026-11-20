@@ -10,8 +10,18 @@ hudBottom:
     pop de
     push de
     ld a,(selectedLevel)
-    add a,'1'
-    ld (hudLevelNumber),a
+    inc a                       ; level index is zero-based
+    ld hl,hudLevelNumber
+    cp 10
+    jr c,.units
+    ld (hl),'1'
+    inc hl
+    sub 10
+.units:
+    add a,'0'
+    ld (hl),a
+    inc hl
+    ld (hl),0
     ld hl,hudLevelText
     ld e,HUD_BITMAP_LOW
     call drawScreenText
@@ -37,4 +47,4 @@ hudClearBottom:
     ret
 
 hudLevelText: db "LEVEL "
-hudLevelNumber: db "1",0
+hudLevelNumber: db "1",0,0      ; room for levels 10-16

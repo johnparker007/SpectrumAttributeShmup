@@ -49,11 +49,15 @@ plotIncomingDot:
     srl e
     jr c,.paper
     add hl,de
-    ld a,(hl) : and #f8 : or YELLOW : ld (hl),a
+    ld a,(hl) : and #f8
+.ink: or YELLOW
+    ld (hl),a
     ret
 .paper:
     add hl,de
-    ld a,(hl) : and #c7 : or YELLOW << 3 : ld (hl),a
+    ld a,(hl) : and #c7
+.paperColour: or YELLOW << 3
+    ld (hl),a
     ret
     defs 47-($-overlayEnemies)  ; same footprint as the original packed-dot loop
     else

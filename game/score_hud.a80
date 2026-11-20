@@ -1,20 +1,26 @@
 ; Score and lives use the same glyph queue in both layouts.
-HUD_WIDTH equ STARTING_LIVES+1+6
-HUD_X equ 32-HUD_WIDTH
-HUD_DIGIT_RIGHT equ 29          ; columns 30 and 31 are startup-only zeroes
+HUD_DIGIT_RIGHT equ 29          ; hundreds column, with the units anchored at 31
 HUD_ATTR equ #47                 ; bright white on black
 HUD_SCORE_DIRTY equ 0
 HUD_LIVES_DIRTY equ 1
     ifdef BOTTOM_HUD
+HUD_TENS_DIRTY equ 2
+HUD_LIFE_X equ 8                ; 24 six-pixel ships fit before the six score cells
 HUD_BITMAP_HIGH equ #50
 HUD_BITMAP_LOW equ #e0
     else
+HUD_WIDTH equ STARTING_LIVES+1+6
+HUD_X equ 32-HUD_WIDTH
 HUD_BITMAP_HIGH equ #40
 HUD_BITMAP_LOW equ 0
     endif
 
 hudInit:
     ifdef BOTTOM_HUD
+        ld hl,#ffff             ; F represents a blank significant digit
+        ld (hudDrawn),hl
+        ld a,(hudLifeEndpoints+STARTING_LIVES)
+        ld (hudLivesDrawn),a
         call hudBottomNormal
     else
         ld d,HUD_BITMAP_HIGH
@@ -33,6 +39,12 @@ hudInit:
 hudInitialBitmap:
     ld hl,hudInitialRows
 .row:
+    ifdef BOTTOM_HUD
+    ld e,HUD_BITMAP_LOW+HUD_LIFE_X
+    dup 3 : ld a,(hl) : inc hl : ld (de),a : inc e : edup
+    ld e,HUD_BITMAP_LOW+31
+    ld a,(hl) : inc hl : ld (de),a
+    else
     ld e,HUD_BITMAP_LOW+HUD_X
     ld b,HUD_WIDTH
 .byte:
@@ -41,6 +53,7 @@ hudInitialBitmap:
     inc hl
     inc e
     djnz .byte
+    endif
     inc d
     ld a,d
     and 7
@@ -60,12 +73,21 @@ hudAward:
     ret c
     ld h,a
     ld (hudScore),hl
+    ifdef BOTTOM_HUD
+    ld a,l
+    endif
     ld hl,hudPending
     set HUD_SCORE_DIRTY,(hl)
+    ifdef BOTTOM_HUD
+    cp 2                        ; only ...0000 and ...0100 need another check
+    ret nc
+    jp hudScoreAwarded
+    else
     ret
+    endif
 
-; One video frame either selects a changed cell or copies one row of the
-; selected glyph to both bitmap banks. A digit in progress keeps its glyph.
+; The bottom HUD copies two scanlines in its Frame 2 slot with one page swap.
+; Fetch both glyph bytes before paging out bank 0, which holds the ship cells.
 hudStep:
     ld a,(hudRow)
     cp 8
@@ -79,6 +101,9 @@ hudStep:
 .draw:
     ld d,a
     inc a
+    ifdef BOTTOM_HUD
+    inc a
+    endif
     ld (hudRow),a
     ld a,d
     add a,HUD_BITMAP_HIGH
@@ -88,10 +113,20 @@ hudStep:
     ld hl,(hudGlyph)
     ld a,(hl)
     inc hl
+    ifdef BOTTOM_HUD
+    ld (de),a
+    ld c,a                       ; first row
+    inc d
+    ld a,(hl)                    ; second row
+    inc hl
+    endif
     ld (hudGlyph),hl
 hudBitmapWrite:
     ld (de),a
     ld h,a
+    ifdef BOTTOM_HUD
+    ld l,c
+    endif
     set 7,d
     ld bc,#7ffd
     ld a,#17
@@ -100,13 +135,23 @@ hudPageIn:
     ld a,h
 hudShadowWrite:
     ld (de),a
+    ifdef BOTTOM_HUD
+    dec d
+    ld a,l
+    ld (de),a
+    endif
     ld a,#10
 hudPageOut:
     out (c),a
     ret
 
 hudSelectDigit:
+    ifdef BOTTOM_HUD
+    call hudFormatScore          ; DE = packed digits with leading F blanks
+    ret c                       ; tens cell queued on a zero/nonzero transition
+    else
     ld de,(hudScore)
+    endif
     ld hl,hudDrawn
     ld b,HUD_DIGIT_RIGHT
     ld a,(hl)
@@ -141,6 +186,11 @@ hudSelectDigit:
     dup 4 : rrca : edup
     and 15
 .select:
+    ifdef BOTTOM_HUD
+    cp 15
+    ld hl,hudLifeBlank
+    jr z,hudQueueGlyph
+    endif
     add a,a
     add a,a
     add a,a
@@ -161,6 +211,9 @@ hudQueueGlyph:
     ret
 
 hudSelectLife:
+    ifdef BOTTOM_HUD
+    jp hudSelectPackedLife
+    else
     ld a,(playerLives)
     ld hl,hudLivesDrawn
     cp (hl)
@@ -183,6 +236,7 @@ hudSelectLife:
     ld hl,hudPending
     res HUD_LIVES_DIRTY,(hl)
     ret
+    endif
 
 ; Tiles/sprites replace the attribute buffer each game tick, so repaint
 ; just the strip's two rows of attributes after composition.
@@ -211,7 +265,13 @@ hudRow: db 8
 hudColumn: db HUD_BITMAP_LOW+HUD_DIGIT_RIGHT
 hudGlyph: dw hudDigits
 hudDigits: incbin "score_digits.bin"
+    ifdef BOTTOM_HUD
+hudLifeBlank: defs 8,0
+hudInitialRows: incbin "hud_initial_bottom.bin"
+    assert $-hudInitialRows=8*4
+    else
 hudLifeIcon: incbin "hud_life_icon.bin"
 hudLifeBlank: defs 8,0
 hudInitialRows: incbin "hud_initial.bin"
     assert $-hudInitialRows=8*HUD_WIDTH
+    endif
