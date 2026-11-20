@@ -54,10 +54,10 @@ sectorSeed:
     edup
     ifdef STRESS_BONUS_LIFE
         ; Start with a full row of wide icons. The first real hit awards the
-        ; 19th ship while the projectile, sprite and scenery pools are busy.
-        ld hl,#7699
+        ; 19th spare while the projectile, sprite and scenery pools are busy.
+        ld hl,#8199
         ld (hudScore),hl
-        ld a,18
+        ld a,19
         ld (playerLives),a
         ld a,(1<<HUD_SCORE_DIRTY)|(1<<HUD_TENS_DIRTY)|(1<<HUD_LIVES_DIRTY)
         ld (hudPending),a

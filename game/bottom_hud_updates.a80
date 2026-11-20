@@ -104,8 +104,11 @@ hudSelectPackedLife:
 
 hudLifeEndpoints:
     assert HUD_LIFE_COLUMNS % 3 = 0
-    dup HUD_LIFE_COLUMNS+1,lives
-        db lives
+    ; Indexed by total lives. Game over and the last active ship both show
+    ; zero spares. Each additional life advances the icon strip.
+    db 0
+    dup HUD_LIFE_COLUMNS+1,spares
+        db spares
     edup
     dup HUD_LIFE_COLUMNS/3,group
         db HUD_LIFE_COLUMNS+3*(group+1)

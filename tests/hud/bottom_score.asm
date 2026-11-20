@@ -11,7 +11,7 @@ hudProbe:
     di
     ld sp,24499
     SET_PAGE 0
-    ld a,15                     ; check the widest level label alongside all 23 ships
+    ld a,15                     ; check the widest level label alongside all 22 spares
     ld (selectedLevel),a
     call gameInit
     ; Return after the production dot pool finishes, before the HUD/raster
@@ -49,6 +49,22 @@ awardMany:
     ld a,b
     or c
     jr nz,awardMany
+    ret
+
+loseShip:
+    ld a,1
+    ld (player_hit),a
+    call updatePlayerLife
+    xor a
+    ld (player_hit),a
+    ; Let the real respawn protection expire or the GAME OVER panel finish.
+    ld b,RESPAWN_TICKS+INVINCIBLE_TICKS
+.tick:
+    push bc
+    call updatePlayerLife
+    call gameOverStep
+    pop bc
+    djnz .tick
     ret
 
 ; A = expected lives, BC = packed score, HL = expected image in bank 6.

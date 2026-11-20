@@ -191,7 +191,7 @@ doSinScroll equ barrelScroll_Update
         packed_cells = b"".join(bytes(column) for column in zip(*packed_rows))
         (game / "hud_life_cells.bin").write_bytes(bytes(8) + icon + packed_cells)
         (game / "hud_initial_bottom.bin").write_bytes(
-            b"".join(bytes((ship, ship, ship, zero)) for ship, zero in zip(icon, glyphs["0"])))
+            b"".join(bytes((ship, ship, 0, zero)) for ship, zero in zip(icon, glyphs["0"])))
         (game / "incoming_x.bin").write_bytes(bytes(shot_steps(0)))
         (game / "incoming_y.bin").write_bytes(bytes(shot_steps(1)))
         # Minimum minor-axis distance to cross each of the four angular
