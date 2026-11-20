@@ -1,0 +1,55 @@
+; Run one map to its terminal viewport with the raster disabled. Then rewind
+; exactly as restart does before seeding the independent deadline test.
+sectorTest:
+.stream:
+    call streamSceneryTile
+    ld a,(barrelScrollComplete)
+    or a
+    jr z,.stream
+sectorStreamDone:
+    call rewindBarrel
+
+; Test-only initializer in bank 0. The production loop and its addresses
+; remain identical. The first Frame 2 expires eight blasts, then accepts five
+; fresh hits on the right-hand copies. Scroll passes 79 -> 0 during the blasts.
+sectorSeed:
+    call gameInit
+    ld a,78
+    ld (tileMapScroll_H),a
+    ld a,8
+    ld (sceneryBlastCount),a
+    dup 8,i
+        ld hl,(18+i)+(28+i)*256
+        ld (sceneryBlasts+3*i),hl
+        ld a,1
+        ld (sceneryBlasts+3*i+2),a
+        ld a,BLAST_TILE+2
+        ld (tileMap+18+i),a
+        ld (tileMap+28+i),a
+    edup
+    dup PLAYER_PAIRS,i
+        ld hl,(3+i*8)+20*256
+        ld (player_pairs+2*i),hl
+        xor a
+        ld (tileMap+36+10+i),a
+        ld a,DESTRUCTIBLE_TILE+(i%4)
+        ld (tileMap+54+i),a
+        ld (tileMap+64+i),a
+    edup
+    dup WAVE_ENEMIES,i
+        ld hl,(23+2*i)+(1+5*(i%3))*256
+        ld (enemy_boxes+2*i),hl
+        if i>=8
+            ld a,YELLOW_APPROACH
+            ld (enemyMotion+2*i),a
+            ld hl,yellowArt
+            ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
+        endif
+    edup
+    dup ENEMY_COUNT,i
+        ld hl,(17+i)+(4+(i%5)*6)*256
+        ld (enemy_records+3*i),hl
+        ld a,((i%4)*8)
+        ld (enemy_records+3*i+2),a
+    edup
+    jp syncActors

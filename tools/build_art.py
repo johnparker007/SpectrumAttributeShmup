@@ -24,6 +24,7 @@ MENU_LOGO_COOL = (0x44, 0x45, 0x41, 0x43)  # Green, cyan, blue, magenta.
 # of the ribbon keep changing even when only part of the strip is visible.
 MENU_LOGO_RUN_ORDER = bytes.fromhex("69 cb 66 24 28 fd 5d e0")
 DESTRUCTIBLE_TILE = 124
+BLAST_TILE = 121
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
     "player": "player_art.bin",
@@ -130,13 +131,15 @@ def map_bytes(source):
     if target is not None:
         target_gid = int(target.get("firstgid"))
         tileset = ET.parse(source.parent / DESTRUCTIBLE_TILESET).getroot()
-        marker = tileset.find("tile[@id='0']/properties/property[@name='destructible']")
-        if target_gid <= 128 or marker is None or marker.get("value") != "true":
+        marked = {int(t.get("id")) for t in tileset.findall("tile")
+                  if t.find("properties/property[@name='destructible'][@value='true']") is not None}
+        if target_gid <= 128 or marked != set(range(4)):
             raise ValueError("Place the marked destructible tileset after the 128 base tiles")
     gids = [int(value.strip()) for value in layer.text.split(",") if value.strip()]
-    if len(gids) != 1536 or any(not 1 <= gid <= DESTRUCTIBLE_TILE and gid != target_gid for gid in gids):
-        raise ValueError("Fill the map with base tiles 0–123 or the intact destructible tile")
-    tiles = [DESTRUCTIBLE_TILE if gid == target_gid else gid - 1 for gid in gids]
+    targets = {} if target_gid is None else {target_gid+i: DESTRUCTIBLE_TILE+i for i in range(4)}
+    if len(gids) != 1536 or any(not 1 <= gid <= BLAST_TILE and gid not in targets for gid in gids):
+        raise ValueError("Use scenery tiles 0–120 or a marked intact destructible")
+    tiles = [targets.get(gid, gid - 1) for gid in gids]
     # The barrel starts with nine complete columns, then streams six tiles
     # per incoming column. Preserve that layout when exporting from Tiled.
     opening = [tiles[y * 256 + x] for y in range(6) for x in range(9)]
@@ -160,10 +163,10 @@ def build_art(output, *, sprite_dir=None):
     tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
     if len(tiles) != 6144:
         raise ValueError("The tile converter produced an unexpected sheet size")
-    blast_tiles = convert_image(ART / "gfx/destructible.png", "converter-tiles.exe", gfx / "destructible.bin", (32, 8))
-    if len(blast_tiles) != 4 * 48:
-        raise ValueError("Expected the intact target and three explosion frames")
-    (gfx / "tileSet.png.bin").write_bytes(tiles[:DESTRUCTIBLE_TILE * 48] + blast_tiles)
+    targets = convert_image(ART / "gfx/destructible.png", "converter-tiles.exe", gfx / "destructible.bin", (56, 8))
+    if len(targets) != 7 * 48:
+        raise ValueError("Expected four intact targets and three explosion frames")
+    (gfx / "tileSet.png.bin").write_bytes(tiles[:BLAST_TILE * 48] + targets[4*48:] + targets[:4*48])
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
@@ -184,7 +187,7 @@ def build_art(output, *, sprite_dir=None):
         unpacked = maps / f"{map_output(number)}.bin"
         data = map_bytes(ART / "maps" / name)
         unpacked.write_bytes(data)
-        level_targets.append(DESTRUCTIBLE_TILE in data)
+        level_targets.append(max(data) >= DESTRUCTIBLE_TILE)
         run([ZX0 / "zx0.exe", "-f", unpacked.resolve(), unpacked.with_suffix(".zx0").resolve()], maps)
     (output / "level_targets.bin").write_bytes(level_targets)
 

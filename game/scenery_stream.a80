@@ -1,0 +1,69 @@
+; The 18-column buffer repeats eight of the ten scrolling columns. The
+; stream writes columns 9..18; 9 has only a right copy, 18 only a left.
+    assert tileMapWidth=18 && low tileMap=0 && SCREEN_TILE_HEIGHT=6
+streamSceneryTile:
+    ld hl,(doNextTileFrame+1)
+    ld a,(hl)
+    inc l
+    ld (doNextTileFrame+1),hl
+    or a
+    ret z
+
+    ld a,(barrelScrollFinalColumn)
+    or a
+    jr nz,.padding                ; last five prefetches are beyond the map
+    ld hl,(sourceTileMapReadIndex)
+    ld de,sourceTileMap
+    add hl,de
+    ld a,(hl)
+    ld hl,(sourceTileMapReadIndex)
+    inc hl
+    ld (sourceTileMapReadIndex),hl
+.paddingReady:
+    ld b,a
+    ld a,(tileMapWriteRow)
+    add a,a : ld c,a
+    add a,a : add a,a : add a,a
+    add a,c                       ; row * 18
+    ld hl,tileMapWriteColumn
+    add a,(hl)
+    ld c,(hl)
+    ld l,a : ld h,high tileMap
+    ld a,c
+    cp 18
+    jr z,.left
+    ld (hl),b
+    cp 9
+    jr z,.next
+.left:
+    ld a,l : sub 10 : ld l,a
+    ld (hl),b
+.next:
+    ld hl,tileMapWriteRow
+    inc (hl)
+    ld a,(hl)
+    cp SCREEN_TILE_HEIGHT
+    jr z,.nextColumn
+    cp SCREEN_TILE_HEIGHT-1
+    ret nz
+    ld a,(barrelScrollFinalColumn)
+    ld (barrelScrollComplete),a
+    ret
+.nextColumn:
+    ld (hl),0
+    ld hl,tileMapWriteColumn
+    inc (hl)
+    ld a,(hl)
+    cp 19
+    jr nz,.advance
+    ld (hl),9
+.advance:
+    ld hl,sourceTileMapReadColumn
+    inc (hl)
+    ret nz
+    ld a,1
+    ld (barrelScrollFinalColumn),a
+    ret
+.padding:
+    xor a
+    jr .paddingReady

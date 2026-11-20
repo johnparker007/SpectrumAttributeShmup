@@ -38,7 +38,27 @@ overlayBegin:
     endif
     PLOT_PLAYERS
 overlayEnemies:
+    ifdef LEVEL_WAVES
+    jp drawIncomingDots
+; One active projectile. BC retains the viewport origin, D remains zero.
+plotIncomingDot:
+    ld e,l
+    ld a,h : add a,a : ld l,a : ld h,high row_offsets
+    ld a,(hl) : inc l : ld h,(hl) : ld l,a
+    add hl,bc
+    srl e
+    jr c,.paper
+    add hl,de
+    ld a,(hl) : and #f8 : or YELLOW : ld (hl),a
+    ret
+.paper:
+    add hl,de
+    ld a,(hl) : and #c7 : or YELLOW << 3 : ld (hl),a
+    ret
+    defs 47-($-overlayEnemies)  ; same footprint as the original packed-dot loop
+    else
     PLOT_ENEMIES
+    endif
 overlayEnd:
     ifdef LIVE_SHMUP
         ifdef BOTTOM_HUD

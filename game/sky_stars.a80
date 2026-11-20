@@ -1,0 +1,58 @@
+; One candidate per shadow-screen slot, using the 364 T-states previously
+; spent waiting. processTileMap builds fresh pointers before the next pass.
+; A hidden star writes to a private word on an equally long path.
+    align 256
+skyVectors:
+    ds 4                        ; IYL counts from eight down to one
+    jp skyStar1 : nop
+    jp skyStar2 : nop
+    jp skyStar3 : nop
+    jp skyStar4 : nop
+    jp skyStar5 : nop
+    jp skyStar6 : nop
+    jp skyStar7 : nop
+    jp skyStar8 : nop
+drawSkyStar:
+    ld a,iyl : add a,a : add a,a
+    ld l,a : ld h,high skyVectors : jp (hl)
+skyArt:
+    dup 16,i
+        dw tileSet+48*(64+i)
+    edup
+    assert high skyArt=high(skyArt+31)
+skySink: dw 0
+
+    macro SKY_STAR tileRow, lowerDot, fast, startX
+    ld a,(gameTick) : cpl
+    if fast
+        add a,a
+    else
+        nop
+    endif
+    add a,startX : and 63 : ld b,a
+    ld a,(tileMapScroll_H) : and 7 : add a,b : ld b,a
+    rrca : rrca : and #1e : ld e,a : ld d,0
+    ld hl,renderTilesList+tileRow*18 : add hl,de
+    ld a,(hl) : xor low tileSet : ld e,a : inc hl
+    ld a,(hl) : xor high tileSet : or e
+    jp nz,.hidden : jp .store
+.hidden:
+    ld hl,skySink+1
+.store:
+    ld a,b : and 7 : add a,a : add a,low(skyArt+16*lowerDot)
+    ld e,a : ld d,high skyArt
+    ld a,(de) : dec hl : ld (hl),a
+    inc de : ld a,(de) : inc hl : ld (hl),a
+    dup 3 : ld a,0 : edup
+    dup 5 : nop : edup
+    ret
+    endm
+
+skyStar1: SKY_STAR 0,0,1,12
+skyStar2: SKY_STAR 0,1,0,49
+skyStar3: SKY_STAR 1,1,1,7
+skyStar4: SKY_STAR 2,0,0,31
+skyStar5: SKY_STAR 3,1,1,53
+skyStar6: SKY_STAR 4,0,1,20
+skyStar7: SKY_STAR 4,1,0,6
+skyStar8: SKY_STAR 5,0,0,48

@@ -2,6 +2,7 @@
 ; after streaming; columns 8 and 9 have no second copy.
 SCENERY_BLAST_SLOTS equ 8
 SCENERY_BLAST_TICKS equ 6
+SCENERY_MOUNT equ 104            ; scorched deck plate underneath every fixture
     assert tileMapWidth=18 && low tileMap=0
     assert tileMapWidth*tileMapHeight<=256
 
@@ -19,71 +20,60 @@ sceneryStep:
     or a
     ret z
     call sceneryAgeBlasts
-    ld a,(tileMapScroll_H)
-    ld d,a
-    ld ix,player_pairs
-    ld b,PLAYER_PAIRS
-.pair:
-    ; A three-dot shot step plus at most one dot of scroll cannot skip a full tile.
-    ld a,(ix)
-    inc a
-    jr z,.next
-    dec a
-    add a,d
-    ld c,a                       ; barrel X of the two-dot footprint
-    rrca : rrca : rrca
-    and #1f
-    ld e,a                       ; physical barrel column
-    ld a,(ix+1)
-    call sceneryTestRow
-    jr z,.hit
-    ld a,(ix+1)
-    add a,PLAYER_PAIR_GAP
-    xor (ix+1)
-    bit 3,a                      ; one probe when both lanes share a tile row
-    jr z,.next
-    ld a,(ix+1)
-    add a,PLAYER_PAIR_GAP
-    call sceneryTestRow
-    jr nz,.next
-.hit:
-    ld (ix),#ff                  ; either lane spends the entire paired shot
-    push bc
-    push de
-    push ix
-    call sceneryStartBlast
-    pop ix
-    pop de
-    pop bc
-.next:
-    inc ix
-    inc ix
-    djnz .pair
+    dup PLAYER_PAIRS, slot
+        ld hl,(player_pairs+2*slot)
+        ld a,l
+        inc a
+        jr z,1f
+        call sceneryProbePair
+        jr c,1f
+        ld a,#ff
+        ld (player_pairs+2*slot),a
+        call sceneryStartBlast
+1:
+    edup
     ret
 
-; A = lane Y, E = column, C = barrel X. On a hit HL and E identify the cell.
-sceneryTestRow:
-    and #f8
-    ld l,a
-    add a,a
-    srl l : srl l
-    add a,l                      ; tile row times 18
+; HL = paired shot (X,Y). Return carry clear, HL = hit cell, E = column.
+; Both shot lanes share X. Their row origins are either equal or 18 apart.
+sceneryProbePair:
+    ld a,(tileMapScroll_H)
+    add a,l
+    ld c,a
+    rrca : rrca : rrca
+    and #1f
+    ld e,a
+    ld b,h
+    ld l,h
+    ld h,high sceneryRowOffsets
+    ld a,(hl)
     add a,e
     ld l,a
     ld h,high tileMap
+    call sceneryTestCell
+    ret nc
+    assert PLAYER_PAIR_GAP=4
+    bit 2,b                      ; BIT preserves carry on a miss
+    ret z
+    ld a,l
+    add a,tileMapWidth
+    ld l,a
+sceneryTestCell:
     ld a,(hl)
     cp DESTRUCTIBLE_TILE
-    ret z
+    ret nc
     ld a,c
     and 7
     cp 7
-    ret nz
-    inc l                        ; second dot crosses the tile edge
+    ret c
+    inc l                        ; right dot crosses a column boundary
     ld a,(hl)
     cp DESTRUCTIBLE_TILE
-    ret nz
+    jr c,.miss
     inc e
-    xor a
+    ret
+.miss:
+    dec l
     ret
 
 sceneryStartBlast:
@@ -100,27 +90,28 @@ sceneryStartBlast:
     jr c,.find
     ld a,l
     sub 10
-    ld l,a
+    ld c,a                       ; keep HL on the cell actually struck
 .find:
-    ld ix,sceneryBlasts
-    ld de,3
-    ld b,SCENERY_BLAST_SLOTS
-.slot:
-    ld a,(ix+2)
-    or a
-    jr z,.start
-    add ix,de
-    djnz .slot
-    ld de,DESTRUCTIBLE_TILE*256 ; safe fallback if the pool is full
+    dup SCENERY_BLAST_SLOTS, slot
+        ld a,(sceneryBlasts+3*slot+2)
+        or a
+        jr nz,1f
+        ld de,sceneryBlasts+3*slot
+        jr .start
+1:
+    edup
+    ld e,SCENERY_MOUNT           ; reveal the crater immediately if the pool is full
+    ld d,(hl)
     jr sceneryReplace
 .start:
-    ld (ix),l
-    ld (ix+1),c
-    ld (ix+2),SCENERY_BLAST_TICKS
+    ld a,l : ld (de),a : inc de
+    ld a,c : ld (de),a : inc de
+    ld a,SCENERY_BLAST_TICKS : ld (de),a
     ld a,(sceneryBlastCount)
     inc a
     ld (sceneryBlastCount),a
-    ld de,DESTRUCTIBLE_TILE*256+DESTRUCTIBLE_TILE+1
+    ld e,BLAST_TILE
+    ld d,(hl)
 
 ; HL = primary, C = alias low byte, D = old tile, E = replacement.
 ; The first nine world columns have no streaming copy at initial load.
@@ -137,43 +128,60 @@ sceneryAgeBlasts:
     ld a,(sceneryBlastCount)
     or a
     ret z
-    ld ix,sceneryBlasts
-    ld b,SCENERY_BLAST_SLOTS
-.slot:
-    ld a,(ix+2)
-    or a
-    jr z,.next
+    ld b,a                       ; collect retirements in B for the whole pass
+    dup SCENERY_BLAST_SLOTS, slot
+        ld hl,sceneryBlasts+3*slot+2
+        ld a,(hl)
+        or a
+        call nz,sceneryAgeOne
+    edup
+    ld a,b
+    ld (sceneryBlastCount),a
+    ret
+
+sceneryAgeOne:
+    dec (hl)
+    jr z,.finish
+    ; Both ticks of a stage must still address the original blast. A new
+    ; column streamed into the barrel retires the slot without marking it.
+    add a,low sceneryBlastStages
     ld e,a
-    ld d,0
-    ld hl,sceneryBlastStages
-    add hl,de
-    ld d,(hl)
+    ld d,high sceneryBlastStages
+    ld a,(de)
+    ld d,a                       ; expected stage
+    ld e,(hl)                    ; remaining ticks
+    push hl
+    dec hl
+    ld c,(hl)
+    dec hl
+    ld l,(hl)
     ld h,high tileMap
-    ld l,(ix)
     ld a,(hl)
     cp d
-    jr nz,.retire                ; barrel streamed a new world cell here
-    dec (ix+2)
-    jr z,.finish
-    bit 0,(ix+2)
-    jr nz,.next
+    jr nz,.overwritten
+    pop af                       ; discard saved timer address
+    bit 0,e
+    ret nz
     ld e,d
     inc e
-    ld c,(ix+1)
-    call sceneryReplace
-    jr .next
+    jp sceneryReplace
+.overwritten:
+    pop hl
+    ld (hl),0
+    dec b
+    ret
+
 .finish:
-    ld e,0                       ; base tileset's blank tile
-    ld c,(ix+1)
-    call sceneryReplace
-.retire:
-    ld (ix+2),0
-    ld hl,sceneryBlastCount
-    dec (hl)
-.next:
-    ld de,3
-    add ix,de
-    djnz .slot
+    dec hl
+    ld c,(hl)
+    dec hl
+    ld l,(hl)
+    ld h,high tileMap
+    ld a,(hl)
+    cp BLAST_TILE+2
+    ld de,(BLAST_TILE+2)*256+SCENERY_MOUNT
+    call z,sceneryReplace
+    dec b
     ret
 
 resetScenery:
@@ -189,6 +197,13 @@ resetScenery:
 sceneryEnabled: db 0
 sceneryBlastCount: db 0
 sceneryBlasts: defs SCENERY_BLAST_SLOTS*3
-sceneryBlastStages: db 0,DESTRUCTIBLE_TILE+3,DESTRUCTIBLE_TILE+3
-    db DESTRUCTIBLE_TILE+2,DESTRUCTIBLE_TILE+2,DESTRUCTIBLE_TILE+1,DESTRUCTIBLE_TILE+1
+    align 8
+sceneryBlastStages: db 0,BLAST_TILE+2,BLAST_TILE+2
+    db BLAST_TILE+1,BLAST_TILE+1,BLAST_TILE,BLAST_TILE
 levelScenery: incbin "level_targets.bin"
+
+; Y can be any logical screen row. The page-aligned table avoids a second
+; multiply-by-18 for the lower lane of a shot. It lives in pageable bank 0.
+    align 256
+sceneryRowOffsets:
+    dup 48,y : db (y/8)*tileMapWidth : edup

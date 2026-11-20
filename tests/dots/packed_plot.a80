@@ -166,3 +166,17 @@ row_offsets:
         dw ROW_BYTES*row
     edup
     endm
+
+    macro DRAW_INCOMING_POOL
+; Leave room in Frame 2 for a dense bay of targets to explode while the
+; projectile pool is full. Load the common viewport once for all 24 dots.
+drawIncomingDots:
+    ld bc,(attrPointer)
+    ld d,0
+    dup ENEMY_COUNT, slot
+        ld hl,(enemy_records+3*slot)
+        ld a,l : inc a
+        call nz,plotIncomingDot
+    edup
+    jp overlayEnd
+    endm

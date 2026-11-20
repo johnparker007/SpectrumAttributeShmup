@@ -32,7 +32,11 @@ scrollScenery:
     ld a,(barrelScrollComplete)
     or a
     ret nz
-    call barrelScroll_UpdateDoNextTile
+    ifdef LEVEL_WAVES
+        call streamSceneryTile
+    else
+        call barrelScroll_UpdateDoNextTile
+    endif
     jp barrelScroll_UpdateAdvanceScroll
 
 motionStep:

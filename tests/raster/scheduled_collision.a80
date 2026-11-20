@@ -20,12 +20,16 @@ collision_shadow:
     out (c),h
     exx
     call collisionPair         ; one enemy box and two dots against the player
-    ifdef OVERLAY_MOTION
-        ld bc,354
+    ifdef LEVEL_WAVES
+        call drawSkyStar
     else
-        ld bc,366
+        ifdef OVERLAY_MOTION
+            ld bc,354
+        else
+            ld bc,366
+        endif
+        call DELAY
     endif
-    call DELAY
     exx
     jp collision_normal
 

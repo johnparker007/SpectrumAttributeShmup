@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
+from build_art import BLAST_TILE, DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
 from bottom_hud import install_bottom_raster
 from menu_luminance import build_luminance
 from profile_blokius import build, capture
@@ -190,7 +190,7 @@ doSinScroll equ barrelScroll_Update
         defines.append("LIVE_SHMUP")
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
-            for filename in ("bottom_hud.a80", "bottom_hud_timing.a80"):
+            for filename in ("bottom_hud.a80", "bottom_hud_timing.a80", "sky_stars.a80", "scenery_stream.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -260,6 +260,7 @@ doSinScroll equ barrelScroll_Update
         # Leave bank 0 space after the renderer, with the AY recipe still at #cb00.
         scenery_source = f"""    ifdef LEVEL_WAVES
 DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
+BLAST_TILE equ {BLAST_TILE}
         include "destructible.a80"
     endif
     assert $ <= #cb00
@@ -318,6 +319,11 @@ luminancePlusExtra: incbin "gfx/luminance-plus-extra.bin"
     endif
     ifdef LEVEL_MENU
         include "joystick.a80"
+    endif
+    ifdef LEVEL_WAVES
+        include "sky_stars.a80"
+        include "scenery_stream.a80"
+        DRAW_INCOMING_POOL
     endif
     assert $ <= #10000
 ''')
