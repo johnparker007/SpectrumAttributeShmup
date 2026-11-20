@@ -1,4 +1,7 @@
 ; The menu occupies the normal screen with the raster renderer disabled.
+    ifdef BOTTOM_HUD
+        define GAME_OVER_MUSIC
+    endif
 showLevelMenu:
     di
     call disableRender
@@ -113,6 +116,7 @@ menuSelected:
 .hold:
     halt
     djnz .hold
+prepareLevelScreens:
     di
     ifdef LUMINANCE_LOGO
         call clearMenuRaster
@@ -124,7 +128,9 @@ menuSelected:
 
 returnToMenu:
     pop hl                         ; discard the return from motionStep
+selectNextLevel:
     call showLevelMenu
+restartSelectedLevel:
     di
     call rewindBarrel
     ; The first render pass otherwise reads the old level's buffer and tile list.
@@ -137,14 +143,17 @@ returnToMenu:
     call processTileMap
 
     xor a
+    ifndef GAME_OVER_MUSIC
     ld (gameOverRows),a
-    ld (restartHeld),a
+    endif
     ld (hudPending),a
     ld (sound_initialized),a
     ld (phrase_left),a
     ld h,a
     ld l,a
     ld (hudScore),hl
+    ld a,32                        ; a held Enter must be released before another restart
+    ld (restartHeld),a
     ifndef BOTTOM_HUD
     ld (hudDrawn),hl
     endif

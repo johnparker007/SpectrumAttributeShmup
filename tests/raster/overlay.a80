@@ -73,9 +73,11 @@ overlayEnd:
 hudAttributesDone:
         call hudStep
 hudFrame2Done:
+    ifndef GAME_OVER_MUSIC
         call gameOverAttributes
         call gameOverStep
         call gameOverStep
+    endif
     endif
     ifndef OVERLAY_MOTION
     ; Confirm untouched lane selection at two opposite viewport edges.

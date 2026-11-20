@@ -1,0 +1,18 @@
+; Put one real hit in the normal collision-result latch on the first run.
+; Subsequent restarts go through the unmodified game initializer.
+seedLastShip:
+    call gameInit
+    ld a,(lastShipSeeded)
+    or a
+    ret nz
+    inc a
+    ld (lastShipSeeded),a
+    ld (playerLives),a
+    ld (player_hit),a
+    ld hl,#1234                    ; 123,400 points
+    ld (hudScore),hl
+    ld a,7
+    ld (hudPending),a
+    ret
+lastShipSeeded: db 0
+    assert $<=#10000

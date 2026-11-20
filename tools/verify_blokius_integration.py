@@ -154,6 +154,7 @@ doSinScroll equ barrelScroll_Update
     shutil.copyfile(TESTS / "raster" / "scheduled_collision.a80", game / "engine" / "spritesRenderBIG.a80")
     defines = ["OVERLAY_MOTION", "OVERLAY_FAST_PLOT", "SCHEDULE_COLLISION", "OVERLAY_AUDIO", "OVERLAY_PHRASES",
                "BARREL_SCENERY"]
+    game_over_resource = b""
     if live:
         # Read the freshly updated positions directly in the small-sprite
         # renderer. Both IX offsets have the same instruction timing.
@@ -226,6 +227,12 @@ doSinScroll equ barrelScroll_Update
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu:
             defines.append("LEVEL_MENU")
+            if not prototype_waves:
+                shutil.copyfile(MUSIC.parent / "game_over_music.a80", game / "game_over_music.a80")
+                track = MUSIC / "name-regist.pt3"
+                run([ZX0 / "zx0.exe", "-f", track, game / "music/name-regist.zx0"], game)
+                game_over_resource = ('gameOverTrack: incbin "music/name-regist.zx0"\n'
+                                      f'    assert {track.stat().st_size} <= renderTilesList-attrBuffer\n').encode("ascii")
             for name in ("joystick.a80", "redefine_keys.a80", "menu_logo.a80", "menu_logo_setup.a80"):
                 shutil.copyfile(TESTS.parent / "game" / name, game / name)
             if luminance_logo:
@@ -308,6 +315,7 @@ SCENERY_MOUNT equ {SCENERY_MOUNT}
 luminance128Extra: incbin "gfx/luminance-128k-extra.bin"
         endif
     endif
+''' + game_over_resource + b'''
     assert $ <= #10000
     ifdef LEVEL_MENU
         page 3
@@ -319,8 +327,10 @@ luminance128: incbin "gfx/luminance-128k.bin"
         org 55000
 menuTrackInit:
         incbin "music/player_55000.bin"
+menuTrackInitHL equ menuTrackInit+3
 menuTrackTick equ menuTrackInit+5
 menuTrackMute equ menuTrackInit+8
+menuTrackSetup equ menuTrackInit+10
         assert $ <= 57158
         org 57158
         incbin "music/song_57158.bin"

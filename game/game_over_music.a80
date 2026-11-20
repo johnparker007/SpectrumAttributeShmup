@@ -1,0 +1,126 @@
+; The fatal tick is the first visit. Run another 50 game ticks (100 video
+; frames) before leaving the raster loop.
+GAME_OVER_WAIT equ 1+2*25
+gameOverWait: db GAME_OVER_WAIT
+gameOverKeys: db 0
+
+showGameOver:
+    pop hl                         ; leave motionStep and the two-frame game loop
+    di
+    call disableRender
+    xor a
+    call swapPage
+    ld a,GAME_OVER_WAIT
+    ld (gameOverWait),a
+.finishHud:
+    call hudStep
+    ld a,(hudPending)
+    or a
+    jr nz,.finishHud
+    ld a,(hudRow)
+    cp 8
+    jr nz,.finishHud
+    call drawGameOverPanel
+
+    ld a,1
+    call swapPage
+    ld hl,gameOverTrack
+    ld de,attrBuffer                ; free until menu setup or level restart
+    call dzx0_standard
+    call menuMusicPage
+    ld hl,attrBuffer
+    call menuTrackInitHL
+    ld hl,menuTrackSetup
+    set 0,(hl)                     ; PT3 single-play mode
+    call readGameOverKeys
+    ld (gameOverKeys),a
+    ei
+gameOverFrame:
+    halt
+    call menuTrackTick
+gameOverTickDone:
+    ld a,(menuTrackSetup)
+    bit 7,a                        ; set by the player at the end of its order list
+    jr nz,gameOverMenu
+    call readGameOverKeys
+    ld hl,gameOverKeys
+    ld b,a
+    xor (hl)
+    ld (hl),b
+    and b                          ; ignore keys held through entry
+    rra
+    jr c,gameOverRestart
+    or a
+    jr z,gameOverFrame
+gameOverMenu:
+    call stopGameOverMusic
+    jp selectNextLevel
+gameOverRestart:
+    call stopGameOverMusic
+    call prepareLevelScreens
+    jp restartSelectedLevel
+
+stopGameOverMusic:
+    di
+    xor a
+    ld (menuTrackSetup),a          ; Meadows Edge loops normally on return
+    call menuTrackMute
+    jp menuMusicRestore
+
+readGameOverKeys:
+    ld a,#7f
+    in a,(#fe)
+    cpl
+    and 4                          ; M
+    rrca
+    ld b,a
+    ld a,#bf
+    in a,(#fe)
+    cpl
+    and 1                          ; Enter
+    or b
+    ret
+
+drawGameOverPanel:
+    ; Black out only the playfield. The final HUD is already in screen 5.
+    xor a
+    ld hl,#5800
+    ld de,#5801
+    ld bc,23*32-1
+    ld (hl),a
+    ldir
+    ld hl,gameOverText
+    ld de,GAME_OVER_PIXEL
+    ld a,GAME_OVER_ROWS/8
+.line:
+    push af
+    push de
+    ld a,8
+.scan:
+    push de
+    ld bc,GAME_OVER_WIDTH
+    ldir
+    pop de
+    inc d
+    dec a
+    jr nz,.scan
+    pop de
+    ld a,e
+    add a,32
+    ld e,a
+    pop af
+    dec a
+    jr nz,.line
+    ld hl,#5800+GAME_OVER_Y*32+GAME_OVER_X
+    ld de,32-GAME_OVER_WIDTH
+    ld c,GAME_OVER_ROWS/8
+.attributes:
+    ld b,GAME_OVER_WIDTH
+.cell:
+    ld (hl),HUD_ATTR
+    inc hl
+    djnz .cell
+    add hl,de
+    dec c
+    jr nz,.attributes
+    ret

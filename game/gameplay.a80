@@ -61,7 +61,11 @@ controlsReady:
     ld (hl),e
     and e
     and 32
+    ifdef GAME_OVER_MUSIC
+    jp nz,restartPressed
+    else
     jp nz,restartGame
+    endif
     ld a,(playerLives)
     or a
     ifdef LEVEL_MENU
@@ -90,11 +94,24 @@ gameplayComplete:
 
     ifdef LEVEL_MENU
 controlsReady.gameOver:
+    ifdef GAME_OVER_MUSIC
+    ld hl,gameOverWait
+    dec (hl)
+    jp z,showGameOver
+    jr controlsReady.moveEnemy
+
+restartPressed:
+    ld a,(playerLives)
+    or a
+    jp nz,restartGame
+    jr controlsReady.gameOver
+    else
     ld bc,#7ffe                    ; Space, Symbol Shift, M, N, B
     in a,(c)
     bit 2,a
     jp z,returnToMenu
     jr controlsReady.moveEnemy
+    endif
     endif
 
 ; Active input bits are P, O, Q, A, Space and Enter.

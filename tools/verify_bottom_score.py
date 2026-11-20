@@ -96,8 +96,6 @@ def build_cases(game):
     for lives in (2, 1, 0):
         cases.append("call loseShip")
         check(16, 100, lives)
-        rows = "GAME_OVER_ROWS" if lives == 0 else "0"
-        cases.extend(("ld a,(gameOverRows)", f"cp {rows}", "jp nz,failed"))
     cases.append("call resetEncounter")
     check(16, 0, 3)
     for level in (9, 10, 16, 1):
