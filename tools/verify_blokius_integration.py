@@ -214,6 +214,14 @@ doSinScroll equ barrelScroll_Update
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
+            # The live compositor reads X/Y directly. Reuse its obsolete DRAWX/Y
+            # copy pass after the last beam-timed write, at the same address.
+            renderer = game / "engine" / "spritesRender.a80"
+            code = renderer.read_bytes()
+            begin = code.index(b"N=0", code.index(b";patch small sprites here"))
+            end = code.index(b"    edup", begin) + len(b"    edup")
+            renderer.write_bytes(code[:begin] + b'    include "flight_animation.a80"' + code[end:])
+            shutil.copyfile(TESTS.parent / "game/flight_animation.a80", game / "flight_animation.a80")
             (game / "yellow_retreat.bin").write_bytes(bytes(
                 ((step * delta // YELLOW_RETREAT_TICKS)
                  - ((step - 1) * delta // YELLOW_RETREAT_TICKS)) & 255
@@ -349,6 +357,13 @@ luminancePlusExtra: incbin "gfx/luminance-plus-extra.bin"
     endif
     page 0
     assert testAudioRecipeEnd <= #e000
+    ifdef LEVEL_WAVES
+        org testAudioRecipeEnd
+        align 512
+enemyArt:  incbin "enemy_art.bin"
+yellowArt: incbin "yellow_art.bin"
+        assert yellowArt=enemyArt+256 && $=yellowArt+256 && $<=#e000
+    endif
     org #e000
     include "enemy_runtime.a80"
     ifdef LIVE_SFX

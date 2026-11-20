@@ -200,21 +200,31 @@ def build_art(output, *, sprite_dir=None):
             if (attribute & mask) == 0:
                 blasts[i] |= mount[i % len(mount)] & mask
     (gfx / "tileSet.png.bin").write_bytes(tiles[:BLAST_TILE * 48] + blasts + fixtures)
+    flight_sprites = set()
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
+        flight_sprites = {"enemy_green_sine", "enemy_yellow_z"}
     else:
         sprites = SPRITES
     for name, filename in sprites.items():
         target = output / filename
-        data = convert_image(sprite_dir / f"{name}.png", "converter-sprites.exe", target, (5, 5))
-        if len(data) != 60:
-            raise ValueError(f"The sprite converter produced an unexpected size for {name}")
-        if name == "player":
-            (output / "hud_life_icon.bin").write_bytes(hud_life_icon(data))
-        # The live compositor preserves the destination's bright/flash bits.
-        target.write_bytes(bytes(value | 192 if index % 2 == 0 else value & 63
-                                 for index, value in enumerate(data)))
+        sources = [sprite_dir / f"{name}.png"]
+        if name in flight_sprites:
+            sources.extend(sprite_dir / f"{name}_{n}.png" for n in (2, 3, 4))
+        packed = bytearray()
+        for source in sources:
+            data = convert_image(source, "converter-sprites.exe", target, (5, 5))
+            if len(data) != 60:
+                raise ValueError(f"The sprite converter produced an unexpected size for {source}")
+            if name == "player":
+                (output / "hud_life_icon.bin").write_bytes(hud_life_icon(data))
+            # The live compositor preserves the destination's bright/flash bits.
+            packed.extend(value | 192 if index % 2 == 0 else value & 63
+                          for index, value in enumerate(data))
+            if name in flight_sprites:
+                packed.extend(bytes(4))  # Four 64-byte poses fit one Z80 page.
+        target.write_bytes(packed)
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
     level_targets = bytearray()

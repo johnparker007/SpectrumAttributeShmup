@@ -6,8 +6,8 @@ The playable build reads these files on every build.
 | --- | --- |
 | `gfx/tileSet.png` | Background sheet, 128 by 64 pixels, with 128 tiles of 8 by 8 dots |
 | `sprites/player.png` | 5×5 player ship and source for the monochrome HUD life icon. Enclosed cyan cockpit dots appear as cut-outs in the icon. |
-| `sprites/enemy_green_sine.png` | Green sine flier, 5 by 5 dots |
-| `sprites/enemy_yellow_z.png` | Yellow retreating flier, 5 by 5 dots |
+| `sprites/enemy_green_sine.png`, then `enemy_green_sine_2.png` through `_4.png` | Green sine flier folding and extending its fins |
+| `sprites/enemy_yellow_z.png`, then `enemy_yellow_z_2.png` through `_4.png` | Yellow Z flier with a spinning cyan core |
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` through `maps/level-9.tmx` | Nine 256 × 6 maps. Each layer carries the sector name |
 | `maps/tileSet.tsx` | Tiled scenery palette with previews of the extractor and pump animations |
@@ -17,7 +17,9 @@ The playable build reads these files on every build.
 | `gfx/blokius-logo.pbm` | Baked 224×32 monochrome logo used by the TAP build |
 | `fonts/Blokius-Arcade-8.bdf` | Editable 8×8 source for the menu, HUD and GAME OVER lettering |
 
-Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Ship collision boxes stay 5 by 5 dots.
+Each PNG pixel represents one engine dot, displayed as a 4 by 4 pixel block on the Spectrum. Use the eight Spectrum colours at full RGB intensity. Keep sprites at 5 by 5 pixels and use transparent pixels around their shapes. The small-sprite converter supplies both horizontal alignments. Each enemy keeps its 5 by 5 collision box throughout its flight loop.
+
+Each enemy has a four-pose flight loop. Edit the unsuffixed PNG for the spawn pose and the three numbered PNGs for the following poses. Each pose lasts four gameplay ticks (160 ms). Double-click `Build-TAP.bat` to rebuild the game after editing.
 
 ### Scenery
 

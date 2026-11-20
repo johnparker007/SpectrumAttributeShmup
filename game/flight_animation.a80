@@ -1,0 +1,32 @@
+; The small sprites have already been drawn. Advance one quarter of their
+; flight poses for the next composition. Each ship holds a pose for four
+; 25 Hz ticks. Reusing a slot starts it at its own species' first pose.
+advanceFlightSprites:
+    assert SPRITE=9 && WAVE_ENEMIES=15
+    ld a,(gameTick)
+    and 3
+    ld e,a
+    add a,a : add a,a : add a,a : add a,e
+    ld e,a
+    ld d,0
+    ld hl,sprite08+SPRITE.IMAGE
+    add hl,de
+    ld de,4*SPRITE
+    ld b,4
+.next:
+    inc hl
+    ld a,(hl)
+    and #fe
+    xor high enemyArt           ; zero for either of the two flight pages
+    sub 1
+    sbc a,a
+    and 64                      ; flight step, or zero for player/explosions
+    dec hl
+    add a,(hl)                  ; wraps the fourth pose to the first
+    ld (hl),a
+    add hl,de
+    djnz .next
+    ret
+    ; 440 T-states before RET versus 512 for the archived position copies.
+    ; Preserve subsequent renderer addresses and the four-T-state HALT phase.
+    defs 16*6-($-advanceFlightSprites)

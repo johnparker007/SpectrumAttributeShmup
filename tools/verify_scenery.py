@@ -63,6 +63,12 @@ def verify(emulator, game, model, level, *, bonus=False):
     colours = pc("overlayEnd")
     checks.append((colours, peek(symbols["plotIncomingDot.ink"]+1) + "+256*" +
                    peek(symbols["plotIncomingDot.paperColour"]+1)))
+    # The seeded green and yellow ships eight slots apart share an update tick.
+    # Sample both full pointers before the renderer advances the next quartet.
+    flight = pc("advanceFlightSprites")
+    checks.append((flight, f"PEEKW({symbols['sprite10']:04X}H)"))
+    yellow = flight + " AND 1=1"
+    checks.append((yellow, f"PEEKW({symbols['sprite18']:04X}H)"))
     if bonus:
         checks.append((pc("hudScoreAwarded.extraLife"), "TSTATESP"))
     spool = game / f"sector-{model}-{level}.txt"
@@ -96,6 +102,12 @@ def verify(emulator, game, model, level, *, bonus=False):
     for watch, _ in checks[8:13]:
         assert [v for k, v in play if k == watch][:7] == [stage*257 for stage in stages]
     assert [v for k, v in play if k == colours][:12] == [7 + 256*56, 6 + 256*48]*6
+    for watch, species in ((flight, "enemyArt"), (yellow, "yellowArt")):
+        poses = [v - symbols[species] for k, v in play if k == watch]
+        first_step = poses.index(64)
+        assert 1 <= first_step <= 4 and poses[:first_step] == [0]*first_step
+        cycle = [offset for offset in (64, 128, 192, 0) for _ in range(4)]
+        assert poses[first_step:first_step+16] == cycle, (model, level, species, poses[:20])
     if bonus:
         assert any(k == checks[-1][0] for k, _ in play)
     margins = [min(FRAME - v % FRAME for k, v in halts if k == pc(phase))

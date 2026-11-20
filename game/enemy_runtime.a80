@@ -457,11 +457,10 @@ explosionFrames:
 explosion1: incbin "explosion_1.bin"
 explosion2: incbin "explosion_2.bin"
 explosion3: incbin "explosion_3.bin"
-enemyArt: incbin "enemy_art.bin"
-playerArt: incbin "player_art.bin"
-    ifdef LEVEL_WAVES
-yellowArt: incbin "yellow_art.bin"
+    ifndef LEVEL_WAVES
+enemyArt: incbin "enemy_art.bin",0,60
     endif
+playerArt: incbin "player_art.bin"
 
     align 256
 shipTrajectories: incbin "ship_trajectories.bin"
