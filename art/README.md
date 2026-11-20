@@ -5,7 +5,7 @@ The playable build reads these files on every build.
 | File | Purpose |
 | --- | --- |
 | `gfx/tileSet.png` | Background sheet, 128 by 64 pixels, with 128 tiles of 8 by 8 dots |
-| `sprites/player.png` | Player ship, 5 by 5 dots |
+| `sprites/player.png` | 5×5 player ship and source for the monochrome HUD life icon. Enclosed cyan cockpit dots appear as cut-outs in the icon. |
 | `sprites/enemy_green_sine.png` | Green sine flier, 5 by 5 dots |
 | `sprites/enemy_yellow_z.png` | Yellow retreating flier, 5 by 5 dots |
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |

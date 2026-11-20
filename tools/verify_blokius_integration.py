@@ -178,8 +178,7 @@ doSinScroll equ barrelScroll_Update
         (game / "score_digits.bin").write_bytes(b"".join(glyphs[char] for char in digits))
         (game / "game_over.bin").write_bytes(bytes(glyphs[char][row] for line in game_over_text
                                                  for row in range(8) for char in line))
-        icon = bytes((0, 0x20, 0x38, 0x7C, 0x38, 0x20, 0, 0))
-        (game / "hud_life_icon.bin").write_bytes(icon)
+        icon = (game / "hud_life_icon.bin").read_bytes()
         (game / "hud_initial.bin").write_bytes(b"".join(bytes((ship, ship, ship, 0)) + bytes((digit,)) * 6
                                                        for ship, digit in zip(icon, glyphs["0"])))
         # Four five-pixel silhouettes, one clear pixel between ships. Keep the

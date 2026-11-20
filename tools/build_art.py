@@ -151,6 +151,29 @@ def map_output(number):
     return f"tilemap-{number}" if number > 1 else "tilemap"
 
 
+def hud_life_icon(sprite):
+    """Make a monochrome ship, retaining the wing tips and a cut-out cyan cockpit."""
+    hull = [0] * 8
+    canopy = [0] * 8
+    # The digits occupy scanlines 1-7. Centre the five sprite rows on 2-6.
+    # Each mask/colour pair in the even-X sprite holds two three-bit dots.
+    for y in range(5):
+        for x in range(5):
+            offset = 6 * y + 2 * (x // 2)
+            mask, colours = sprite[offset:offset + 2]
+            shift = 3 * (x % 2)
+            bit = 0x40 >> x
+            if ((mask >> shift) & 7) == 0:
+                hull[y + 2] |= bit
+                if ((colours >> shift) & 7) == 5:
+                    canopy[y + 2] |= bit
+    icon = hull.copy()
+    for y in range(2, 7):
+        interior = hull[y - 1] & hull[y + 1] & (hull[y] << 1) & (hull[y] >> 1)
+        icon[y] &= ~(interior & canopy[y])
+    return bytes(icon)
+
+
 def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
     font = output / SCREEN_FONT
@@ -177,6 +200,8 @@ def build_art(output, *, sprite_dir=None):
         data = convert_image(sprite_dir / f"{name}.png", "converter-sprites.exe", target, (5, 5))
         if len(data) != 60:
             raise ValueError(f"The sprite converter produced an unexpected size for {name}")
+        if name == "player":
+            (output / "hud_life_icon.bin").write_bytes(hud_life_icon(data))
         # The live compositor preserves the destination's bright/flash bits.
         target.write_bytes(bytes(value | 192 if index % 2 == 0 else value & 63
                                  for index, value in enumerate(data)))

@@ -13,26 +13,42 @@ from verify_zesarux_raster import run
 PROBE = Path(__file__).resolve().parents[1] / "tests/hud/bottom_score.asm"
 
 
-def bitmap(font, level, score, lives):
+def life_pixels(sprite, font):
+    # Decode the renderer's odd-X copy as a reference for the even-X conversion.
+    dots = {}
+    for y in range(5):
+        for lane in range(1, 6):
+            offset = 30 + 6 * y + 2 * (lane // 2)
+            shift = 3 * (lane % 2)
+            if ((sprite[offset] >> shift) & 7) == 0:
+                dots[lane - 1, y] = (sprite[offset + 1] >> shift) & 7
+    zero_start = 8 * (ord("0") - 32)
+    zero = font[zero_start:zero_start + 8]
+    ink_rows = [y for y, bits in enumerate(zero) if bits]
+    top = (min(ink_rows) + max(ink_rows)) // 2 - 2
+    return [(x, y + top) for (x, y), colour in dots.items()
+            if colour != 5 or any(p not in dots for p in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))]
+
+
+def bitmap(font, ship_pixels, level, score, lives):
     text = f"LEVEL {level}".ljust(26) + f"{score:6d}"
     image = bytearray(font[8 * (ord(char) - 32) + y] for y in range(8) for char in text)
     for n in range(lives):
-        for y, row in enumerate(("00000", "01000", "01110", "11111", "01110", "01000", "00000", "00000")):
-            for dx, pixel in enumerate(row):
-                if pixel == "1":
-                    x = 64 + 6*n + dx
-                    image[32*y + x//8] |= 0x80 >> (x % 8)
+        for dx, y in ship_pixels:
+            x = 64 + 6*n + dx
+            image[32*y + x//8] |= 0x80 >> (x % 8)
     return image
 
 
 def build_cases(game):
     font = (game / "font/arcade-8.bin").read_bytes()
+    ship_pixels = life_pixels((game / "player_art.bin").read_bytes(), font)
     images, cases = bytearray(), []
 
     def check(level, score, lives):
         cases.extend((f"ld hl,expectedImages+{len(images)}", f"ld bc,#{score // 100:04d}",
                       f"ld a,{lives}", "call checkHUD"))
-        images.extend(bitmap(font, level, score, lives))
+        images.extend(bitmap(font, ship_pixels, level, score, lives))
 
     previous = 0
     # Include all extra lives, consecutive awards across boundaries, and
