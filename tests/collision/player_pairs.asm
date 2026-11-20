@@ -35,6 +35,24 @@ start:
     CHECK_PAIR 13,12,14,6,#ff,0  ; Lower shot hits, upper shot cannot hit the next ship.
     CHECK_PAIR 13,12,15,7,0,#ff  ; The first ship misses the pair.
     CHECK_PAIR #ff,0,10,10,0,0   ; A spent pair cannot wrap into a hit at the left edge.
+
+    macro CHECK_INCOMING shotX,shotY,expectedFlag
+        ld hl,shotY*256+shotX
+        ld (enemy_positions),hl
+        call collisionInit
+        ld a,(player_hit)
+        cp expectedFlag
+        jp nz,failed
+    endm
+
+    ld hl,10*256+13              ; ship X=12, inset hitbox starts at X=13
+    ld (player_box),hl
+    CHECK_INCOMING 12,12,0
+    CHECK_INCOMING 16,12,0
+    CHECK_INCOMING 13,10,#ff
+    CHECK_INCOMING 15,14,#ff
+    CHECK_INCOMING 14,9,0
+    CHECK_INCOMING 14,15,0
 passed: halt
     nop
 failed: halt

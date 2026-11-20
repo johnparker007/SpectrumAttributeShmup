@@ -292,7 +292,9 @@ syncActors:
     ld a,(respawnWait)
     or a
     jr nz,.shipAbsent
-    ld (player_box),hl          ; blinking changes the draw position only
+    inc l                       ; exclude the leftmost sprite column
+    ld (player_box),hl
+    dec l                       ; drawing still uses the full sprite
     ld a,(invincibleTicks)
     or a
     jr z,.shipPosition

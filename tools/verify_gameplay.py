@@ -182,9 +182,10 @@ def expected(inputs):
         alive = lives > 0 and not respawn_wait
         visible = alive and (not invulnerable or invulnerable % 2)
         displayed = visible or player_explosion > 0
-        bullet_hit = alive and bool(hit(player, [(x, y) for x, y, _ in incoming], 1))
+        player_box = (player[0] + 1 if alive else HIDDEN[0], player[1])
+        bullet_hit = alive and bool(hit(player_box, [(x, y) for x, y, _ in incoming], 1, box_width=3))
         contact_slot = next((n for n, enemy in enumerate(enemies) if alive and box_visible(enemy)
-                             and abs(enemy[0] - player[0]) < 5 and abs(enemy[1] - player[1]) < 5), None)
+                             and hit(player_box, (enemy,), 5, box_width=3)), None)
         contact = contact_slot is not None
         player_hit = bullet_hit or contact
         enemy_hits = [False] * ENEMY_SHIPS
@@ -207,7 +208,7 @@ def expected(inputs):
             "shot_started": shot_started, "explosion_started": explosion_started,
             "respawn_wait": respawn_wait, "invincible": invulnerable, "visible": bool(visible),
             "message_rows": message_rows,
-            "player_box": packed((player[0] if alive else HIDDEN[0], player[1])),
+            "player_box": packed(player_box),
             "sprite_xy": packed((player[0] + 12 if displayed else HIDDEN[0] + 12, player[1] + 12)),
             "flags": [packed(255 * flag for flag in enemy_hits[:2]),
                       packed((255 * enemy_hits[2], 255 * player_hit))],
@@ -654,7 +655,7 @@ def verify(emulator, stock, game, replay, model, seconds, replay_seconds, audio,
             raise ValueError(f"{model}: the bearing probe failed")
         paired = trace(emulator, replay / "player_pairs.sna", replay / "player_pairs.sym", ["passed", "failed"], model, 1)
         if [event["labels"] for event in paired["events"]] != [["passed"]]:
-            raise ValueError(f"{model}: the paired-shot collision probe failed")
+            raise ValueError(f"{model}: the projectile collision probe failed")
         hud = {**hud_updates.result(), **hud_video.result()}
         return {"model": model, **report, "gameplay_video_scenes": art.result(),
                 "keyboard_masks": keyboard.result(), "scenery_rewind": scenery.result(),

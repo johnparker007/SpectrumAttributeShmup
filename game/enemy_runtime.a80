@@ -383,14 +383,14 @@ checkPlayerContact:
     ld a,c
     cp HIDDEN_BOX
     ret z
-    ; Two 5-by-5 boxes overlap when both top-left coordinates differ by
-    ; at most four dots. The byte subtraction also handles clipped enemy X.
+    ; The five-dot enemy overlaps the three-dot player when dx is -4..2.
+    ; The byte subtraction also handles clipped enemy X.
     dup WAVE_ENEMIES, slot
         ld hl,(enemy_boxes+slot*2)
         ld a,l
         sub c
         add a,4
-        cp 9
+        cp 5+PLAYER_HITBOX_WIDTH-1
         jr nc,1f
         ld a,h
         sub b

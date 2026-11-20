@@ -1,6 +1,8 @@
-; Fixed-time 5x5 box checks. The host supplies valid, screen-relative positions.
+PLAYER_HITBOX_WIDTH equ 3
+
+; Fixed-time box checks. Positions are relative to the playfield.
 ; A' accumulates #ff for hit, 0 for miss. The loop always evaluates both axes.
-    macro FIXED_BOX_SCAN width
+    macro FIXED_BOX_SCAN width,boxWidth
 .next:
     ld a,(de)
     inc de
@@ -8,7 +10,7 @@
     if width=2
         inc a                  ; shot can start one dot left of the box
     endif
-    cp 5+width-1
+    cp boxWidth+width-1
     sbc a,a
     ld l,a
     ld a,(de)
@@ -92,7 +94,7 @@ collisionEnemy:
     ld b,9
     xor a
     ex af,af'
-    FIXED_BOX_SCAN 2
+    FIXED_BOX_SCAN 2,5
     endif
     ex af,af'
     ld hl,(next_result)
@@ -111,7 +113,11 @@ collisionIncomingTwo:
     ld b,2
     ld a,(player_hit)
     ex af,af'
-    FIXED_BOX_SCAN 1
+    ifdef LIVE_SHMUP
+        FIXED_BOX_SCAN 1,PLAYER_HITBOX_WIDTH
+    else
+        FIXED_BOX_SCAN 1,5
+    endif
     ex af,af'
     ld (player_hit),a
     ld (next_shot),de

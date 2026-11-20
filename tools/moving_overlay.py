@@ -18,9 +18,9 @@ class Phase:
     dots: dict
 
 
-def hit(box, shots, width):
+def hit(box, shots, width, box_width=5):
     x, y = box
-    return 255 * any(x <= sx + width - 1 and sx < x + 5 and y <= sy < y + 5 for sx, sy in shots)
+    return 255 * any(x <= sx + width - 1 and sx < x + box_width and y <= sy < y + 5 for sx, sy in shots)
 
 
 def phases():
