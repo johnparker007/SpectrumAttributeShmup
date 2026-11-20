@@ -2,7 +2,6 @@
 ; after streaming; columns 8 and 9 have no second copy.
 SCENERY_BLAST_SLOTS equ 8
 SCENERY_BLAST_TICKS equ 6
-SCENERY_MOUNT equ 104            ; scorched deck plate underneath every fixture
     assert tileMapWidth=18 && low tileMap=0
     assert tileMapWidth*tileMapHeight<=256
 

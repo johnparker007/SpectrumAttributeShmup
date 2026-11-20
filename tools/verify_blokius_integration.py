@@ -12,7 +12,10 @@ import subprocess
 import tempfile
 
 from moving_overlay import ENEMY_BOXES, PLAYER_BOX, phases, prepare, verify_state
-from build_art import BLAST_TILE, DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, ZX0, build_art, map_output
+from build_art import (
+    BLAST_TILE, DESTRUCTIBLE_TILE, LEVEL_MAPS, MENU_LOGO, SCENERY_MOUNT,
+    SCREEN_FONT, ZX0, build_art, map_output,
+)
 from bottom_hud import install_bottom_raster
 from bonus_chime import bake_bonus, tag_music_bank
 from menu_luminance import build_luminance
@@ -283,6 +286,7 @@ doSinScroll equ barrelScroll_Update
         scenery_source = f"""    ifdef LEVEL_WAVES
 DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
 BLAST_TILE equ {BLAST_TILE}
+SCENERY_MOUNT equ {SCENERY_MOUNT}
         include "destructible.a80"
         include "bottom_hud_updates.a80"
     endif

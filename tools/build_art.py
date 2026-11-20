@@ -25,6 +25,7 @@ MENU_LOGO_COOL = (0x44, 0x45, 0x41, 0x43)  # Green, cyan, blue, magenta.
 MENU_LOGO_RUN_ORDER = bytes.fromhex("69 cb 66 24 28 fd 5d e0")
 DESTRUCTIBLE_TILE = 124
 BLAST_TILE = 121
+SCENERY_MOUNT = 104  # Scorched deck plate revealed underneath every fixture.
 DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
     "player": "player_art.bin",
@@ -189,7 +190,16 @@ def build_art(output, *, sprite_dir=None):
     targets = convert_image(ART / "gfx/destructible.png", "converter-tiles.exe", gfx / "destructible.bin", (56, 8))
     if len(targets) != 7 * 48:
         raise ValueError("Expected four intact targets and three explosion frames")
-    (gfx / "tileSet.png.bin").write_bytes(tiles[:BLAST_TILE * 48] + targets[4*48:] + targets[:4*48])
+    mount = tiles[SCENERY_MOUNT * 48:(SCENERY_MOUNT + 1) * 48]
+    fixtures = targets[:4 * 48]
+    blasts = bytearray(targets[4 * 48:])
+    # Black dots in the blast art expose the deck. Each attribute holds two
+    # independent dots, one in INK and one in PAPER.
+    for i, attribute in enumerate(blasts):
+        for mask in (0x07, 0x38):
+            if (attribute & mask) == 0:
+                blasts[i] |= mount[i % len(mount)] & mask
+    (gfx / "tileSet.png.bin").write_bytes(tiles[:BLAST_TILE * 48] + blasts + fixtures)
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}

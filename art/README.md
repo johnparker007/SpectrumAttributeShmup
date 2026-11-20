@@ -25,7 +25,7 @@ Paint sky with tile 0. The eight moving blue stars can appear anywhere this tile
 
 Paint tile 3 for an animated pump. Stamp the extractor as a 2 × 2 block with tiles 12 and 13 above 28 and 29. Both animations share the existing tile pointer updates. Sections with open sky, trusses, transmitters and radiator wings alternate with solid decks, asteroid ridges and industrial bays.
 
-Paint shootable objects **inside a deck** using the first four tiles from **Destructible Scenery**. Their blue backing matches hull plate 1. After three bright explosion frames, tile 104 shows the same plate with a black crater and red embers. Open space and the crater use separate tile IDs.
+Paint shootable objects **inside a deck** using the first four tiles from **Destructible Scenery**. Their blue backing matches hull plate 1. Tile 104 shows the plate with a black crater and red embers. The build fills every black dot in the three explosion frames with the corresponding dot from tile 104, so the deck shows through the blast and the crater stays when it clears.
 
 The PNGs and TMX files are the editable masters. Save maps with one CSV tile layer and fill every cell. The optional command `python tools/compose_scenery.py build/map-drafts` generates fresh copies of the original nine layouts in a separate folder. Normal TAP builds read your Tiled edits directly.
 
