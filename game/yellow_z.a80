@@ -4,7 +4,7 @@ YELLOW_RETREAT_TICKS equ 12
 YELLOW_MAX_DELTA equ 43
 YELLOW_EXIT equ #c0
 YELLOW_TURN_X equ 26
-YELLOW_WAVE_SIZE equ 8
+YELLOW_WAVE_SIZE equ 7
 
 ; Set both the trajectory and art because slots can change wave type.
 spawnLevelShip:
@@ -218,7 +218,7 @@ emitYellowShots:
     jp aimQueuedShot
 
 ; Indexed by remaining ships, so the first entrance uses the last row here.
-yellowEntryRows: db 24,4,28,19,39,15,35,8
+yellowEntryRows: db 4,28,19,39,15,35,8
     assert $-yellowEntryRows=YELLOW_WAVE_SIZE
 yellowRetreatPaths: defs 2*WAVE_ENEMIES
 yellowRetreatSteps:

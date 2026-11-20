@@ -100,6 +100,10 @@ def verify_choice(emulator, game, model, choice):
     s = read_symbols(game / "main.sym")
     if (s["PLAYFIELD_HEIGHT"], s["ENEMY_COUNT"], s["WAVE_ENEMIES"]) != (46, 24, 15):
         raise ValueError("Expected the bottom HUD, 24 projectile slots and fifteen enemy slots")
+    green_wave_size = s["GREEN_WAVE_SIZE"]
+    yellow_wave_size = s["YELLOW_WAVE_SIZE"]
+    if (green_wave_size, yellow_wave_size) != (7, 7):
+        raise ValueError(f"{model} map {choice}: expected seven ships in each wave")
     points = {name: f"PC={s[name]:04X}H" for name in (
         "menuWait", "levelUnpackBegin", "levelUnpackEnd", "levelPageRestored",
         "enableRender", "renderFrame1", "firstFrameLogic", "halt2",
@@ -175,13 +179,14 @@ def verify_choice(emulator, game, model, choice):
     shot_probe = f"PC={s['enemyShotEmitted']:04X}H"
     motion_probe = f"{points['halt2']} AND 1=1"
     yellow_probe = f"{points['halt2']} AND 2=2"
+    first_yellow_offset = 2 * green_wave_size
     wave_clock_probe = f"{wave_probe} AND 1=1"
     watch.extend(((wave_probe, "PEEK(HL)+PEEK(IX)*256"), (wave_clock_probe, "TSTATESP"),
                   (queue_probe, "PEEKW(HL)"),
                   (shot_probe, "B+C*256+D*65536"),
                   (motion_probe, f"PEEKW({s['enemy_records']:04X}H)"),
-                  (yellow_probe, f"PEEKW({s['enemy_boxes'] + 16:04X}H)"
-                   f"+PEEK({s['enemyMotion'] + 16:04X}H)*65536")))
+                  (yellow_probe, f"PEEKW({s['enemy_boxes'] + first_yellow_offset:04X}H)"
+                   f"+PEEK({s['enemyMotion'] + first_yellow_offset:04X}H)*65536")))
     yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
     yellow_queue_clock = yellow_queue + " AND 1=1"
     watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP")))
@@ -197,17 +202,17 @@ def verify_choice(emulator, game, model, choice):
     headroom = [min(FRAME - value % FRAME for phase, value in timing if phase == slot) for slot in (0, 1)]
     entrances = [value for condition, value in rows if condition == wave_probe]
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
-    opening = [GREEN_SHIP_Y[0][3]] * 8
+    opening = [GREEN_SHIP_Y[0][3]] * green_wave_size
     yellow_spawns = []
     if yellow_count != 255:
-        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4, 24))
+        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4))
         clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
-        yellow_spawns = clocks[8:16]
-        green_to_yellow = (clocks[8] - clocks[7]) // 2
+        yellow_spawns = clocks[green_wave_size:green_wave_size + yellow_wave_size]
+        green_to_yellow = (yellow_spawns[0] - clocks[green_wave_size - 1]) // 2
         if (choice <= 5 and green_to_yellow < 144) or (choice >= 7 and green_to_yellow >= 144):
             raise ValueError(f"{model} map {choice}: unexpected spacing between waves")
         gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
-        if len(gaps) != 7 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
+        if len(gaps) != yellow_wave_size - 1 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
             raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
     opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
     if entrances[:len(opening)] != opening:
