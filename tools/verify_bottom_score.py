@@ -33,9 +33,15 @@ def life_pixels(sprite, font):
 def bitmap(font, ship_pixels, level, score, lives):
     text = f"LEVEL {level}".ljust(26) + f"{score:6d}"
     image = bytearray(font[8 * (ord(char) - 32) + y] for y in range(8) for char in text)
-    for n in range(lives):
+    # Once the 18 single-ship cells are full, each further life converts
+    # the next three cells on the right into a group of four ships.
+    tight_groups = max(0, lives - 18)
+    wide = lives - 4 * tight_groups
+    origins = [64 + 8*n + 1 for n in range(wide)]
+    origins.extend(64 + 8*wide + 6*n for n in range(4 * tight_groups))
+    for origin in origins:
         for dx, y in ship_pixels:
-            x = 64 + 6*n + dx
+            x = origin + dx
             image[32*y + x//8] |= 0x80 >> (x % 8)
     return image
 
@@ -70,6 +76,14 @@ def build_cases(game):
                   "ld a,1", "ld (player_hit),a", "call updatePlayerLife"))
     check(16, 20000, 3)
     cases.extend(("call resetEncounter", "call hudAward", "call hudStep", "call resetEncounter"))
+    check(16, 0, 3)
+    # Lose the 19th life with the second of its three cells partially drawn.
+    cases.extend(("ld bc,7699", "call awardMany"))
+    check(16, 769900, 18)
+    cases.extend(("call hudAward", "dup 7 : call hudStep : edup",
+                  "ld a,1", "ld (player_hit),a", "call updatePlayerLife"))
+    check(16, 770000, 18)
+    cases.append("call resetEncounter")
     check(16, 0, 3)
     for level in (9, 10, 16, 1):
         cases.extend((f"ld a,{level-1}", "ld (selectedLevel),a", "call hudInit"))

@@ -37,7 +37,9 @@ After the last ship is destroyed, **GAME OVER**, **ENTER TO RESTART** and **M TO
 
 The bottom HUD shows the level on the left, one ship per remaining life across the middle, and the right-aligned score at the far right. Each enemy scores 100 points. The first bonus ship comes at 20,000, followed by another every 50,000 points (70,000, 120,000 and so on). All 23 possible lives fit beside a six-digit score and a two-digit level. The playfield is 46 logical rows high.
 
-The score starts at `0`. The units zero is drawn at startup and the tens zero changes only when the score crosses between zero and a positive value. A life change redraws only the affected icon cells. Each Frame 2 selects one changed cell or copies two scanlines of an already selected cell to both bitmap banks.
+Each of the first 18 ships gets a full character of width. Each extra life packs four ships into three cells at the right of the strip. Losing that life restores the wider spacing in those cells. A life change redraws only the affected cells.
+
+The score starts at `0`. The units zero is drawn at startup and the tens zero changes only when the score crosses between zero and a positive value. Each Frame 2 selects one changed cell or copies two scanlines of an already selected cell to both bitmap banks.
 
 Frame 1 draws the first tile of the bottom tile row during the former HUD attribute-copy interval. Shifted tiles merge shared edge bytes in left-to-right order. The last tile pass omits the two hidden logical rows and skips the display swap inside the HUD. The fixed-time collision slots keep their original schedule and read eight inactive reserve records behind the 24 live projectile slots.
 

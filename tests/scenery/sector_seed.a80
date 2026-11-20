@@ -53,8 +53,19 @@ sectorSeed:
         ld (enemy_records+3*i+2),a
     edup
     ifdef STRESS_BONUS_LIFE
-        ld hl,#0199              ; first enemy hit takes 19,900 to 20,000
+        ; Start with a full row of wide icons. The first real hit awards the
+        ; 19th ship while the projectile, sprite and scenery pools are busy.
+        ld hl,#7699
         ld (hudScore),hl
+        ld a,18
+        ld (playerLives),a
+        ld a,(1<<HUD_SCORE_DIRTY)|(1<<HUD_TENS_DIRTY)|(1<<HUD_LIVES_DIRTY)
+        ld (hudPending),a
+.primeHud:
+        call hudStep
+        ld a,(hudPending)
+        or a
+        jr nz,.primeHud
         ld a,1
         ld (collision_actual),a
     endif

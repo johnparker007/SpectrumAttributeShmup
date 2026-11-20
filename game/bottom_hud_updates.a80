@@ -62,9 +62,9 @@ hudFormatScore:
     or a                        ; carry clear: compare and queue a significant digit
     ret
 
-; Four five-pixel ships at six-pixel intervals occupy three character cells.
-; A ship crossing a byte boundary takes two ordinary glyph updates. Tracking
-; the individual changes lets a loss reverse a partially drawn award cleanly.
+; One ship per cell until the strip fills. Each subsequent award packs four
+; ships into the rightmost three wide cells. A loss reverses the same changes,
+; even if it interrupts an award partway through those three cells.
 hudSelectPackedLife:
     ld a,(playerLives)
     ld e,a
@@ -103,14 +103,22 @@ hudSelectPackedLife:
     ret
 
 hudLifeEndpoints:
-    dup 6,group
-        db group*6,group*6+1,group*6+3,group*6+5
+    assert HUD_LIFE_COLUMNS % 3 = 0
+    dup HUD_LIFE_COLUMNS+1,lives
+        db lives
     edup
-    db 36
+    dup HUD_LIFE_COLUMNS/3,group
+        db HUD_LIFE_COLUMNS+3*(group+1)
+    edup
 hudLifeChanges:
-    dup 6,group
-        db HUD_LIFE_X+group*3,    8,0, HUD_LIFE_X+group*3,  16,8
-        db HUD_LIFE_X+group*3+1, 24,0, HUD_LIFE_X+group*3+1,32,24
-        db HUD_LIFE_X+group*3+2, 40,0, HUD_LIFE_X+group*3+2,48,40
+    ; Entries are column, glyph offset after an award, glyph offset after a loss.
+    dup HUD_LIFE_COLUMNS,col
+        db HUD_LIFE_X+col,8,0
+    edup
+    dup HUD_LIFE_COLUMNS/3,group
+        dup 3,col
+            db HUD_LIFE_X+HUD_LIFE_COLUMNS-3*(group+1)+col,16+8*col,8
+        edup
     edup
 hudLifeGlyphs: incbin "hud_life_cells.bin"
+    assert $-hudLifeGlyphs=5*8
