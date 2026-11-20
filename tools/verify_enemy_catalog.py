@@ -7,10 +7,10 @@ from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
 
-from enemy_catalog import FLIERS, ROSTERS, path_bytes, settings
+from enemy_catalog import FLIERS, ROSTERS, flight_steps, settings, spawn_lane
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
-from verify_gameplay import PLAYER_START, aim
+from verify_gameplay import aim
 from verify_scenery import FLAGS
 from verify_zesarux_raster import run
 
@@ -63,7 +63,7 @@ def verify_load(emulator, game, model, level, scratch):
           f"map + enemies {ms(last-load):.1f} ms, selection to renderer {ms(play-start):.1f} ms", flush=True)
 
 
-def wave_probe(game, assembler, directory):
+def wave_probe(game, assembler, directory, camp=False):
     shutil.copytree(game, directory)
     code = directory / "gameplay.a80"
     before = b"ld hl,playerLives\n    dec (hl)"
@@ -71,61 +71,122 @@ def wave_probe(game, assembler, directory):
     assert source.count(before) == 1
     # Keep rams, deaths and respawns active through a whole unattended rotation.
     # The replacement tests the current lives count and also takes 11 T.
+    if camp:
+        # Keep the real keyboard poll and hold right, up and fire after it.
+        marker = b"controlsReady:\n    ld (lastControls),a"
+        assert source.count(marker) == 1
+        source = source.replace(marker, b"controlsReady:\n    or 21\n    ld (lastControls),a")
     code.write_bytes(source.replace(before, b"ld hl,playerLives\n    ld a,(hl) : or a"))
     for name in ("main.tap", "main.sna"):
         (directory / name).unlink()
     run([assembler, *(f"-D{flag}=1" for flag in FLAGS), "--sym=main.sym", "main.asm"], directory)
 
 
-def verify_waves(emulator, game, model, level, scratch):
+def expected_flight(ship, member, reflected, guns):
+    y, upward = spawn_lane(ship, member, reflected)
+    active = dict(guns)
+    for sample, x, inward in flight_steps(ship):
+        height = y - inward if upward else y + inward
+        gate = next((col for col in range(x, sample + 1) if col in active), None)
+        bearing = None
+        if gate is not None:
+            angle = active[gate]
+            bearing = 1 if angle is None else ((-angle if upward else angle) % 32) * 8
+        yield x & 255, height, bearing
+
+
+def verify_waves(emulator, game, model, level, scratch, camp=False):
     s = read_symbols(game / "main.sym")
     roster = ROSTERS[level - 1]
 
     def pc(name):
         return f"PC={s[name]:04X}H"
 
-    spawn, read, shot = map(pc, ("writeSpawnArt", "moveCatalogShip.readSample", "catalogShotReady"))
+    spawn = pc("writeSpawnArt")
+    move, gun = map(pc, ("moveCatalogShip.positionWritten", "moveCatalogShip.gunPositionWritten"))
+    aim_at, shot = map(pc, ("catalogBearing", "catalogShotReady"))
+    tick, bullet = map(pc, ("moveIncoming", "moveDot"))
     halts = [pc("halt2"), pc("halt1")]
-    checks = [(spawn, "BC"), (read, "HL+PEEK(HL)*65536"), (shot, "B+C*256+D*65536"),
+    position = "PEEKW(HL-1)+B*65536"
+    checks = [(spawn, f"B+PEEK(HL)*256+PEEK({s['spawnSlot']:04X}H)*65536"),
+              (move, position), (gun, position), (aim_at, f"PEEKW({s['playerXY']:04X}H)+D*65536"),
+              (shot, "B+C*256+D*65536"), (tick, "A"), (bullet, "A"),
               *((halt, "TSTATESP") for halt in halts)]
+    hit = pc("updatePlayerLife.checkPlayer") + f" AND PEEK({s['player_hit']:04X}H)>0"
+    if camp:
+        checks.append((hit, f"PEEKW({s['playerXY']:04X}H)"))
     spool = scratch / f"wave-{model}-{level}.txt"
     spool.write_text(str(level) * 80, encoding="ascii")
-    log = breakpoint_log(emulator, game / "main.tap", model, 82, checks, True, spool)
-    events = [(k, int(v)) for k, v in HIT.findall(log)]
-    images = [v for k, v in events if k == spawn]
-    expected = [s["enemyArt"] + n * 256 for n in range(len(roster)) for _ in range(7)]
-    assert images[:len(expected)] == expected, (model, level, "wave rotation", len(images))
-    valid_shots = set()
-    paths = []
-    for slot, species in enumerate(roster[2:], 2):
-        curve = path_bytes(FLIERS[species - 2])
-        for gun, (x, bearing) in enumerate(settings(level, species)[1], 1):
-            for mirror in (0, 1):
-                ix = x * 2 + mirror
-                y = curve[ix] + 2
-                if bearing is None:
-                    direction = aim(x, y, PLAYER_START)
-                else:
-                    direction = ((-bearing if mirror else bearing) % 32) * 8
-                valid_shots.add(x + y * 256 + direction * 65536)
-                curve[ix] |= gun * 64
-        paths.extend(curve)
-    visited = set()
-    for point, value in events:
-        if point == read:
-            sample, addr = divmod(value, 65536)
-            offset = addr - s["catalogPaths"]
-            assert 0 <= offset < len(paths) and paths[offset] == sample, (model, level, offset, sample)
-            visited.add(offset // 256)
-        if point == shot:
-            assert value in valid_shots, (model, level, "bearing or origin", value)
-    assert visited == set(range(len(roster[2:])))
-    assert not paths or any(k == shot for k, v in events)
-    times = [(k, v) for k, v in events if k in halts]
+    log = breakpoint_log(emulator, game / "main.tap", model, 105, checks, True, spool)
+    spawns = 0
+    slots = {}
+    gate_selected = False
+    pending = None
+    counts = []
+    times = []
+    aim_player = None
+    aimed = 0
+    pressure_at_corner = 0
+    corner_losses = 0
+    wave_length = 7 * len(roster)
+    for point, raw in HIT.findall(log):
+        value = int(raw)
+        if point == spawn:
+            slot, pose = divmod(value, 65536)
+            row, page = divmod(pose, 256)
+            member = spawns % 7
+            kind = spawns // 7 % len(roster)
+            assert page == s["enemyArt"] // 256 + kind, (model, level, spawns, page)
+            if kind >= 2:
+                species = roster[kind]
+                ship = FLIERS[species - 2]
+                reflected = spawns // wave_length % 2 == 0
+                assert row == spawn_lane(ship, member, reflected)[0], (model, level, ship.name, member, row)
+                slots[slot] = expected_flight(ship, member, reflected, settings(level, species)[1])
+            spawns += 1
+        elif spawns and point in (move, gun):
+            remaining, xy = divmod(value, 65536)
+            x, y, bearing = next(slots[s["WAVE_ENEMIES"] - remaining])
+            assert xy == y * 256 + x, (model, level, xy, x, y)
+            assert (point == gun) == (bearing is not None and not gate_selected)
+            if point == gun:
+                pending = (x, y + 2, bearing)
+                gate_selected = True
+        elif spawns and point == aim_at:
+            mode, player = divmod(value, 65536)
+            aim_player = (player % 256, player // 256)
+        elif spawns and point == shot:
+            direction, origin = divmod(value, 65536)
+            x, y = origin % 256, origin // 256
+            assert (x, y, mode) == pending, (model, level, x, y, mode, pending)
+            expected = aim(x, y, aim_player) if mode == 1 else mode
+            assert direction == expected, (model, level, x, y, aim_player, direction, expected)
+            if mode == 1:
+                aimed += 1
+                pressure_at_corner += aim_player == (s["PLAYER_RIGHT"], 0)
+        elif spawns and point == tick:
+            gate_selected = False
+            if spawns <= wave_length:
+                counts.append(0)
+        elif point == bullet and counts and spawns <= wave_length:
+            counts[-1] += 1
+        elif point == hit and value == s["PLAYER_RIGHT"] and (spawns - 1) // 7 % len(roster) >= 2:
+            corner_losses += 1
+        elif point in halts:
+            times.append((point, value))
+
+    assert spawns > wave_length, (model, level, "incomplete rotation", spawns)
+    assert level == 1 or aimed > 0
+    if camp:
+        assert pressure_at_corner > 0, (model, level, "no shots aimed at the corner")
+        if level == 9:
+            assert corner_losses > 0, (model, level, "corner camper survived")
+    assert max(counts) <= s["ENEMY_COUNT"]
     assert len(times) >= 100 and all(k != j and w // FRAME == v // FRAME + 1
-                                     for (k, v), (j, w) in zip(times, times[1:])), (model, level, "overrun")
-    print(f"{model} level {level}: {len(images)} spawns, {len(times)} video frames, "
-          f"{sum(k == shot for k, v in events)} scripted shots", flush=True)
+               for (k, v), (j, w) in zip(times, times[1:])), (model, level, "overrun")
+    print(f"{model} level {level}: {len(times)} video frames, {spawns} spawns, {aimed} aimed shots, "
+          f"{pressure_at_corner} aimed at the parked ship, {corner_losses} corner losses, "
+          f"{sum(counts)/len(counts):.2f} mean / {max(counts)} peak bullets over the first rotation", flush=True)
 
 
 if __name__ == "__main__":
@@ -135,15 +196,19 @@ if __name__ == "__main__":
     parser.add_argument("--waves", type=Path, metavar="ASSEMBLER", help="Exercise complete gameplay wave rotations")
     parser.add_argument("--levels", type=int, nargs="+", choices=range(1, len(ROSTERS) + 1),
                         default=range(1, len(ROSTERS) + 1))
+    parser.add_argument("--camp", action="store_true", help="Hold fire in the upper right during the wave check")
     args = parser.parse_args()
+    if args.camp and (not args.waves or 1 in args.levels):
+        parser.error("--camp needs --waves and armed levels")
     with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=4) as workers:
         game = args.game.resolve()
         check = verify_load
         if args.waves:
             game = Path(tmp) / "waves"
-            wave_probe(args.game.resolve(), args.waves.resolve(), game)
+            wave_probe(args.game.resolve(), args.waves.resolve(), game, args.camp)
             check = verify_waves
-        jobs = [workers.submit(check, args.emulator.resolve(), game, model, level, Path(tmp))
+        options = {"camp": args.camp} if args.waves else {}
+        jobs = [workers.submit(check, args.emulator.resolve(), game, model, level, Path(tmp), **options)
                 for level in args.levels for model in ("P2", "P2A41")]
         for job in jobs:
             job.result()

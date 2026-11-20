@@ -33,18 +33,24 @@ Each level cycles through its roster in order, with seven ships of one type per 
 | 8 | Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
 | 9 | Azure Hopper, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
 
-The additional ships have individual mirrored paths and up to three firing positions. For example, the Ivory Stair flies a staircase and fires along successive bearings, the Copper Drill zigzags and fires to either side, and the Silver Splitter fires a close pair before its aimed shot. Difficulty unlocks firing positions and tightens spacing. A ship shares its four animation frames across every difficulty. The build bakes its path once, and GET READY enables the firing positions for the selected level. See [the enemy catalogue](../tools/enemy_catalog.py) for the editable paths, bearings and rosters.
+Each of the fourteen additional waves uses seven entry heights. Cobalt Skimmers fly straight across in evenly spaced lanes. Scarlet Hooks enter from alternating edges and turn back towards their starting height. Azure Hoppers accelerate through two parts of a double hop, and Silver Splitters break inward after a long straight approach. The next pass reflects each formation vertically.
 
-The sixteen compressed ship packets occupy 2,418 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
+Each new type has an aimed shot from its first appearance. Levels 2 through 9 enable **1, 2, 2, 3, 3, 4, 5 and 6** firing positions per ship respectively. Later waves enter closer together and can fire near the right edge, then aim again farther across. Some ships interleave aimed and fixed-angle shots. When several of the new ships reach a firing position on the same tick, one gets the shot. This keeps the cost of a simultaneous volley bounded. All waves share the 24-bullet pool.
+
+The build bakes each ship's vertical steps, horizontal dashes, entry lanes and firing positions into its existing 256-byte path page. GET READY enables the positions for the selected difficulty. Each ship shares its four animation frames across every difficulty. See [the enemy catalogue](../tools/enemy_catalog.py) for the editable formations, paths, bearings and rosters.
+
+The sixteen compressed ship packets occupy 2,313 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
 
 | GET READY measurement | Grey +2 | Black +2A |
 | --- | ---: | ---: |
 | Level 1 enemy load | 13.2 ms | 14.0 ms |
-| Level 2 enemy load | 45.2 ms | 47.7 ms |
-| Longest enemy load, levels 1–9 | 100.9 ms | 103.4 ms |
-| Longest map and enemy load together | 128.0 ms | 132.0 ms |
+| Level 2 enemy load | 44.0 ms | 46.7 ms |
+| Longest enemy load, levels 1–9 | 101.3 ms | 104.1 ms |
+| Longest map and enemy load together | 128.2 ms | 132.7 ms |
 
-The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full rotation of the roster, including spawn order, movement samples, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check.
+The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full rotation of the roster, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there.
+
+With the player idle, level 2 averaged 0.87 live enemy bullets over its first wave rotation and peaked at 4. Level 5 averaged 4.41 and peaked at 17. Level 9 averaged 12.20 and peaked at 22 of the 24 slots. Both models produced the same counts.
 
 Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 

@@ -7,6 +7,7 @@ import shutil
 import tempfile
 
 from build_art import map_output
+from enemy_catalog import FLIERS, ROSTERS, flight_steps, settings, spawn_lane
 from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
@@ -36,6 +37,19 @@ def make_probe(game, directory, assembler, *, bonus=False, catalog=False):
     flags = FLAGS + (["STRESS_BONUS_LIFE"] if bonus else [])
     if catalog:
         flags.append("STRESS_CATALOG")
+        positions = bytearray()
+        for i in range(15):
+            species = ROSTERS[8][2 + i % 6]
+            ship = FLIERS[species - 2]
+            entry, upward = spawn_lane(ship, 0, i % 2)
+            gates = dict(settings(9, species)[1])
+            prev_x, prev_y = 67, entry
+            for sample, x, height in flight_steps(ship):
+                if any(c in gates for c in range(x, sample + 1)):
+                    break
+                prev_x, prev_y = x, entry + (-height if upward else height)
+            positions.extend((prev_x, prev_y, upward))
+        (directory / "catalog-stress.bin").write_bytes(positions)
     run([assembler, *("-D" + flag + "=1" for flag in flags), "--sym=main.sym", "main.asm"], directory)
 
 
@@ -71,6 +85,11 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     checks.append((flight, f"PEEKW({symbols['sprite10']:04X}H)"))
     yellow = flight + " AND 1=1"
     checks.append((yellow, f"PEEKW({symbols['sprite18']:04X}H)"))
+    if catalog:
+        armed = pc("moveCatalogShip.readSample") + " AND PEEK(HL)>63"
+        checks.append((armed, "B"))
+        accepted = pc("moveCatalogShip.gunPositionWritten")
+        checks.append((accepted, "B"))
     if bonus:
         checks.append((pc("hudScoreAwarded.extraLife"), "TSTATESP"))
     spool = game / f"sector-{model}-{level}.txt"
@@ -107,6 +126,12 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     bases = (symbols["enemyArt"], symbols["enemyArt" if level == 1 else "yellowArt"])
     if catalog:
         bases = tuple(symbols["enemyArt"] + (2+slot%6)*256 for slot in (1, 9))
+        # Slot zero takes the bonus-awarding hit. The survivors reach their
+        # gates across two ticks while the projectile pool is saturated.
+        opening = play[:[i for i, (k, _) in enumerate(play) if k == end][1]]
+        gates = sum(k == armed for k, _ in opening)
+        grants = sum(k == accepted for k, _ in opening)
+        assert gates >= 14 and grants == 2, (model, "saturated guns", gates, grants)
     for watch, base in zip((flight, yellow), bases):
         poses = [v - base for k, v in play if k == watch]
         first_step = poses.index(64)

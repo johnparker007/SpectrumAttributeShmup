@@ -1,7 +1,8 @@
 ; Bank 0. One 256-byte art page per resident species, indexed by waveKind.
 ; Slots 0 and 1 are the sine and Z ships. Other slots also own a path page.
-; Its even/odd bytes give top/bottom entrances. Offscreen samples 142..147
-; hold three pairs of bearings. Only GET READY writes these pages.
+; Even/odd samples turn inward from the top/bottom half. Bits 0..4 are
+; delta Y + 16, bit 5 adds a second X step, and bits 6..7 select a gun.
+; Unused offscreen samples hold the bearings, seven entry pairs and gates.
     include "enemy_manifests.a80"
 residentCount: db 0
 residentDelays: defs 8
@@ -59,29 +60,21 @@ loadEnemyRoster:
     ld a,b
     or a
     jr z,.loaded
-    ld c,64                     ; gun number in the top two bits of a sample
-    ld de,142
+    ld d,h
+    ld e,CATALOG_GATES
 .gun:
-    ld l,(ix)
-    ld a,(hl)
-    or c
+    ld a,(de)                   ; sample crossed on a single or double step
+    inc e
+    ld l,a
+    ld a,(de)
+    inc e
+    ld c,a                      ; bearing selector for either entry direction
+    or (hl)
     ld (hl),a
     inc l
-    ld a,(hl)
-    or c
-    ld (hl),a
-    ld l,e
-    ld a,(ix+1)
-    ld (hl),a
-    inc l
-    ld a,(ix+2)
-    ld (hl),a
-    inc l
-    ld e,l
-    inc ix : inc ix : inc ix
     ld a,c
-    add a,64
-    ld c,a
+    or (hl)
+    ld (hl),a
     djnz .gun
 .loaded:
     inc iyh
@@ -105,17 +98,21 @@ spawnCatalogShip:
     ld c,0
     add a,high catalogPaths-high enemyArt-2
     ld d,a
-    add a,a
-    ld e,a
     ld a,(waveIndex)
-    rlca : rlca
-    or e
-    ld (ix),a
-    and 1
-    or 2*67
+    add a,a : add a,a           ; carry flips the whole formation on the next pass
+    ld a,(waveRemaining)
+    rla
+    add a,CATALOG_ENTRIES-2
     ld e,a
     ld a,(de)
+    ld e,a
+    and 63
     ld (hl),a
+    ld a,e
+    rlca                        ; carry selects this ship's inward direction
+    ld a,d
+    rla
+    ld (ix),a
     jp writeSpawnArt
 
 moveCatalogShip:
@@ -142,96 +139,78 @@ moveCatalogShip:
     ld l,a
 .readSample:
     ld a,(hl)
-    cp 64
-    jr nc,.gun
+.shotMask:
+    and #ff                     ; one scripted trigger is serviced per tick
+    cp 32
+    jr nc,.marked
+.position:
     ld h,high shipTrajectories  ; green slots reuse the alternate H
     exx
     inc hl
+    sub 16
+    add a,(hl)
     ld (hl),a
+.positionWritten:
     jp stepWave.advance
+.marked:
+    bit 5,a
+    jr z,.gun
+    exx
+    dec (hl)                    ; Y and the gun belong to the landing column
+    exx
+    and #df
+    cp 32
+    jr c,.position
 .gun:
-    ld c,a
-    and #c0
-    rlca : rlca : rlca
-    add a,140
-    ld b,a
-    ld a,l
-    and 1
-    add a,b
-    ld l,a
-    ld b,(hl)                   ; bearing, or 1 for aimed fire
-    ld a,c
-    and 63
+    ld (finishCatalogShots.path+1),hl
+    and 31
+    ld h,high shipTrajectories
     exx
     inc hl
+    sub 16
+    add a,(hl)
     ld (hl),a
-    ; Up to three pending origins. Consume one per Frame 2, bounding aim time.
-    push hl
-    exx
-    ld a,(catalogWrite)
-    ld l,a
-    add a,4
-    and 15
-    ld c,a
-    ld a,(catalogRead)
-    cp c
-    jr z,.full
-    ld a,c
-    ld (catalogWrite),a
-    ld a,l
-    add a,low catalogQueue
-    ld l,a
-    ld h,high catalogQueue
-    ld (hl),b
-    inc l
-    pop bc                      ; address of this ship's Y
-    ld a,(bc)
-    add a,2
-    ld (hl),a
-    dec bc
-    ld a,(bc)
-    inc l
-    ld (hl),a
-    ld h,high shipTrajectories
-    exx
+.gunPositionWritten:
+    ; These coordinates stay live until Frame 2. Mask just the gun bits for
+    ; the remaining ships this tick, so a whole salvo has a bounded cost.
+    ld (finishCatalogShots.ship+1),hl
+    ld a,#3f
+    ld (moveCatalogShip.shotMask+1),a
     jp stepWave.advance
-.full:
-    ld h,high shipTrajectories
-    exx
-    pop hl
-    jp stepWave.advance
-
-    align 16
-catalogQueue: defs 16
-catalogRead: db 0
-catalogWrite: db 0
 
 finishCatalogShots:
-    ld a,(catalogWrite)
-    ld hl,catalogRead
-    cp (hl)
+    ld a,(moveCatalogShip.shotMask+1)
+    inc a
     jp z,mainLoop
-    ld a,(hl)
-    add a,4
-    and 15
-    ld e,(hl)
-    ld (hl),a
+    ld a,#ff
+    ld (moveCatalogShip.shotMask+1),a
     ld hl,(enemyWrite)
     ld a,(hl)
     inc a
-    jp nz,mainLoop              ; pool full, discard this firing opportunity
+    jp nz,mainLoop              ; pool full, discard this opportunity
     ld a,(playerLives)
     or a
     jp z,mainLoop
-    ld a,e
-    add a,low catalogQueue
+.path:
+    ld hl,0                     ; marked sample for the winning ship
+    ld a,(hl)
+    and #c0
+    rlca : rlca : rlca
+    add a,CATALOG_BEARINGS-2
+    ld c,a
+    ld a,l
+    and 1
+    add a,c
     ld l,a
-    ld h,high catalogQueue
     ld d,(hl)
-    inc l
-    ld c,(hl)
-    inc l
+.ship:
+    ld hl,0
+    ld a,(hl)
+    add a,2
+    ld c,a
+    dec hl
     ld b,(hl)
+catalogBearing:
     bit 0,d
     call nz,aimIncoming
 catalogShotReady:

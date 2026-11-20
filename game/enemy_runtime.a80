@@ -380,11 +380,10 @@ resetLevelWaves:
     ld (waveIndex),a
     xor a
     ld (waveKind),a
-    ld (catalogRead),a
-    ld (catalogWrite),a
     ld a,9
     ld (stepWave.spawnDelay+1),a
     ld a,#ff
+    ld (moveCatalogShip.shotMask+1),a
     ld (greenShot),a
     ld (yellowMidShot),a
     ld (yellowEndShot),a

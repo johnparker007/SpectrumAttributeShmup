@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
-from enemy_catalog import FLIERS, ROSTERS, path_bytes
+from enemy_catalog import FLIERS, ROSTERS, spawn_lane
 from menu_luminance import (
     COPPER_BANDS, COPPER_MENU_TEXT, COPPER_ROW_BANDS,
     GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS,
@@ -155,7 +155,7 @@ def verify_choice(emulator, game, model, choice):
     expect_at("levelUnpackEnd", "DE", s["sourceTileMap"] + len(expected))
     spool = game / f"menu-{model}-{choice}.txt"
     spool.write_text(str(choice) * 80, encoding="ascii")
-    boot_log = breakpoint_log(emulator, game / "main.tap", model, 20, watch,
+    boot_log = breakpoint_log(emulator, game / "main.tap", model, 30, watch,
                               fast_autoload=True, keyboard_spool=spool)
     hits = {}
     for condition, value in HIT.findall(boot_log):
@@ -218,8 +218,9 @@ def verify_choice(emulator, game, model, choice):
             raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
     roster = ROSTERS[choice-1]
     if len(roster) > 2:
-        state = (s["catalogPaths"] >> 7 & 255) | 1
-        opening.append(256*state + path_bytes(FLIERS[roster[2]-2])[135])
+        y, upward = spawn_lane(FLIERS[roster[2]-2], 0, True)
+        state = (s["catalogPaths"] >> 7 & 255) | upward
+        opening.append(256 * state + y)
     else:
         opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
     if entrances[:len(opening)] != opening:
