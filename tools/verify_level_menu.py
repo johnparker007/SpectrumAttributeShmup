@@ -9,6 +9,7 @@ import shutil
 import tempfile
 
 from build_art import LEVEL_MAPS, MENU_LOGO, SCREEN_FONT, logo_bands, map_output
+from enemy_catalog import FLIERS, ROSTERS, path_bytes
 from menu_luminance import (
     COPPER_BANDS, COPPER_MENU_TEXT, COPPER_ROW_BANDS,
     GOLD_BAR, GOLD_BAR_TOP, GOLD_BAR_BOTTOM, LUMINANCE_BANDS,
@@ -189,8 +190,9 @@ def verify_choice(emulator, game, model, choice):
                    f"+PEEK({s['enemyMotion'] + first_yellow_offset:04X}H)*65536")))
     yellow_queue = f"PC={s['moveYellow.shotQueued']:04X}H"
     yellow_queue_clock = yellow_queue + " AND 1=1"
-    watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP")))
-    log = breakpoint_log(emulator, game / "main.tap", model, 50 if 4 <= choice <= 5 else 32, watch,
+    catalog_shot = f"PC={s['catalogShotReady']:04X}H"
+    watch.extend(((yellow_queue, "A"), (yellow_queue_clock, "TSTATESP"), (catalog_shot, "D")))
+    log = breakpoint_log(emulator, game / "main.tap", model, 50 if 2 <= choice <= 5 else 32, watch,
                          fast_autoload=True, keyboard_spool=spool)
     rows = [(condition, int(value)) for condition, value in HIT.findall(log)]
     halts = {points["halt2"]: 0, frame2_halt: 1}
@@ -214,11 +216,18 @@ def verify_choice(emulator, game, model, choice):
         gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
         if len(gaps) != yellow_wave_size - 1 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
             raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
-    opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
+    roster = ROSTERS[choice-1]
+    if len(roster) > 2:
+        state = (s["catalogPaths"] >> 7 & 255) | 1
+        opening.append(256*state + path_bytes(FLIERS[roster[2]-2])[135])
+    else:
+        opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
     if entrances[:len(opening)] != opening:
         raise ValueError(f"{model} map {choice}: expected entrances {opening}, saw {entrances[:len(opening)]}")
     queued = [value for condition, value in rows if condition == queue_probe]
-    shots = [value for condition, value in rows if condition == shot_probe]
+    emissions = [(condition, value) for condition, value in rows if condition in (shot_probe, catalog_shot)]
+    shots = [value for i, (condition, value) in enumerate(emissions)
+             if condition == shot_probe and (i == 0 or emissions[i-1][0] != catalog_shot)]
     yellow_shots = [shot for shot in shots if shot & 255 in (38, 50)]
     shots = [shot for shot in shots if shot & 255 not in (38, 50)]
     yellow_origins = [value for condition, value in rows if condition == yellow_queue]
@@ -232,7 +241,7 @@ def verify_choice(emulator, game, model, choice):
     else:
         expected_origin = packed((column, GREEN_SHIP_Y[0][column] + 2))
         first_bearing = aim(column, expected_origin >> 8, PLAYER_START)
-        minimum_shots = 12 if yellow_count == 255 else 8
+        minimum_shots = green_wave_size
         if (len(shots) < minimum_shots or len(shots) != len(queued)
                 or any((shot & 65535) != origin + 512 or origin & 255 != column
                        for shot, origin in zip(shots, queued))

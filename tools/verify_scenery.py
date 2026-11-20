@@ -19,7 +19,7 @@ FLAGS = ("OVERLAY_MOTION OVERLAY_FAST_PLOT SCHEDULE_COLLISION OVERLAY_AUDIO OVER
          "BARREL_SCENERY LIVE_SHMUP LEVEL_WAVES BOTTOM_HUD LEVEL_MENU LUMINANCE_LOGO LIVE_SFX").split()
 
 
-def make_probe(game, directory, assembler, *, bonus=False):
+def make_probe(game, directory, assembler, *, bonus=False, catalog=False):
     shutil.copytree(game, directory)
     source = directory / "main.asm"
     marker = b"            call gameInit"
@@ -34,10 +34,12 @@ def make_probe(game, directory, assembler, *, bonus=False):
     for name in ("main.sna", "main.tap"):
         (directory / name).unlink()
     flags = FLAGS + (["STRESS_BONUS_LIFE"] if bonus else [])
+    if catalog:
+        flags.append("STRESS_CATALOG")
     run([assembler, *("-D" + flag + "=1" for flag in flags), "--sym=main.sym", "main.asm"], directory)
 
 
-def verify(emulator, game, model, level, *, bonus=False):
+def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     symbols = read_symbols(game / "main.sym")
 
     def pc(name):
@@ -102,17 +104,21 @@ def verify(emulator, game, model, level, *, bonus=False):
     for watch, _ in checks[8:13]:
         assert [v for k, v in play if k == watch][:7] == [stage*257 for stage in stages]
     assert [v for k, v in play if k == colours][:12] == [7 + 256*56, 6 + 256*48]*6
-    for watch, species in ((flight, "enemyArt"), (yellow, "yellowArt")):
-        poses = [v - symbols[species] for k, v in play if k == watch]
+    bases = (symbols["enemyArt"], symbols["enemyArt" if level == 1 else "yellowArt"])
+    if catalog:
+        bases = tuple(symbols["enemyArt"] + (2+slot%6)*256 for slot in (1, 9))
+    for watch, base in zip((flight, yellow), bases):
+        poses = [v - base for k, v in play if k == watch]
         first_step = poses.index(64)
         assert 1 <= first_step <= 4 and poses[:first_step] == [0]*first_step
         cycle = [offset for offset in (64, 128, 192, 0) for _ in range(4)]
-        assert poses[first_step:first_step+16] == cycle, (model, level, species, poses[:20])
+        assert poses[first_step:first_step+16] == cycle, (model, level, base, poses[:20])
     if bonus:
         assert any(k == checks[-1][0] for k, _ in play)
     margins = [min(FRAME - v % FRAME for k, v in halts if k == pc(phase))
                for phase in ("halt2", "halt1")]
-    print(f"{model} level {level}{' + bonus' if bonus else ''}: {len(writes)} streamed cells, {len(halts)} frames, "
+    print(f"{model} level {level}{' + bonus' if bonus else ''}{' + catalog' if catalog else ''}: "
+          f"{len(writes)} streamed cells, {len(halts)} frames, "
           f"minimum margins {margins} T", flush=True)
 
 
@@ -136,11 +142,15 @@ def main():
         make_probe(game, probe, assembler)
         bonus = root / "bonus"
         make_probe(game, bonus, assembler, bonus=True)
+        catalog = root / "catalog"
+        make_probe(game, catalog, assembler, bonus=True, catalog=True)
         with ThreadPoolExecutor(max_workers=4) as pool:
             jobs = [pool.submit(verify, emulator, probe, model, n)
                     for n in range(1, 10) for model in MODELS]
             jobs.extend(pool.submit(verify, emulator, bonus, model, n, bonus=True)
                         for n in (1, 9) for model in MODELS)
+            jobs.extend(pool.submit(verify, emulator, catalog, model, 9, bonus=True, catalog=True)
+                        for model in MODELS)
             for job in jobs:
                 job.result()
 

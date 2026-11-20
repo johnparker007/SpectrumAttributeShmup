@@ -9,6 +9,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 from verify_zesarux_raster import run
+from enemy_catalog import FLIERS, pack_catalog
 
 
 ART = Path(__file__).resolve().parents[1] / "art"
@@ -204,7 +205,9 @@ def build_art(output, *, sprite_dir=None):
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
-        flight_sprites = {"enemy_green_sine", "enemy_yellow_z"}
+        extra = {"enemy_" + ship.name for ship in FLIERS}
+        sprites.update({name: f"{name}.bin" for name in sorted(extra)})
+        flight_sprites = {"enemy_green_sine", "enemy_yellow_z"} | extra
     else:
         sprites = SPRITES
     for name, filename in sprites.items():
@@ -225,6 +228,8 @@ def build_art(output, *, sprite_dir=None):
             if name in flight_sprites:
                 packed.extend(bytes(4))  # Four 64-byte poses fit one Z80 page.
         target.write_bytes(packed)
+    if flight_sprites:
+        pack_catalog(output, ZX0 / "zx0.exe", run)
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
     level_targets = bytearray()

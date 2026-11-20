@@ -40,8 +40,8 @@ GREEN_SHIP_Y = (GREEN_TOP_Y, tuple(GREEN_TRAVEL_Y - y for y in GREEN_TOP_Y))
 # First visible X is 63. X=58 gives the player five more dots of warning.
 GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63, 63)
 GREEN_FAST_FROM = 6
-YELLOW_FIRE_COUNTS = (255, 255, 255, 0, 0, 1, 2, 2, 2)
-WAVE_GAPS = ((9, 9), (9, 9), (9, 9), (145, 108), (145, 108), (70, 50), (35, 25), (9, 9), (5, 5))
+YELLOW_FIRE_COUNTS = (255, 0, 0, 0, 0, 1, 2, 2, 2)
+WAVE_GAPS = ((9, 9), (145, 108), (145, 108), (145, 108), (145, 108), (70, 50), (35, 25), (9, 9), (5, 5))
 YELLOW_RETREAT_TICKS = 12
 YELLOW_MAX_Y = 43
 SHOT_DIRECTIONS = 32
@@ -210,7 +210,7 @@ doSinScroll equ barrelScroll_Update
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
-                             "sky_stars.a80", "scenery_stream.a80"):
+                             "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -355,14 +355,23 @@ luminancePlusExtra: incbin "gfx/luminance-plus-extra.bin"
             endif
         endif
     endif
+    ifdef LEVEL_WAVES
+        page 6
+        org tileSetEnd
+        include "enemy_packets.a80"
+        assert $<=#10000
+    endif
     page 0
     assert testAudioRecipeEnd <= #e000
     ifdef LEVEL_WAVES
         org testAudioRecipeEnd
         align 512
-enemyArt:  incbin "enemy_art.bin"
-yellowArt: incbin "yellow_art.bin"
-        assert yellowArt=enemyArt+256 && $=yellowArt+256 && $<=#e000
+enemyArt: defs 8*256             ; four poses per resident species
+yellowArt equ enemyArt+256
+catalogPaths: defs 6*256         ; mirrored flight samples and gun gates
+        assert (high catalogPaths)*2%256>=#a0 && ((high catalogPaths)+5)*2%256<#c0
+        include "enemy_catalog.a80"
+        assert $<=#e000
     endif
     org #e000
     include "enemy_runtime.a80"

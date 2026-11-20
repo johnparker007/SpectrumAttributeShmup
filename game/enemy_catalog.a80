@@ -1,0 +1,239 @@
+; Bank 0. One 256-byte art page per resident species, indexed by waveKind.
+; Slots 0 and 1 are the sine and Z ships. Other slots also own a path page.
+; Its even/odd bytes give top/bottom entrances. Offscreen samples 142..147
+; hold three pairs of bearings. Only GET READY writes these pages.
+    include "enemy_manifests.a80"
+residentCount: db 0
+residentDelays: defs 8
+
+loadEnemyRoster:
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,enemyManifests
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    ld a,(hl)
+    ld (residentCount),a
+    inc hl
+    push hl
+    pop ix
+    ld iyh,high enemyArt
+.next:
+    ld l,(ix)
+    ld h,(ix+1)
+    call unpackEnemyPacket
+    ld hl,attrBuffer
+    ld d,iyh
+    ld e,0
+    ld bc,256
+.artCopy:
+    ldir
+    ld a,iyh
+    sub high enemyArt
+    ld e,a
+    ld d,0
+    ld hl,residentDelays
+    add hl,de
+    ld a,(ix+2)
+    ld (hl),a
+    ld b,(ix+3)
+    ld de,4
+    add ix,de
+    ld a,iyh
+    cp high enemyArt+2
+    jr c,.loaded
+    add a,high catalogPaths-high enemyArt-2
+    push bc
+    ld d,a
+    ld e,0
+    ld hl,attrBuffer+256
+    ld bc,256
+.pathCopy:
+    ldir
+    pop bc
+    ld h,a
+    ld a,b
+    or a
+    jr z,.loaded
+    ld c,64                     ; gun number in the top two bits of a sample
+    ld de,142
+.gun:
+    ld l,(ix)
+    ld a,(hl)
+    or c
+    ld (hl),a
+    inc l
+    ld a,(hl)
+    or c
+    ld (hl),a
+    ld l,e
+    ld a,(ix+1)
+    ld (hl),a
+    inc l
+    ld a,(ix+2)
+    ld (hl),a
+    inc l
+    ld e,l
+    inc ix : inc ix : inc ix
+    ld a,c
+    add a,64
+    ld c,a
+    djnz .gun
+.loaded:
+    inc iyh
+    ld a,iyh
+    sub high enemyArt
+    ld hl,residentCount
+    cp (hl)
+    jr nz,.next
+    ; This is the future playfield buffer on the first launch from the menu.
+    ld hl,attrBuffer
+    ld de,attrBuffer+1
+    ld bc,511
+    ld (hl),0
+    ldir
+    ret
+
+spawnCatalogShip:
+    ld a,(waveKind)
+    add a,high enemyArt
+    ld b,a
+    ld c,0
+    add a,high catalogPaths-high enemyArt-2
+    ld d,a
+    add a,a
+    ld e,a
+    ld a,(waveIndex)
+    rlca : rlca
+    or e
+    ld (ix),a
+    and 1
+    or 2*67
+    ld e,a
+    ld a,(de)
+    ld (hl),a
+    jp writeSpawnArt
+
+moveCatalogShip:
+    ld a,b
+    xor c
+    rrca                         ; stagger adjacent ships across game ticks
+    jp c,stepWave.skipY
+    dec (hl)
+    ld a,(hl)
+    cp #fb
+    jr nz,.sample
+    ld (hl),HIDDEN_BOX
+    jp stepWave.skipY
+.sample:
+    exx
+    ld a,(de)
+    scf
+    rra                         ; high path address and the mirrored-entry bit
+    ld h,a
+    exx
+    ld a,(hl)
+    rla
+    exx
+    ld l,a
+.readSample:
+    ld a,(hl)
+    cp 64
+    jr nc,.gun
+    ld h,high shipTrajectories  ; green slots reuse the alternate H
+    exx
+    inc hl
+    ld (hl),a
+    jp stepWave.advance
+.gun:
+    ld c,a
+    and #c0
+    rlca : rlca : rlca
+    add a,140
+    ld b,a
+    ld a,l
+    and 1
+    add a,b
+    ld l,a
+    ld b,(hl)                   ; bearing, or 1 for aimed fire
+    ld a,c
+    and 63
+    exx
+    inc hl
+    ld (hl),a
+    ; Up to three pending origins. Consume one per Frame 2, bounding aim time.
+    push hl
+    exx
+    ld a,(catalogWrite)
+    ld l,a
+    add a,4
+    and 15
+    ld c,a
+    ld a,(catalogRead)
+    cp c
+    jr z,.full
+    ld a,c
+    ld (catalogWrite),a
+    ld a,l
+    add a,low catalogQueue
+    ld l,a
+    ld h,high catalogQueue
+    ld (hl),b
+    inc l
+    pop bc                      ; address of this ship's Y
+    ld a,(bc)
+    add a,2
+    ld (hl),a
+    dec bc
+    ld a,(bc)
+    inc l
+    ld (hl),a
+    ld h,high shipTrajectories
+    exx
+    jp stepWave.advance
+.full:
+    ld h,high shipTrajectories
+    exx
+    pop hl
+    jp stepWave.advance
+
+    align 16
+catalogQueue: defs 16
+catalogRead: db 0
+catalogWrite: db 0
+
+finishCatalogShots:
+    ld a,(catalogWrite)
+    ld hl,catalogRead
+    cp (hl)
+    jp z,mainLoop
+    ld a,(hl)
+    add a,4
+    and 15
+    ld e,(hl)
+    ld (hl),a
+    ld hl,(enemyWrite)
+    ld a,(hl)
+    inc a
+    jp nz,mainLoop              ; pool full, discard this firing opportunity
+    ld a,(playerLives)
+    or a
+    jp z,mainLoop
+    ld a,e
+    add a,low catalogQueue
+    ld l,a
+    ld h,high catalogQueue
+    ld d,(hl)
+    inc l
+    ld c,(hl)
+    inc l
+    ld b,(hl)
+    bit 0,d
+    call nz,aimIncoming
+catalogShotReady:
+    call emitIncoming
+    jp mainLoop

@@ -10,7 +10,11 @@ YELLOW_WAVE_SIZE equ 7
 spawnLevelShip:
     ld a,(waveKind)
     or a
-    jr nz,.yellow
+    jr z,.green
+    dec a
+    jp nz,spawnCatalogShip
+    jr .yellow
+.green:
     ld a,(waveIndex)
     ld (ix),a
     or 3                         ; spawn X=67 indexes sample 3
@@ -19,7 +23,7 @@ spawnLevelShip:
     ld a,(de)
     ld (hl),a
     ld bc,enemyArt
-    jr .art
+    jr writeSpawnArt
 .yellow:
     ld a,(waveRemaining)
     dec a
@@ -40,7 +44,7 @@ spawnLevelShip:
     ld (hl),a
 .yellowArt:
     ld bc,yellowArt
-.art:
+writeSpawnArt:
     push hl
     ld a,(spawnSlot)
     ld e,a
@@ -62,25 +66,30 @@ spawnLevelShip:
 advanceLevelWave:
     ld a,(waveKind)
     or a
-    jr nz,.afterYellow
+    jr nz,.next
     ld a,(waveIndex)
     xor #40                      ; alternate the green wave's entrance
     ld (waveIndex),a
-    ld a,(yellowFireMode)
-    inc a
-    jr z,.greenOnly
-    ld (hl),YELLOW_WAVE_SIZE
-    ld a,1
-    ld (waveKind),a
-    ld a,(levelWaveGaps)
-    jr .saveGap
-.greenOnly:
-    ld (hl),GREEN_WAVE_SIZE
-    ret
-.afterYellow:
-    ld (hl),GREEN_WAVE_SIZE
     xor a
+.next:
+    inc a
+    ld (hl),GREEN_WAVE_SIZE
+    ld hl,residentCount
+    cp (hl)
+    jr c,.save
+    xor a
+.save:
     ld (waveKind),a
+    ld e,a
+    ld d,0
+    ld hl,residentDelays
+    add hl,de
+    ld a,(hl)
+    ld (stepWave.spawnDelay+1),a
+    ld a,e
+    cp 1
+    ld a,(levelWaveGaps)
+    jr z,.saveGap
     ld a,(levelWaveGaps+1)
 .saveGap:
     ld (spawnWait),a

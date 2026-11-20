@@ -39,11 +39,30 @@ sectorSeed:
     dup WAVE_ENEMIES,i
         ld hl,(23+2*i)+(1+5*(i%3))*256
         ld (enemy_boxes+2*i),hl
+        ifdef STRESS_CATALOG
+            ; Occupy all fifteen slots with the six scripted level-nine species.
+            ; Two ships cross armed gates on the opening tick.
+            ld a,(high catalogPaths+i%6)*2+(i%2)
+            ld (enemyMotion+2*i),a
+            ld hl,enemyArt+(2+i%6)*256
+            ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
+            ld a,46+i            ; clear the five simultaneous scenery shots
+            ld (enemy_boxes+2*i),a
+            if i=1 || i=5
+                ld a,52+i/5
+                ld (enemy_boxes+2*i),a
+            endif
+        else
         if i>=8
+            ld a,(residentCount)
+            dec a
+            jr z,1f
             ld a,YELLOW_APPROACH
             ld (enemyMotion+2*i),a
             ld hl,yellowArt
             ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
+1:
+        endif
         endif
     edup
     dup ENEMY_COUNT,i

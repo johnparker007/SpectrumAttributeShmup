@@ -8,6 +8,7 @@ The playable build reads these files on every build.
 | `sprites/player.png` | 5×5 player ship and source for the monochrome HUD life icon. Enclosed cyan cockpit dots appear as cut-outs in the icon. |
 | `sprites/enemy_green_sine.png`, then `enemy_green_sine_2.png` through `_4.png` | Green sine flier folding and extending its fins |
 | `sprites/enemy_yellow_z.png`, then `enemy_yellow_z_2.png` through `_4.png` | Yellow Z flier with a spinning cyan core |
+| `sprites/enemy_<name>.png`, then `enemy_<name>_2.png` through `_4.png` | Four editable flight poses for each of the fourteen additional ships |
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` through `maps/level-9.tmx` | Nine 256 × 6 maps. Each layer carries the sector name |
 | `maps/tileSet.tsx` | Tiled scenery palette with previews of the extractor and pump animations |
@@ -55,7 +56,7 @@ python tools/build_game.py --assembler "C:/path/to/sjasmplus.exe"
 
 The playable TAP is written to `build/game.tap`. Graphics are converted automatically. To inspect the converted graphics on their own, run `python tools/build_art.py`. Converted files appear in `build/art`.
 
-The build compresses all nine maps with the bundled ZX0 tool. Press **1–9** on the title screen to choose a test level. Enter during gameplay restarts that level. Each difficulty uses the same green sine artwork.
+The build compresses all nine maps and each ship's four poses with ZX0. Press **1–9** on the title screen to choose a level. GET READY expands only the ships on that level's roster. All difficulty settings for a ship share its PNGs. The roster and flight profiles are in [enemy_catalog.py](../tools/enemy_catalog.py).
 
 The original Windows sprite and tile converters are included in `gfx`. Python 3 and Windows are required for this conversion workflow. The game build also needs SjASMPlus. The headless verifier additionally needs ZEsarUX.
 

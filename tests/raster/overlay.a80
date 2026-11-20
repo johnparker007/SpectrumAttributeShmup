@@ -115,7 +115,11 @@ hudFrame2Done:
     ifdef OVERLAY_FAST_PLOT
         inc de                 ; 1,038 T-states saved, plus 6 preserves HALT phase
     endif
-    jp mainLoop
+    ifdef LEVEL_WAVES
+        jp finishCatalogShots
+    else
+        jp mainLoop
+    endif
 
 overlayFailed:
     di

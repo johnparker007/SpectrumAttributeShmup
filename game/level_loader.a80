@@ -28,6 +28,10 @@ levelPageRestored:
         call configureScenery
         ld a,(selectedLevel)
         call configureLevelWaves
+        ld a,(selectedLevel)
+enemyLoadBegin:
+        call loadEnemyRoster
+enemyLoadEnd:
     endif
     ei
     ret
@@ -35,3 +39,14 @@ levelPageRestored:
     include "dzx0_standard.asm"
 
 selectedLevel: db 0
+
+    ifdef LEVEL_WAVES
+; Fixed RAM trampoline. Both the source and destination banks use #c000.
+unpackEnemyPacket:
+    ld a,6
+    call swapPage
+    ld de,attrBuffer
+    call dzx0_standard
+    xor a
+    jp swapPage
+    endif

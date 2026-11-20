@@ -99,4 +99,4 @@ The [Blokius timing baseline](docs/blokius-timing.md) follows the unmodified gam
 
 The [Blokius scenery test](docs/blokius-integration.md) checks the WIP's barrel scroll and animated tiles with the new projectile and AY workload.
 
-The [playable barrel-scroll build](docs/gameplay.md) adds keyboard movement, green sine waves with level-specific firing, and an incremental score HUD.
+The [playable barrel-scroll build](docs/gameplay.md) has nine sectors and sixteen animated enemy types. Each level loads its own waves during GET READY.

@@ -1,4 +1,14 @@
 ; Game logic runs with bank 0 mapped. This code and the sprites live above AY data.
+    macro sampleGreenY
+        and 63
+        exx
+        ld l,a
+        ld a,(de)
+        or l
+        ld l,a
+        ld a,(hl)
+        exx
+    endm
 stepWave:
     exx
     ld h,high shipTrajectories
@@ -29,24 +39,14 @@ stepWave:
     ld a,(hl)
     cp #fb                       ; a five-dot sprite is fully offscreen at X=-5
     jr z,.hide
-    and 63
-    exx
-    ld l,a
-    ld a,(de)
-    or l
-    ld l,a
-    ld a,(hl)
-    exx
-    inc hl
-    ld (hl),a
     ifdef LEVEL_WAVES
-        dec hl
-        ld a,(hl)
 .fireAtColumn:
         cp HIDDEN_BOX
-        call z,queueGreenShot
-        inc hl
+        jp z,.armedGreen
     endif
+    sampleGreenY
+    inc hl
+    ld (hl),a
     jr .advance
 .hit:
     exx
@@ -86,12 +86,24 @@ stepWave:
 .skipY:
     inc hl
 .advance:
+    ifdef LEVEL_WAVES
+    ; Each table of slot records fits within a single page.
+    assert high enemy_boxes=high (enemy_boxes+2*WAVE_ENEMIES-1)
+    assert high collision_actual=high (collision_actual+WAVE_ENEMIES-1)
+    assert high enemyMotion=high (enemyMotion+2*WAVE_ENEMIES-1)
+    inc l
+    inc e
+    exx
+    inc e : inc e
+    exx
+    else
     inc hl
     inc de
     exx
     inc de
     inc de
     exx
+    endif
     ifdef LEVEL_WAVES
         dec b
         jp nz,.next
@@ -131,15 +143,10 @@ stepWave:
         rrca
         ld (ix),a
     endif
-    ld a,9
     ifdef LEVEL_WAVES
-        ld a,(waveKind)
-        or a
-        ld a,9
-        jr z,.saveDelay
-        ld a,4
-.saveDelay:
+.spawnDelay:
     endif
+    ld a,9
     ld (spawnWait),a
     ld a,(spawnSlot)
     inc a
@@ -163,7 +170,17 @@ stepWave:
     endif
 
     ifdef LEVEL_WAVES
+.armedGreen:
+    sampleGreenY
+    inc hl
+    ld (hl),a
+    dec hl
+    ld a,(hl)
+    call queueGreenShot
+    jp .skipY
 .yellow:
+    bit 5,a                     ; scripted path page encoded in bits 1-7
+    jp nz,moveCatalogShip
     call moveYellow
     jp .advance
     endif
@@ -363,6 +380,10 @@ resetLevelWaves:
     ld (waveIndex),a
     xor a
     ld (waveKind),a
+    ld (catalogRead),a
+    ld (catalogWrite),a
+    ld a,9
+    ld (stepWave.spawnDelay+1),a
     ld a,#ff
     ld (greenShot),a
     ld (yellowMidShot),a
@@ -423,6 +444,11 @@ syncEnemyShips:
         ld (enemyMotion+slot*2+1),a
         ld hl,enemyArt
         ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
+        jr 1f
+2:
+        call explosionArt
+        ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
+        jr 3f
 1:
         ld hl,(enemy_boxes+slot*2)
         ld a,l
@@ -432,10 +458,6 @@ syncEnemyShips:
         add a,d                  ; apply the Y offset without carry from X
         ld h,a
         ld (sprite09+slot*SPRITE+SPRITE.X),hl
-        jr 3f
-2:
-        call explosionArt
-        ld (sprite09+slot*SPRITE+SPRITE.IMAGE),hl
 3:
     edup
     ret

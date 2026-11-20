@@ -16,9 +16,8 @@ advanceFlightSprites:
 .next:
     inc hl
     ld a,(hl)
-    and #fe
-    xor high enemyArt           ; zero for either of the two flight pages
-    sub 1
+    sub high enemyArt
+    cp 8                        ; carry for any resident flight page
     sbc a,a
     and 64                      ; flight step, or zero for player/explosions
     dec hl
@@ -27,6 +26,6 @@ advanceFlightSprites:
     add hl,de
     djnz .next
     ret
-    ; 440 T-states before RET versus 512 for the archived position copies.
+    ; 412 T-states before RET versus 512 for the archived position copies.
     ; Preserve subsequent renderer addresses and the four-T-state HALT phase.
     defs 16*6-($-advanceFlightSprites)

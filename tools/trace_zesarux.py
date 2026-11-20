@@ -18,7 +18,8 @@ def read_symbols(symbols):
     return {name: int(value, 16) for name, value in SYMBOL.findall(symbols.read_text())}
 
 
-def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=False, keyboard_spool=None):
+def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=False, keyboard_spool=None,
+                   *, repeat=False):
     if len(breakpoints) > 100:
         raise ValueError("ZEsarUX supports up to 100 breakpoints")
     image = image.resolve(strict=True)
@@ -37,6 +38,8 @@ def breakpoint_log(emulator, image, model, seconds, breakpoints, fast_autoload=F
     ]
     if fast_autoload:
         command.append("--fastautoload")
+    if repeat:
+        command.append("--brkp-always")  # LDIR revisits the same PC on consecutive bytes.
     if keyboard_spool is not None:
         command.extend(["--keyboardspoolfile", keyboard_spool, "--keyboardspoolfile-play",
                         "--keyboardspoolfile-keylength", "8"])

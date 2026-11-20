@@ -10,24 +10,49 @@ Green sine fliers enter beyond the right edge and move left one logical dot ever
 
 The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
 
-The level loader selects the firing column and baked bullet speed during **GET READY**. Each armed flier gets one shot when it crosses that column. The shot uses the closest of 32 bearings towards the player, or points left while the player is absent. Slow trajectories average about two thirds of the original speed. Each in-flight shot uses the same three-byte record and reads X and Y deltas from the selected pair of 256-byte tables.
+The level loader selects the green flier's firing column and the level's bullet speed during **GET READY**. Each armed green flier gets one shot when it crosses that column. The shot uses the closest of 32 bearings towards the player, or points left while the player is absent. Slow trajectories average about two thirds of the original speed. Each in-flight shot uses the same three-byte record and reads X and Y deltas from the selected pair of 256-byte tables.
 
 | Level | Green flier firing |
 | --- | --- |
 | 1–2 | Unarmed |
 | 3 and 5 | One slow shot, five dots inside the playfield |
 | 4 | One slow shot on entry |
-| 6–8 | One shot on entry at the original speed |
+| 6–9 | One shot on entry at the original speed |
 
-From level 4, each green wave alternates with a separate wave of seven yellow fliers. Yellow ships enter five ticks apart when an enemy slot is free. Levels 4 and 5 leave enough time for the previous wave to clear. Levels 6–9 shorten the gaps so waves can overlap. Two full waves and the player use fifteen of the sixteen sprite slots.
+Each level cycles through its roster in order, with seven ships of one type per wave. Level 1 has only the green flier. Levels 2–9 open with green and yellow waves, followed by the additional types below. Yellow ships enter five ticks apart when a slot is free. Early levels give each wave time to clear. Levels 6–9 shorten the gaps so waves can overlap. Two full waves and the player use fifteen of the sixteen sprite slots.
+
+| Level | Additional waves in flight order | Resident types |
+| --- | --- | ---: |
+| 1 | Green sine only | 1 |
+| 2 | Cobalt Skimmer, Scarlet Hook | 4 |
+| 3 | Cobalt Skimmer, Scarlet Hook, Ivory Stair, Amber Kite | 6 |
+| 4 | Ivory Stair, Amber Kite, Violet Needle, Mint Manta | 6 |
+| 5 | Violet Needle, Mint Manta, Copper Drill, Azure Hopper | 6 |
+| 6 | Copper Drill, Azure Hopper, Rose Claw, Jade Pendulum | 6 |
+| 7 | Copper Drill, Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet | 7 |
+| 8 | Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
+| 9 | Azure Hopper, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
+
+The additional ships have individual mirrored paths and up to three firing positions. For example, the Ivory Stair flies a staircase and fires along successive bearings, the Copper Drill zigzags and fires to either side, and the Silver Splitter fires a close pair before its aimed shot. Difficulty unlocks firing positions and tightens spacing. A ship shares its four animation frames across every difficulty. The build bakes its path once, and GET READY enables the firing positions for the selected level. See [the enemy catalogue](../tools/enemy_catalog.py) for the editable paths, bearings and rosters.
+
+The sixteen compressed ship packets occupy 2,418 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
+
+| GET READY measurement | Grey +2 | Black +2A |
+| --- | ---: | ---: |
+| Level 1 enemy load | 13.2 ms | 14.0 ms |
+| Level 2 enemy load | 45.2 ms | 47.7 ms |
+| Longest enemy load, levels 1–9 | 100.9 ms | 103.4 ms |
+| Longest map and enemy load together | 128.0 ms | 132.0 ms |
+
+The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full rotation of the roster, including spawn order, movement samples, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check.
 
 Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 
 | Level | Yellow flier firing |
 | --- | --- |
-| 4–5 | Unarmed |
+| 2–5 | Unarmed |
 | 6 | One aimed shot at the end of the retreat |
-| 7–8 | An aimed shot halfway through the retreat and another at its end |
+| 7–9 | An aimed shot halfway through the retreat and another at its end |
 
 All enemies on a level share the same 32 prebaked bullet directions and speed. The yellow fliers first shoot on level 6, which uses the faster paths. Up to 24 enemy bullets can be active at once. They alternate yellow and white on successive 25 Hz gameplay ticks.
 
