@@ -18,7 +18,7 @@ from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_blokius_integration import (
-    GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, YELLOW_FIRE_COUNTS, install,
+    GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, WAVE_GAPS, YELLOW_FIRE_COUNTS, install,
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
 from verify_luminance_writes import verify_luminance_writes
@@ -220,13 +220,14 @@ def verify_choice(emulator, game, model, choice):
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
     opening = [GREEN_SHIP_Y[0][3]] * green_wave_size
     yellow_spawns = []
+    clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
+    before_next_wave = clocks[green_wave_size] - clocks[green_wave_size - 1]
+    gap = WAVE_GAPS[choice - 1][int(yellow_count == 255)]
+    if before_next_wave != 2 * (gap + 1):
+        raise ValueError(f"{model} map {choice}: unexpected first wave gap of {before_next_wave} frames")
     if yellow_count != 255:
         opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4))
-        clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
         yellow_spawns = clocks[green_wave_size:green_wave_size + yellow_wave_size]
-        green_to_yellow = (yellow_spawns[0] - clocks[green_wave_size - 1]) // 2
-        if (choice <= 5 and green_to_yellow < 144) or (choice >= 7 and green_to_yellow >= 144):
-            raise ValueError(f"{model} map {choice}: unexpected spacing between waves")
         gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
         if len(gaps) != yellow_wave_size - 1 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
             raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")

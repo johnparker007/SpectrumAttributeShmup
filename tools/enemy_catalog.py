@@ -38,19 +38,26 @@ FLIERS = (
     Flier("copper_drill", (0, 0, 12, 2, 14, 3, 15, 4, 13, 2), False, PINCER, ((15, 30),), 7,
           ((49, AIM), (40, 2), (58, AIM), (26, 30), (63, AIM), (35, AIM))),
     Flier("azure_hopper", (0, 0, 1, 17, 2, 1, 1, 20, 2, 0), True, INTERLEAVE, ((37, 52), (9, 20)), 8,
-          ((46, AIM), (33, AIM), (57, AIM), (24, 3), (62, AIM), (39, 29))),
+          ((46, AIM), (33, AIM), (57, AIM), (24, 3), (62, AIM), (39, 29),
+           (53, 3), (29, 29), (19, 3), (60, 29))),
     Flier("rose_claw", (0, 0, 12, 19, 20, 18, 6, 1), True, FAN, ((19, 33),), 8,
-          ((45, AIM), (35, 3), (58, AIM), (24, AIM), (62, AIM), (51, 29))),
+          ((45, AIM), (35, 3), (58, AIM), (24, AIM), (62, AIM), (51, 29),
+           (40, 3), (55, 29))),
     Flier("jade_pendulum", (0, 3, 12, 20, 17, 7, 0, 4, 13), True, PINCER, (), 8,
-          ((50, AIM), (37, 2), (58, AIM), (27, 30), (63, AIM), (44, AIM))),
+          ((50, AIM), (37, 2), (58, AIM), (27, 30), (63, AIM), (44, AIM),
+           (19, 2), (32, 30), (54, 2), (23, 30))),
     Flier("silver_splitter", (0, 0, 0, 0, 1, 8, 16, 16, 16), False, RANK, ((23, 34),), 7,
-          ((52, AIM), (46, AIM), (58, 30), (29, 2), (63, AIM), (40, AIM))),
+          ((52, AIM), (46, AIM), (58, 30), (29, 2), (63, AIM), (40, AIM),
+           (19, 30), (36, 2), (55, 30), (49, 2))),
     Flier("crimson_comet", (0, 0, 4, 9, 14, 19, 19, 19, 19), False, PINCER, ((12, 53),), 7,
-          ((48, AIM), (33, AIM), (58, AIM), (20, 0), (63, AIM), (42, 0))),
+          ((48, AIM), (33, AIM), (58, AIM), (20, 0), (63, AIM), (42, 0),
+           (55, 0), (26, 0), (61, 0), (52, 0))),
     Flier("polar_wraith", (0, 0, 13, 13, 4, 4, 17, 17, 9), True, INTERLEAVE, ((39, 51), (12, 25)), 7,
-          ((51, AIM), (35, 3), (59, AIM), (25, AIM), (63, AIM), (45, 29))),
+          ((51, AIM), (35, 3), (59, AIM), (25, AIM), (63, AIM), (45, 29),
+           (30, 3), (55, 29), (38, 3), (61, 29))),
     Flier("ruby_crown", (0, 0, 16, 6, 20, 4, 18, 0, 9), False, FAN, ((33, 46),), 8,
-          ((53, AIM), (38, 29), (59, AIM), (27, 3), (63, AIM), (46, AIM))),
+          ((53, AIM), (38, 29), (59, AIM), (27, 3), (63, AIM), (46, AIM),
+           (19, 29), (31, 3), (23, 29), (56, 3))),
 )
 NAMES = ("green_sine", "yellow_z", *(ship.name for ship in FLIERS))
 ROSTERS = (
@@ -145,9 +152,12 @@ def settings(level, species):
     if species < 2:
         return (9 if species == 0 else 4), ()
     ship = FLIERS[species - 2]
-    counts = (0, 1, 2, 2, 3, 3, 4, 5, 6)
-    gap = (0, 5, 4, 2, 1, 0, -1, -2, -3)
-    return ship.spacing + gap[level - 1], ship.guns[:counts[level - 1]]
+    counts = (0, 2, 3, 3, 4, 5, 6, 8, 10)
+    gap = (0, 4, 3, 2, 1, 0, -1, -2, -3)
+    guns = counts[level - 1]
+    if level == 3 and species in (4, 5):
+        guns = 2  # Introduce Stair and Kite before enabling their third shot.
+    return ship.spacing + gap[level - 1], ship.guns[:guns]
 
 
 def pack_catalog(output, compressor, run):
@@ -168,7 +178,8 @@ def pack_catalog(output, compressor, run):
         if i >= 2:
             ship = FLIERS[i - 2]
             columns = [x for x, bearing in ship.guns]
-            if (len(columns) > 6 or len(set(columns)) != len(columns)
+            # The clipped exit uses samples 248..255 at the end of the page.
+            if (GATES + 2 * len(columns) > 248 or len(set(columns)) != len(columns)
                     or any(x < 0 or x >= 64 for x in columns)
                     or any(d is not None and not 0 <= d < 32 for _, d in ship.guns)
                     or len(ship.lanes) != 7 or len(set(ship.lanes)) != 7 or ship.heights[0] != 0

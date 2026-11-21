@@ -233,11 +233,24 @@ moveCatalogShip:
     jp stepWave.advance
 
 finishCatalogShots:
+    ld a,(gameTick)
+    and 63
+    jr nz,.targetReady
+    ld hl,(playerXY)
+    ld (volleyAim+1),hl         ; one target for the whole formation's salvo
+.targetReady:
+    ld e,a
     ld a,(moveCatalogShip.shotMask+1)
     inc a
     jp z,mainLoop
     ld a,#ff
     ld (moveCatalogShip.shotMask+1),a
+    ; All scripted fliers share a firing window, even across wave overlaps.
+    ; Test it only when a gun is pending. Existing bullets keep travelling.
+    ld a,e
+.volleyEnd:
+    cp 64
+    jp nc,mainLoop
     ld hl,(enemyWrite)
     ld a,(hl)
     inc a
@@ -266,7 +279,12 @@ finishCatalogShots:
     ld b,(hl)
 catalogBearing:
     bit 0,d
+.aim:
     call nz,aimIncoming
 catalogShotReady:
     call emitIncoming
     jp mainLoop
+
+volleyAim:
+    ld hl,PLAYER_START
+    jp aimIncoming.fromPosition

@@ -197,19 +197,28 @@ incomingPage:
     ld d,high incomingX
     ; Sparse fire leaves most slots empty. An untaken call costs less than
     ; advancing the three-byte pointer and counting each empty slot.
+    if high enemy_records=high (enemy_end-1)
+        ld h,high enemy_records
+        define DOT_CURSOR l
+    else
+        define DOT_CURSOR hl
+    endif
     dup ENEMY_COUNT, slot
-        ld hl,enemy_records+slot*3
+        if high enemy_records=high (enemy_end-1)
+            ld l,low (enemy_records+slot*3)
+        else
+            ld hl,enemy_records+slot*3
+        endif
         ld a,(hl)
-        inc a
-        call nz,moveDot
+        or a
+        call p,moveDot           ; live X is 0..63, empty X is #ff
     edup
     ret
 
 moveDot:
-    dec a                        ; undo the empty-slot check to recover X
     ld c,a
-    inc hl
-    inc hl
+    inc DOT_CURSOR
+    inc DOT_CURSOR
     ld a,(hl)
     inc a
     xor (hl)
@@ -222,7 +231,7 @@ moveDot:
     jr nc,.retire
     ld c,a
     ld (hl),e
-    dec hl
+    dec DOT_CURSOR
     inc d                        ; Y table follows X on the next page
     ld a,(de)
     dec d
@@ -230,15 +239,16 @@ moveDot:
     cp PLAYFIELD_HEIGHT
     jr nc,.retireY
     ld (hl),a
-    dec hl
+    dec DOT_CURSOR
     ld (hl),c
     ret
 .retire:
-    dec hl
+    dec DOT_CURSOR
 .retireY:
-    dec hl
+    dec DOT_CURSOR
     ld (hl),#ff
     ret
+    undefine DOT_CURSOR
 
 spawnIncoming:
     ifdef LEVEL_WAVES
@@ -353,8 +363,8 @@ queueGreenShot:
 configureLevelWaves:
     ld l,a
     add a,a
-    add a,a
     add a,l
+    add a,a                      ; six profile bytes per level
     ld e,a
     ld d,0
     ld hl,levelWaveProfiles
@@ -377,6 +387,15 @@ configureLevelWaves:
     inc hl
     ld d,(hl)
     ld (levelWaveGaps),de
+    inc hl
+    ld a,(hl)
+    ld (finishCatalogShots.volleyEnd+1),a
+    cp 64
+    ld hl,aimIncoming
+    jr z,.aim
+    ld hl,volleyAim
+.aim:
+    ld (catalogBearing.aim+1),hl
     ret
 
 resetLevelWaves:
@@ -387,6 +406,8 @@ resetLevelWaves:
     ld (waveController+1),hl
     ld hl,spawnIncoming
     ld (gunController+1),hl
+    ld hl,PLAYER_START
+    ld (volleyAim+1),hl
     ld a,(greenStartPhase)
     xor #40                      ; a retry starts with the opposite entrance
     ld (greenStartPhase),a

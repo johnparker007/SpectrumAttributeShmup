@@ -2,8 +2,9 @@
 ; Bearings start at left and advance through up, right and down.
 ; The shot origin and player centre are both inside the 64-by-48 viewport.
 aimIncoming:
-    push bc
     ld hl,(playerXY)
+.fromPosition:
+    push bc
     ld e,0
     ld a,l
     add a,2

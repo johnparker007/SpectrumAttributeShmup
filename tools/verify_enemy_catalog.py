@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from enemy_catalog import FIRST_ORDER, FLIERS, NAMES, ROSTERS, flight_steps, settings, spawn_lane, wave_orders
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
+from verify_blokius_integration import CATALOG_VOLLEY_TICKS
 from verify_gameplay import aim
 from verify_scenery import FLAGS
 from verify_zesarux_raster import run
@@ -108,8 +109,12 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     tick, bullet = map(pc, ("moveIncoming", "moveDot"))
     halts = [pc("halt2"), pc("halt1")]
     position = "PEEKW(HL-1)+B*65536"
+    window = CATALOG_VOLLEY_TICKS[level - 1]
+    target = s["volleyAim"] + 1 if window < 64 else s["playerXY"]
+    phase_check = shot + " AND 1=1"
     checks = [(spawn, f"B+PEEK(HL)*256+PEEK({s['spawnSlot']:04X}H)*65536"),
-              (move, position), (gun, position), (aim_at, f"PEEKW({s['playerXY']:04X}H)+D*65536"),
+              (move, position), (gun, position), (aim_at, f"PEEKW({target:04X}H)+D*65536"),
+              (phase_check, f"PEEK({s['gameTick']:04X}H)"),
               (shot, "B+C*256+D*65536"), (tick, "A"), (bullet, "A"),
               *((halt, "TSTATESP") for halt in halts)]
     hit = pc("updatePlayerLife.checkPlayer") + f" AND PEEK({s['player_hit']:04X}H)>0"
@@ -159,6 +164,8 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
         elif spawns and point == aim_at:
             mode, player = divmod(value, 65536)
             aim_player = (player % 256, player // 256)
+        elif spawns and point == phase_check:
+            assert value % 64 < window, (model, level, "shot during volley rest", value)
         elif spawns and point == shot:
             direction, origin = divmod(value, 65536)
             x, y = origin % 256, origin // 256

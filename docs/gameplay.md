@@ -24,14 +24,12 @@ The level loader selects the green flier's firing column and the level's bullet 
 
 | Level | Green flier firing |
 | --- | --- |
-| 1–2 | Unarmed |
-| 3 and 5 | One slow shot, five dots inside the playfield |
-| 4 | One slow shot on entry |
+| 1–5 | One slow aimed shot on entry |
 | 6–9 | One shot on entry at the original speed |
 
 Every wave contains seven ships of one type. Level 1 has only the green flier. Each mixed level has three wave orders, and each new attempt advances to the next order for that level. On level 9 the opening pairs are Polar Wraith / Azure Hopper, Ruby Crown / Silver Splitter and Green Sine / Yellow Z. The order chosen for an attempt repeats during that run.
 
-Levels 2–5 give every resident type one wave per rotation. From level 6 the two newest types get a second wave, rising to the newest three on level 7 and the newest four on levels 8–9. Yellow ships enter five ticks apart when a slot is free. Early levels give each wave time to clear. Levels 6–9 shorten the gaps so waves can overlap. Two full waves and the player use fifteen of the sixteen sprite slots.
+Levels 2–5 give every resident type one wave per rotation. From level 6 the two newest types get a second wave, rising to the newest three on level 7 and the newest four on levels 8–9. On level 1 the next formation can begin three ticks (120 ms) after the seventh green ship enters. Within a formation, green ships enter ten ticks apart and yellow ships five ticks apart. When a sprite slot is busy the next entrant waits. Two full waves and the player use fifteen of the sixteen sprite slots.
 
 | Level | Additional resident types | Resident types |
 | --- | --- | ---: |
@@ -47,11 +45,23 @@ Levels 2–5 give every resident type one wave per rotation. From level 6 the tw
 
 Each of the fourteen additional waves uses seven entry heights. Cobalt Skimmers fly straight across in evenly spaced lanes. Scarlet Hooks enter from alternating edges and turn back towards their starting height. Azure Hoppers accelerate through two parts of a double hop, and Silver Splitters break inward after a long straight approach. Each completed green wave flips the vertical orientation for subsequent formations.
 
-Each new type has an aimed shot from its first appearance. Levels 2 through 9 enable **1, 2, 2, 3, 3, 4, 5 and 6** firing positions per ship respectively. Later waves enter closer together and can fire near the right edge, then aim again farther across. Some ships interleave aimed and fixed-angle shots. When several of the new ships reach a firing position on the same tick, one gets the shot. This keeps the cost of a simultaneous volley bounded. All waves share the 24-bullet pool.
+The additional fliers mix aimed shots with fixed bearings that mirror their flight path. From level 4 they share a 64-tick volley cycle across overlapping formations. At the start of the cycle they take one reading of the player's position. Each aimed shot uses its own launch point and that same target, so moving away from the point draws the fire behind the ship. During the rest of the cycle these fliers hold fire and their existing bullets continue across the screen. Green and yellow fliers keep their individual attack patterns. All waves share the 24-bullet pool and only one of the additional fliers can launch per tick.
+
+| Level | Firing positions per additional flier | Ticks open / resting | Gap before yellow / other wave (ticks) |
+| --- | ---: | ---: | ---: |
+| 1 | — | — | — / 3 |
+| 2 | 2 | Always open | 20 / 16 |
+| 3 | 2 for Stair and Kite, 3 for Skimmer and Hook | Always open | 18 / 14 |
+| 4 | 3 | 56 / 8 | 16 / 12 |
+| 5 | 4 | 52 / 12 | 14 / 11 |
+| 6 | 5 | 48 / 16 | 12 / 10 |
+| 7 | 6 | 46 / 18 | 10 / 9 |
+| 8 | 8 | 43 / 21 | 8 / 7 |
+| 9 | 10 | 40 / 24 | 6 / 6 |
 
 The build bakes each ship's vertical steps, horizontal dashes, entry lanes and firing positions into its existing 256-byte path page. GET READY enables the positions for the selected difficulty. Each ship shares its four animation frames across every difficulty. See [the enemy catalogue](../tools/enemy_catalog.py) for the editable formations, paths, bearings and rosters.
 
-The sixteen compressed ship packets occupy 2,313 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
+The sixteen compressed ship packets occupy 2,366 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
 
 | Enemy graphics and path load in the original roster benchmark | Grey +2 | Black +2A |
 | --- | ---: | ---: |
@@ -61,17 +71,16 @@ The sixteen compressed ship packets occupy 2,313 bytes in bank 6. Bank 0 reserve
 
 The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full wave order, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there. Use `--restarts --levels 9` to check the four successive openings on the playable TAP.
 
-With the player idle, level 2 averaged 0.87 live enemy bullets over its first wave rotation and peaked at 4. Level 5 averaged 4.41 and peaked at 17. With the new wave orders level 6 averaged 5.49 and peaked at 13. Level 9 averaged 13.20 and filled all 24 slots. Both models produced the same counts.
+To test a dodge route on both models, run `tools/verify_level9_dodge.py --game <assembled-game-directory> --assembler <sjasmplus.exe> --emulator <zesarux.exe>`. It plays the first level 9 wave order with normal lives, holds each direction for at least three game ticks, and leaves Fire released so all the enemies can shoot.
 
 Yellow fliers enter at varied heights and travel straight left at one dot per game tick. Around 60% across the playfield, each flier captures the player's Y position. It then retreats right at two dots per tick for twelve ticks, using a prebaked path that reaches the captured height at the end of the retreat. It resumes flying left at one dot per tick.
 
 | Level | Yellow flier firing |
 | --- | --- |
-| 2–5 | Unarmed |
-| 6 | One aimed shot at the end of the retreat |
-| 7–9 | An aimed shot halfway through the retreat and another at its end |
+| 2–5 | One slow aimed shot at the end of the retreat |
+| 6–9 | An aimed shot halfway through the retreat and another at its end |
 
-All enemies on a level share the same 32 prebaked bullet directions and speed. The yellow fliers first shoot on level 6, which uses the faster paths. Up to 24 enemy bullets can be active at once. They alternate yellow and white on successive 25 Hz gameplay ticks.
+All enemies on a level share the same 32 prebaked bullet directions and speed. Up to 24 enemy bullets can be active at once. They alternate yellow and white on successive 25 Hz gameplay ticks.
 
 Either player shot destroys an opponent in one hit and retires its whole pair before the next enemy is checked. A pair also retires at the right edge. A bullet destroys a vulnerable player ship, and a ram destroys both the vulnerable player and the enemy it hits. Both sides use 5×5 hitboxes and play a three-frame explosion over six game ticks. Their hitboxes disappear as soon as the explosion starts. You start with three lives. After a loss, the next ship appears at the starting position after 12 game ticks (0.48 seconds) and stays invincible for 75 game ticks (three seconds). Every other 25 Hz game frame hides the ship during invincibility. Protected contact is harmless to both ships. Movement and firing work on both blink phases after the spawn frame.
 

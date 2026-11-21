@@ -39,11 +39,14 @@ SHIP_Y = tuple(tuple(round(centre + amplitude * sin(tau * x / period)) for x in 
 GREEN_TRAVEL_Y = 46 - 5
 GREEN_TOP_Y = tuple(round(GREEN_TRAVEL_Y * (1 - cos(tau * (x - 63) / 64)) / 2) for x in range(64))
 GREEN_SHIP_Y = (GREEN_TOP_Y, tuple(GREEN_TRAVEL_Y - y for y in GREEN_TOP_Y))
-# First visible X is 63. X=58 gives the player five more dots of warning.
-GREEN_FIRE_COLUMNS = (96, 96, 58, 63, 58, 63, 63, 63, 63)
+# Every green member takes the former level 4 shot at the first visible column.
+GREEN_FIRE_COLUMNS = (63,) * 9
 GREEN_FAST_FROM = 6
-YELLOW_FIRE_COUNTS = (255, 0, 0, 0, 0, 1, 2, 2, 2)
-WAVE_GAPS = ((9, 9), (145, 108), (145, 108), (145, 108), (145, 108), (70, 50), (35, 25), (9, 9), (5, 5))
+YELLOW_FIRE_COUNTS = (255, 1, 1, 1, 1, 2, 2, 2, 2)
+# Last spawn to first spawn, minus the tick that actually spawns the ship.
+# The first value applies before a yellow wave, the second before other types.
+WAVE_GAPS = ((2, 2), (19, 15), (17, 13), (15, 11), (13, 10), (11, 9), (9, 8), (7, 6), (5, 5))
+CATALOG_VOLLEY_TICKS = (64, 64, 64, 56, 52, 48, 46, 43, 40)
 YELLOW_RETREAT_TICKS = 12
 YELLOW_MAX_Y = 43
 SHOT_DIRECTIONS = 32
@@ -257,7 +260,7 @@ doSinScroll equ barrelScroll_Update
             (game / "level_fire.bin").write_bytes(bytes(
                 value for level, column in enumerate(GREEN_FIRE_COLUMNS, 1)
                 for value in (column, int(level >= GREEN_FAST_FROM), YELLOW_FIRE_COUNTS[level - 1],
-                              *WAVE_GAPS[level - 1])))
+                              *WAVE_GAPS[level - 1], CATALOG_VOLLEY_TICKS[level - 1])))
             for axis, name in enumerate(("x", "y")):
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu:
