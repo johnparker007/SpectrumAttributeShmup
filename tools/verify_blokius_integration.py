@@ -47,6 +47,8 @@ YELLOW_FIRE_COUNTS = (1, 1, 1, 1, 1, 2, 2, 2, 2)
 # The first value applies before a yellow wave, the second before other types.
 WAVE_GAPS = ((2, 2), (19, 15), (17, 13), (15, 11), (13, 10), (11, 9), (9, 8), (7, 6), (5, 5))
 CATALOG_VOLLEY_TICKS = (64, 64, 64, 56, 52, 48, 46, 43, 40)
+# Fraction of wave firing opportunities withheld, in 256ths. The boss has its own guns.
+WAVE_SHOT_SKIP = (85, 72, 60, 48, 36, 24, 16, 8, 0)
 YELLOW_RETREAT_TICKS = 12
 YELLOW_MAX_Y = 43
 SHOT_DIRECTIONS = 32
@@ -260,7 +262,7 @@ doSinScroll equ barrelScroll_Update
             (game / "level_fire.bin").write_bytes(bytes(
                 value for level, column in enumerate(GREEN_FIRE_COLUMNS, 1)
                 for value in (column, int(level >= GREEN_FAST_FROM), YELLOW_FIRE_COUNTS[level - 1],
-                              *WAVE_GAPS[level - 1], CATALOG_VOLLEY_TICKS[level - 1])))
+                              *WAVE_GAPS[level - 1], CATALOG_VOLLEY_TICKS[level - 1], WAVE_SHOT_SKIP[level - 1])))
             for axis, name in enumerate(("x", "y")):
                 (game / f"incoming_slow_{name}.bin").write_bytes(bytes(shot_steps(axis, slow=True)))
         if menu:

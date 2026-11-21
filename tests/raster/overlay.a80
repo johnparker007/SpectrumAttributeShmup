@@ -24,6 +24,7 @@ overlayBegin:
         call checkPlayerContact
         ifdef LEVEL_WAVES
             call sceneryStep
+projectileOverlay:
         endif
         call expandPlayerPairs
         ld a,(playerLives)

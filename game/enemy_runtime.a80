@@ -316,7 +316,8 @@ aimQueuedShot:
 .aimReady:
     pop af
     ifdef LEVEL_WAVES
-        jr emitIncoming
+waveAimedShot:
+        jp emitIncoming
     else
     jr z,emitIncoming
     call emitIncoming            ; centre, then 22.5 degrees either side
@@ -329,6 +330,17 @@ aimQueuedShot:
     ld d,a
     endif
 emitIncoming:
+    ifdef LEVEL_WAVES
+    ; Withhold evenly spaced firing opportunities across all three wave guns.
+    ; One subtraction per attempted shot. A zero decrement admits every shot.
+waveShotPhase:
+    ld a,#ff
+waveShotSkip:
+    sub 0
+    ld (waveShotPhase+1),a
+    ret c
+allocateIncoming:
+    endif
     ld hl,(enemyWrite)
     ld a,(hl)
     inc a
@@ -361,10 +373,11 @@ queueGreenShot:
     ret
 
 configureLevelWaves:
-    ld l,a
+    ld e,a
     add a,a
-    add a,l
-    add a,a                      ; six profile bytes per level
+    add a,a
+    add a,a
+    sub e                        ; seven profile bytes per level
     ld e,a
     ld d,0
     ld hl,levelWaveProfiles
@@ -390,12 +403,24 @@ configureLevelWaves:
     inc hl
     ld a,(hl)
     ld (finishCatalogShots.volleyEnd+1),a
+    inc hl
+    ld e,(hl)
     cp 64
     ld hl,aimIncoming
     jr z,.aim
     ld hl,volleyAim
 .aim:
     ld (catalogBearing.aim+1),hl
+    ld a,e
+    ld (waveShotSkip+1),a
+    ; At full density, both wave firing paths go straight to the allocator.
+    or a
+    ld hl,emitIncoming
+    jr nz,.shotRoutine
+    ld hl,allocateIncoming
+.shotRoutine:
+    ld (waveAimedShot+1),hl
+    ld (catalogShotReady+1),hl
     ret
 
 resetLevelWaves:
@@ -406,6 +431,8 @@ resetLevelWaves:
     ld (waveController+1),hl
     ld hl,spawnIncoming
     ld (gunController+1),hl
+    ld hl,expandPlayerPairs
+    ld (projectileOverlay+1),hl
     ld hl,PLAYER_START
     ld (volleyAim+1),hl
     ld a,(greenStartPhase)
@@ -413,6 +440,7 @@ resetLevelWaves:
     ld (greenStartPhase),a
     ld (waveIndex),a
     ld a,#ff
+    ld (waveShotPhase+1),a
     ld (moveCatalogShip.shotMask+1),a
     ld (greenShot),a
     ld (yellowMidShot),a

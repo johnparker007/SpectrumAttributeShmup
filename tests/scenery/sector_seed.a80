@@ -42,18 +42,30 @@ sectorSeed:
         ld (tileMap+54+i),a
         ld (tileMap+64+i),a
     edup
+    ifdef STRESS_CATALOG
+    ; Place all fifteen ships one movement step before their first gun.
+    ld hl,catalogStressPositions
+    ld de,enemy_boxes
+    ld ix,enemyMotion
+    ld iy,sprite09
+    ld bc,WAVE_ENEMIES*256             ; B = ships left, C = path slot 0..5
+.ship:
+    dup 2
+        ld a,(hl) : inc hl : ld (de),a : inc de
+    edup
+    ld a,c : add a,high catalogPaths : add a,a : or (hl) : inc hl
+    ld (ix),a : inc ix : inc ix
+    ld a,c : add a,high enemyArt+2
+    ld (iy+SPRITE.IMAGE+1),a
+    ld (iy+SPRITE.IMAGE),0
+    push de : ld de,SPRITE : add iy,de : pop de
+    inc c : ld a,c : cp 6
+    jr nz,.nextShip
+    ld c,0
+.nextShip:
+    djnz .ship
+    else
     dup WAVE_ENEMIES,i
-        ifdef STRESS_CATALOG
-            ; Occupy all fifteen slots with the six scripted level-nine species.
-            ; Every ship is on its real path, one step before its first gun.
-            ld a,(catalogStressPositions+3*i+2)
-            or ((high catalogPaths+i%6)*2) & #ff
-            ld (enemyMotion+2*i),a
-            ld hl,enemyArt+(2+i%6)*256
-            ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
-            ld hl,(catalogStressPositions+3*i)
-            ld (enemy_boxes+2*i),hl
-        else
         ld hl,(23+2*i)+(1+5*(i%3))*256
         ld (enemy_boxes+2*i),hl
         if i>=8
@@ -66,8 +78,8 @@ sectorSeed:
             ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
 1:
         endif
-        endif
     edup
+    endif
     ld hl,sectorTestBullets
     ld de,enemy_records
     ld bc,ENEMY_COUNT*3

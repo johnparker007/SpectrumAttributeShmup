@@ -28,6 +28,15 @@ bossEnter:
     ld (waveController+1),hl
     ld hl,bossFire
     ld (gunController+1),hl
+    ld hl,drawBossEnergy
+    ld (projectileOverlay+1),hl
+    ld a,BOSS_HITS
+    ld (bossHealth),a
+    ld hl,bossBar
+    ld de,bossBar+1
+    ld bc,BOSS_HITS/2-1
+    ld (hl),BOSS_BAR_FULL
+    ldir
     ld hl,63+18*256
     ld (bossXY),hl
     ld a,1
@@ -37,8 +46,6 @@ bossEnter:
     ld a,(selectedLevel)               ; zero-based
     add a,a
     ld e,a : ld d,0
-    add a,8
-    ld (bossHealth),a
     ld hl,bossGuns
     add hl,de
     ld a,(hl)
@@ -54,14 +61,18 @@ bossEnter:
     jp bossPosition
 
 BOSS_X equ 46
+BOSS_HITS equ 32
+BOSS_BAR_X equ (64-BOSS_HITS)/2
+BOSS_BAR_FULL equ #40 | YELLOW | (YELLOW << 3)
+BOSS_BAR_EMPTY equ #40 | 2 | (2 << 3)
+BOSS_BAR_HALF equ #40 | YELLOW | (2 << 3)
 bossStep:
     dup 4,part
         ld hl,bossArt+part*60
         ld a,(collision_actual+part)
         or a
         jr z,1f
-        ld hl,bossHealth
-        dec (hl)
+        call damageBoss
         jp z,bossDestroyed
         ifdef LIVE_SFX
             call startImpactSound
@@ -132,7 +143,7 @@ bossFire:
     add a,d : ld d,a                   ; first bearing
     ld a,e : add a,a : inc a : ld e,a
 .volley:
-    call emitIncoming
+    call allocateIncoming               ; wave density never thins a boss fan
     ld a,d : add a,8 : ld d,a
     dec e
     jr nz,.volley
@@ -197,3 +208,35 @@ bossCooldown: db 0
 bossPeriod: db 0
 bossWings: db 0
 bossWait: db 0
+
+; Two 4x4 dots per attribute byte. Change only the pair containing the hit.
+damageBoss:
+    ld a,(bossHealth)
+    dec a
+    ld (bossHealth),a
+    ld c,a
+    srl a
+    ld e,a : ld d,0
+    ld a,BOSS_BAR_EMPTY
+    jr nc,.write
+    ld a,BOSS_BAR_HALF
+.write:
+    ld hl,bossBar
+    add hl,de
+    ld (hl),a
+    ld a,c : or a                       ; Z on the killing hit
+    ret
+
+; Only the boss patches this Frame 2 call. The regular projectile plots
+; follow it so a shot crossing the gauge stays visible.
+drawBossEnergy:
+    ld hl,(attrPointer)
+    ld de,BOSS_BAR_X/2
+    add hl,de
+    ex de,hl
+    ld hl,bossBar
+    ld bc,BOSS_HITS/2
+    ldir
+bossEnergyDrawn:
+    jp expandPlayerPairs
+bossBar: defs BOSS_HITS/2

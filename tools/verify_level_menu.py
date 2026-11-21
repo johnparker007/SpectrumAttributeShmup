@@ -18,7 +18,8 @@ from profile_blokius import ARCHIVE, build
 from profile_ringo8 import FRAME, HIT, MODELS
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_blokius_integration import (
-    GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, WAVE_GAPS, YELLOW_FIRE_COUNTS, install,
+    GREEN_FAST_FROM, GREEN_FIRE_COLUMNS, GREEN_SHIP_Y, SHOT_VECTORS, WAVE_GAPS, WAVE_SHOT_SKIP,
+    YELLOW_FIRE_COUNTS, install,
 )
 from verify_gameplay import DOWN, LEFT, PLAYER_START, RESTART, UP, aim, packed
 from verify_luminance_writes import verify_luminance_writes
@@ -185,6 +186,10 @@ def verify_choice(emulator, game, model, choice):
     watch = [(points["halt2"], "TSTATESP"), (frame2_halt, "TSTATESP")]
     wave_probe = f"PC={s['stepWave.saveSlot']:04X}H"
     queue_probe = f"PC={s['queueGreenShot']:04X}H"
+    skip = WAVE_SHOT_SKIP[choice - 1]
+    attempt_routine = "emitIncoming" if skip else "allocateIncoming"
+    attempt_probe = f"PC={s[attempt_routine]:04X}H"
+    pool_probe = f"PC={s['allocateIncoming']:04X}H AND 1=1"
     shot_probe = f"PC={s['enemyShotEmitted']:04X}H"
     motion_probe = f"{points['halt2']} AND 1=1"
     yellow_probe = f"{points['halt2']} AND 2=2"
@@ -192,6 +197,8 @@ def verify_choice(emulator, game, model, choice):
     wave_clock_probe = f"{wave_probe} AND 1=1"
     watch.extend(((wave_probe, "PEEK(HL)+PEEK(IX)*256"), (wave_clock_probe, "TSTATESP"),
                   (queue_probe, "PEEKW(HL)"),
+                  (attempt_probe, "B+C*256+D*65536"),
+                  (pool_probe, f"PEEK(PEEKW({s['enemyWrite']:04X}H))"),
                   (shot_probe, "B+C*256+D*65536"),
                   (motion_probe, f"PEEKW({s['enemy_records']:04X}H)"),
                   (yellow_probe, f"PEEKW({s['enemy_boxes'] + first_yellow_offset:04X}H)"
@@ -237,9 +244,25 @@ def verify_choice(emulator, game, model, choice):
     if entrances[:len(opening)] != opening:
         raise ValueError(f"{model} map {choice}: expected entrances {opening}, saw {entrances[:len(opening)]}")
     queued = [value for condition, value in rows if condition == queue_probe]
-    emissions = [(condition, value) for condition, value in rows if condition in (shot_probe, catalog_shot)]
-    shots = [value for i, (condition, value) in enumerate(emissions)
-             if condition == shot_probe and (i == 0 or emissions[i-1][0] != catalog_shot)]
+    phase = 255
+    admitted = []
+    shots = []
+    catalog = False
+    for point, value in rows:
+        if point == catalog_shot:
+            catalog = True
+        elif point == attempt_probe:
+            if not catalog:
+                shots.append(value)
+            if phase >= skip:
+                admitted.append((value, catalog))
+            phase = (phase - skip) % 256
+            catalog = False
+    slots = [value for point, value in rows if point == pool_probe]
+    emitted = [shot for shot, slot in zip(admitted, slots, strict=True) if slot == 255]
+    actual = [value for point, value in rows if point == shot_probe]
+    if actual != [value for value, _ in emitted]:
+        raise ValueError(f"{model} map {choice}: emitted shots differ from the wave firing rate")
     yellow_shots = [shot for shot in shots if shot & 255 in (38, 50)]
     shots = [shot for shot in shots if shot & 255 not in (38, 50)]
     yellow_origins = [value for condition, value in rows if condition == yellow_queue]
@@ -268,7 +291,9 @@ def verify_choice(emulator, game, model, choice):
             raise ValueError(f"{model} map {choice}: incorrect projectile speed")
     return {"model": model, "map": choice, "compressed_bytes": level.with_suffix(".zx0").stat().st_size,
             "unpack_tstates": stop - start, "gameplay_frame_pairs": frame_pairs, "minimum_headroom": headroom,
-            "green_shots": len(shots), "yellow_shots": len(yellow_shots)}
+            "green_shots": sum(not scripted and value & 255 == column for value, scripted in emitted),
+            "yellow_shots": sum(not scripted and value & 255 in (38, 50) for value, scripted in emitted),
+            "wave_opportunities": sum(point == attempt_probe for point, _ in rows), "wave_shots": len(actual)}
 
 
 def check_yellow_path(rows, probe, fire_count, spawns, queued, shots):

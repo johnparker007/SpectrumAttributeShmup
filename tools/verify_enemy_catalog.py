@@ -106,7 +106,7 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     spawn = pc("writeSpawnArt")
     move, gun = map(pc, ("moveCatalogShip.positionWritten", "moveCatalogShip.gunPositionWritten"))
     aim_at, shot = map(pc, ("catalogBearing", "catalogShotReady"))
-    tick, bullet = map(pc, ("moveIncoming", "moveDot"))
+    tick, bullet, emitted = map(pc, ("moveIncoming", "moveDot", "enemyShotEmitted"))
     halts = [pc("halt2"), pc("halt1")]
     position = "PEEKW(HL-1)+B*65536"
     window = CATALOG_VOLLEY_TICKS[level - 1]
@@ -115,7 +115,7 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     checks = [(spawn, f"B+PEEK(HL)*256+PEEK({s['spawnSlot']:04X}H)*65536"),
               (move, position), (gun, position), (aim_at, f"PEEKW({target:04X}H)+D*65536"),
               (phase_check, f"PEEK({s['gameTick']:04X}H)"),
-              (shot, "B+C*256+D*65536"), (tick, "A"), (bullet, "A"),
+              (shot, "B+C*256+D*65536"), (tick, "A"), (bullet, "A"), (emitted, "A"),
               *((halt, "TSTATESP") for halt in halts)]
     hit = pc("updatePlayerLife.checkPlayer") + f" AND PEEK({s['player_hit']:04X}H)>0"
     if camp:
@@ -128,6 +128,7 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     gate_selected = False
     pending = None
     counts = []
+    fired = 0
     times = []
     aim_player = None
     aimed = 0
@@ -181,6 +182,8 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
                 counts.append(0)
         elif point == bullet and counts and spawns <= wave_length:
             counts[-1] += 1
+        elif point == emitted and counts and spawns <= wave_length:
+            fired += 1
         elif point == hit and value == s["PLAYER_RIGHT"] and order[(spawns - 1) // 7 % len(order)] >= 2:
             corner_losses += 1
         elif point in halts:
@@ -195,9 +198,9 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
     assert max(counts) <= s["ENEMY_COUNT"]
     assert len(times) >= 100 and all(k != j and w // FRAME == v // FRAME + 1
                for (k, v), (j, w) in zip(times, times[1:])), (model, level, "overrun")
-    print(f"{model} level {level}: {len(times)} video frames, {spawns} spawns, {aimed} aimed shots, "
+    print(f"{model} level {level}: {len(times)} video frames, {spawns} spawns, {aimed} aimed opportunities, "
           f"{pressure_at_corner} aimed at the parked ship, {corner_losses} corner losses, "
-          f"{sum(counts)/len(counts):.2f} mean / {max(counts)} peak bullets over the first rotation", flush=True)
+          f"{fired} fired, {sum(counts)/len(counts):.2f} mean / {max(counts)} peak bullets over the first rotation", flush=True)
 
 
 def verify_restarts(emulator, game, model, level, scratch):

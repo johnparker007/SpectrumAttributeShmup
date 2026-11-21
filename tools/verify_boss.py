@@ -152,6 +152,9 @@ def verify(trial, emulator, model, level, pilot=False):
     commit, play = map(pc, ("bossSectorCleared", "firstFrameLogic"))
     emitted = pc("enemyShotEmitted")
     death = pc("bossDestroyed")
+    bar = pc("bossEnergyDrawn")
+    bar_health = bar + " AND 1=1"
+    bar_words = [bar + f" AND {i+2}={i+2}" for i in range(8)]
     ay_write = pc("soundEffectWrite")
     # Banked data and code can alias PCs before entering gameplay. Analyse
     # only the observed encounter, starting at the first real gameplay frame.
@@ -165,14 +168,16 @@ def verify(trial, emulator, model, level, pilot=False):
                (pc("bossVictory"), word("hudScore")), (pc("menuWait"), "TSTATESP"),
                (pc("halt1"), "TSTATESP"), (pc("halt2"), "TSTATESP")]
     if pilot:
-        watches.append((ay_write, "A+256*E"))
+        watches.extend(((ay_write, "A+256*E"), (pc("damageBoss"), peek("bossHealth")),
+                        (bar, "DE-" + word("attrPointer")), (bar_health, peek("bossHealth"))))
+        watches.extend((point, f"PEEKW(DE-{16-2*i})") for i, point in enumerate(bar_words))
     for part in range(1, 4):
         watches.append((tick+f" AND {part+3}={part+3}", f"PEEKW({s['enemy_boxes']+part*2:04X}H)"))
     for part in range(4):
         watches.append((tick+f" AND {part+7}={part+7}", f"PEEKW({s['sprite09']+part*9:04X}H)"))
     keys = trial / f"boss-{model}-{level}.keys"
     keys.write_bytes(str(level).encode() * 12 + b'n' * 150)
-    log = breakpoint_log(emulator, trial / "main.tap", model, 60 if pilot else 48, watches, True, keys)
+    log = breakpoint_log(emulator, trial / "main.tap", model, 85 if pilot else 48, watches, True, keys)
     events = [(k, int(v)) for k, v in HIT.findall(log)]
     first = events.index((play, level-1))
     events = events[first:]
@@ -199,7 +204,7 @@ def verify(trial, emulator, model, level, pilot=False):
         art = values(fight,tick+f" AND {part+7}={part+7}")
         assert art[0] == s["bossArt"]+part*60 and set(art) <= {art[0],s["explosion1"]}
     health = values(fight,tick+" AND 3=3")
-    assert health[0] == 8+2*(level-1)
+    assert health[0] == 32
     wings = (level - 1) // 3
     shots = []
     targets = []
@@ -231,6 +236,17 @@ def verify(trial, emulator, model, level, pilot=False):
     margin = min(FRAME-v%FRAME for _,v in halts)
     if pilot:
         assert values(events,death) and min(health) <= 2
+        assert not values(opening, bar), (model, level, "gauge before boss")
+        end = next(i for i, (key, _) in enumerate(events) if key == commit)
+        encounter = events[:end]
+        assert values(encounter, pc("damageBoss")) == list(range(32, 0, -1))
+        remaining = values(encounter, bar_health)
+        assert remaining[0] == 32 and remaining[-1] == 0
+        assert set(values(encounter, bar)) == {24}, (model, level, "gauge position")
+        for hp, *words in zip(remaining, *(values(encounter, key) for key in bar_words), strict=True):
+            dots = [colour for pair in words for attr in pair.to_bytes(2, "little")
+                    for colour in (attr & 7, (attr >> 3) & 7)]
+            assert dots == [6]*hp + [2]*(32-hp), (model, level, hp, dots)
         carry = values(events, commit)[0]
         handoff = events[next(i for i, (k, _) in enumerate(events) if k == commit):]
         assert values(handoff, ay_write)[:3] == [8, 9, 10]
@@ -239,6 +255,10 @@ def verify(trial, emulator, model, level, pilot=False):
         after = int(f"{carry // 256:04x}")
         assert before == 195 and after == before + 10 and carry % 256 == 2
         if level < 9:
+            renderer = next(i for i, (key, _) in enumerate(handoff) if key == play)
+            next_boss = next((i for i, (key, _) in enumerate(handoff[renderer:], renderer)
+                              if key == enter), len(handoff))
+            assert not values(handoff[renderer:next_boss], bar), (model, level, "gauge after handoff")
             assert values(events,pc("startLevelRenderer"))[0] == carry and level in values(events,play)
         else:
             assert values(events,pc("bossVictory")) == [carry//256] and values(events,pc("menuWait"))
