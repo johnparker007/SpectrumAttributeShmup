@@ -9,6 +9,7 @@ soundTickBody:
 
 sound_phrase_header:
     ld hl,(phrase_next)
+soundPhraseEnd equ $
     ld de,testAudioRecipeEnd
     or a
     sbc hl,de

@@ -47,6 +47,17 @@ Below the logo, the menu shades the text one scanline at a time. The two seconda
 
 The gameplay build uses the packed Star Force cover in `game/music`. It plays on channels A and B and loops after 1,280 AY ticks. The 759-byte recipe and 695-byte literal pool were generated from `MainLoop.pt3` (SHA-256 `2e4d488e6070f127f911adbe4f5707043c9145a1c78f681dc154b62a187daa97`). Capture the export with `benchmark_ay.py --pt3 MainLoop.pt3 --through-loop` and pack the resulting JSON with `verify_ay_phrases.py`. The recipe and first literal bank are the gameplay assets.
 
+## Aircraft Carrier boss music
+
+The boss uses a two-channel AY arrangement of “Aircraft Carrier” from NES Gradius. Its rising opening plays once (65 ticks), then the bass and lead repeat from pattern 1 (320 ticks). The 78-byte recipe lives next to the boss art in logical bank 0. Its 544 bytes of register data follow the wave music in logical bank 1. The boss switches the existing 50 Hz player at entry, with both tunes already resident. Channel C still carries shots and explosions, and the extra-ship chime can borrow B.
+
+Edit `game/music/aircraft-carrier.vt2` in Vortex Tracker, export it as `game/music/aircraft-carrier.pt3`, then run the packer and rebuild. The packer captures two passes on the +2 and +2A and checks that their AY output agrees.
+
+```powershell
+python tools/pack_boss_music.py game/music/aircraft-carrier.pt3 game/music/aircraft-carrier.ayp --assembler <sjasmplus.exe> --emulator <zesarux.exe>
+.\Build-TAP.bat
+```
+
 ## Gameplay sound effects
 
 Capture `SoundEffects.pt3` with `benchmark_ay.py --pt3 SoundEffects.pt3 --through-loop`, then run `python tools/extract_ay_effects.py SoundEffects.vt2 <reference.json> game/music`. The extractor uses the sample 3 notes to cut pattern 0 (enemy explosion) and pattern 1 (player fire). The effects occupy 90 bytes in total.

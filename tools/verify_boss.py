@@ -4,11 +4,13 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import shutil
+from struct import unpack_from
 from tempfile import TemporaryDirectory
 
 from build_art import LEVEL_MAPS, ZX0, map_output
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
+from verify_ay_phrases import unpack
 from verify_gameplay import aim
 from verify_scenery import FLAGS, MODELS
 from verify_zesarux_raster import run
@@ -64,6 +66,75 @@ bossTestPilot:
 1:  ret
 """)
     assemble(pilot, assembler)
+
+
+def make_music_pilot(trial, dest, assembler):
+    shutil.copytree(trial, dest)
+    path = dest / "gameplay.a80"
+    src = path.read_text()
+    marker = "    call readControls\n"
+    assert src.count(marker) == 1
+    path.write_text(src.replace(marker, "    call bossMusicPilot\n"))
+    with (dest / "boss.a80").open("a") as f:
+        f.write("""
+bossMusicPilot:
+    ld a,65 : ld (invincibleTicks),a
+    ld hl,(waveController+1) : ld de,bossStep : or a : sbc hl,de
+    jr nz,.idle
+    ld hl,(.ticks) : inc hl : ld (.ticks),hl
+    ld de,4 : or a : sbc hl,de : ld a,16 : ret z  ; fire a single shot
+    ld de,363 : or a : sbc hl,de : ld a,32 : ret z ; Enter after two loops
+.idle:
+    xor a : ret
+.ticks: dw 0
+""")
+    assemble(dest, assembler)
+
+
+def verify_music(game, emulator, model):
+    music = Path(__file__).resolve().parents[1] / "game" / "music"
+    data = (music / "aircraft-carrier.ayp").read_bytes()
+    size, loop = unpack_from("<HH", data)
+    recipe, literals = data[4:4 + size], [data[4 + size:]]
+    first = list(unpack(recipe, literals))
+    repeat = first[sum(recipe[2:loop:3]):]
+    wave = list(unpack((music / "star-force-recipe.bin").read_bytes(),
+                       [(music / "star-force-literal.bin").read_bytes()]))
+    s = read_symbols(game / "main.sym")
+    def pc(label):
+        return f"PC={s[label]:04X}H"
+
+    tick, reg, write, fx, enter, retry = map(pc, ("soundTickBody", "soundSelect", "soundWrite",
+                                                  "soundEffectsTick.writeVolume", "bossEnter", "restartGame"))
+    keys = game / f"music-{model}.keys"
+    keys.write_bytes(b"1" * 12 + b"n" * 150)
+    log = breakpoint_log(emulator, game / "main.tap", model, 100,
+                         [(tick, "TSTATESP"), (reg, "A"), (write, "A"), (fx, "E"),
+                          (enter, "TSTATESP"), (retry, "TSTATESP")], True, keys)
+    events = [(k, int(v)) for k, v in HIT.findall(log)]
+    start = next(i for i, (k, _) in enumerate(events) if k == enter)
+    end = next(i for i in range(start, len(events)) if events[i][0] == retry)
+
+    def packets(rows):
+        times, writes = [], []
+        for key, value in rows:
+            if key == tick:
+                times.append(value)
+                writes.append(bytearray())
+            elif writes and key in (reg, write):
+                writes[-1].append(value)
+        return times, [p + b"\xff" for p in writes]
+
+    times, boss = packets(events[start:end])
+    assert times[0] // FRAME == events[start][1] // FRAME + 1, (model, "late music entrance")
+    assert all(b // FRAME == a // FRAME + 1 for a, b in zip(times, times[1:])), model
+    assert len(boss) >= len(first) + len(repeat) + 1, (model, len(boss))
+    expected = first + repeat * ((len(boss) - len(first)) // len(repeat) + 1)
+    assert boss == expected[:len(boss)], (model, "boss AY writes")
+    assert any(k == fx and v > 0 for k, v in events[start:end]), (model, "silent shot")
+    times, restarted = packets(events[end:])
+    assert len(restarted) >= 16 and restarted[:16] == wave[:16], (model, "wave music on retry")
+    print(f"{model}: {len(boss)} consecutive 50 Hz boss packets, channel C shot and wave retry verified", flush=True)
 
 
 def verify(trial, emulator, model, level, pilot=False):
@@ -189,8 +260,11 @@ if __name__ == "__main__":
             shutil.copyfile(trial / "main.tap", args.trial_tap)
         pilot = Path(tmp) / "pilot"
         make_pilot(trial, pilot, assembler)
+        music_pilot = Path(tmp) / "music"
+        make_music_pilot(trial, music_pilot, assembler)
         with ThreadPoolExecutor(max_workers=3) as pool:
             jobs = [pool.submit(verify,game,args.emulator.resolve(),model,level,game==pilot)
                     for game,levels in ((trial,(1,5,9)),(pilot,(1,9))) for level in levels for model in MODELS]
+            jobs.extend(pool.submit(verify_music, music_pilot, args.emulator.resolve(), model) for model in MODELS)
             for job in jobs:
                 job.result()

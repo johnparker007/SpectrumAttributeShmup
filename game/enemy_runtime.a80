@@ -380,6 +380,9 @@ configureLevelWaves:
     ret
 
 resetLevelWaves:
+    ifdef BONUS_AUDIO
+        call restoreWaveMusic
+    endif
     ld hl,stepWave
     ld (waveController+1),hl
     ld hl,spawnIncoming

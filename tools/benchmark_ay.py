@@ -43,7 +43,7 @@ def extract_music(archive_path, directory, ay_export, pt3=None):
     return hashlib.sha256(player).hexdigest(), hashlib.sha256(song).hexdigest()
 
 
-def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allow_select_only=False):
+def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allow_select_only=False, *, loops=1):
     points = {
         f"PC={symbols['tick_begin']:04X}H": ("begin", "TSTATESP"),
         f"PC={symbols['tick_end']:04X}H": ("end", "TSTATESP"),
@@ -95,9 +95,10 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
                                        "select_instruction_tstate": pending[1], "data_instruction_tstate": clock})
             pending = None
     if frames is None:
-        frames = next((index for index, tick in enumerate(ticks) if "loop" in tick), None)
-        if not frames:
-            raise ValueError(f"{model}: captured {len(ticks)} ticks without reaching the PT3 loop. Increase --seconds.")
+        boundaries = [index for index, tick in enumerate(ticks) if "loop" in tick]
+        if len(boundaries) < loops:
+            raise ValueError(f"{model}: captured {len(ticks)} ticks before {loops} complete passes. Increase --seconds.")
+        frames = boundaries[loops-1]
     if len(ticks) < frames:
         raise ValueError(f"{model}: captured only {len(ticks)} ticks. Increase --seconds.")
 
@@ -113,7 +114,7 @@ def capture(emulator, snapshot, symbols, model, seconds, io_points, frames, allo
             "tick_cost_range": [min(costs), max(costs)], "envelope_writes": len(envelopes)}
 
 
-def record(emulator, directory, model, seconds, through_loop=False):
+def record(emulator, directory, model, seconds, through_loop=False, *, loops=1):
     ports = {
         "PC=DC8CH AND BC=FFFDH": ("select", "TSTATES*256+A"),
         "PC=DC97H AND BC=FFFDH": ("select", "TSTATES*256+A"),
@@ -124,7 +125,7 @@ def record(emulator, directory, model, seconds, through_loop=False):
     }
     symbols = read_symbols(directory / "reference_player.sym")
     result = capture(emulator, directory / "reference_player.sna", symbols, model, seconds, ports,
-                     None if through_loop else FRAMES_REQUIRED, allow_select_only=True)
+                     None if through_loop else FRAMES_REQUIRED, allow_select_only=True, loops=loops)
     for index, tick in enumerate(result["ticks"]):
         registers = [write["register"] for write in tick["writes"]]
         if registers not in (list(range(13)), list(range(14))):

@@ -21,6 +21,9 @@ finishLastWave:
     or a
     ret z
 bossEnter:
+    ifdef BONUS_AUDIO
+        call startBossMusic
+    endif
     ld hl,bossStep
     ld (waveController+1),hl
     ld hl,bossFire

@@ -52,7 +52,7 @@ def unpack(recipe, banks):
             yield bytes(data[start:cursor])
 
 
-def pack(rows, first_bank_limit=BANK_SIZE):
+def pack(rows, first_bank_limit=BANK_SIZE, *, min_reuse_bytes=MIN_REUSE_BYTES):
     literals, runs = [], []
     offsets_by_packet = defaultdict(list)
     index = 0
@@ -66,7 +66,7 @@ def pack(rows, first_bank_limit=BANK_SIZE):
                 count += 1
             if size > best_bytes:
                 best_start, best_count, best_bytes = start, count, size
-        if best_bytes >= MIN_REUSE_BYTES:
+        if best_bytes >= min_reuse_bytes:
             start, count = best_start, best_count
         else:
             start, count = len(literals), 1

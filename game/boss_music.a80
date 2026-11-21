@@ -1,0 +1,26 @@
+; The three recipe pointers change together between 50 Hz music ticks.
+; The next tick reads the new tune in place with the normal effects mixer.
+startBossMusic:
+    ld hl,bossMusicRecipe
+    ld bc,bossMusicLoop
+    ld de,bossMusicEnd
+    jr selectMusicRecipe
+
+restoreWaveMusic:
+    ld hl,(sound_phrase_wrap+1)
+    ld de,testAudioRecipe+3
+    or a
+    sbc hl,de
+    ret z                       ; keep the music running on a normal wave retry
+    ld hl,testAudioRecipe       ; restore its AY initialization packet as well
+    ld bc,testAudioRecipe+3
+    ld de,testAudioRecipeEnd
+selectMusicRecipe:
+    ld (soundPhraseEnd+1),de
+    ld (sound_phrase_wrap+1),bc
+    ld (phrase_next),hl
+    xor a
+    ld (phrase_left),a
+    ret
+
+    include "boss_recipe.a80"

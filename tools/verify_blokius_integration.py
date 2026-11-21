@@ -8,6 +8,7 @@ import json
 from math import cos, sin, tan, tau
 from pathlib import Path
 import shutil
+from struct import unpack_from
 import subprocess
 import tempfile
 
@@ -65,6 +66,27 @@ def shot_steps(axis, slow=False):
 def star_force_music():
     return (MUSIC.joinpath("star-force-recipe.bin").read_bytes(),
             MUSIC.joinpath("star-force-literal.bin").read_bytes(), b"")
+
+
+def add_boss_music(game, wave_literals):
+    data = (MUSIC / "aircraft-carrier.ayp").read_bytes()
+    size, loop = unpack_from("<HH", data)
+    if size % 3 or loop % 3 or not 0 <= loop < size < len(data) - 4:
+        raise ValueError("Invalid boss music recipe or loop offset")
+    literals = data[4 + size:]
+    if len(wave_literals) + len(literals) > 16384:
+        raise ValueError("Gameplay and boss music exceed the first AY literal bank")
+    lines = ["bossMusicRecipe:"]
+    for i in range(0, size, 3):
+        if i == loop:
+            lines.append("bossMusicLoop:")
+        offset, count = unpack_from("<HB", data, 4 + i)
+        if offset >= len(literals) or count == 0:
+            raise ValueError("Invalid boss music phrase")
+        lines.extend((f"    dw {len(wave_literals) + offset}", f"    db {count}"))
+    lines.append("bossMusicEnd:")
+    (game / "boss_recipe.a80").write_text("\n".join(lines) + "\n", encoding="ascii")
+    return wave_literals + literals
 
 
 def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, sprite_dir=None,
@@ -214,7 +236,7 @@ doSinScroll equ barrelScroll_Update
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
                              "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80", "level_tiles.a80",
-                             "boss.a80", "boss_transition.a80"):
+                             "boss.a80", "boss_transition.a80", "boss_music.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -276,8 +298,8 @@ doSinScroll equ barrelScroll_Update
         (game / "collision_expected.bin").write_bytes(phases()[0].hits)
     packed_audio = star_force_music() if audio is None else None
     if live and not prototype_waves and packed_audio is not None:
-        recipe, *banks = packed_audio
-        packed_audio = (recipe, *(tag_music_bank(bank) for bank in banks))
+        recipe, first, second = packed_audio
+        packed_audio = (recipe, tag_music_bank(add_boss_music(game, first)), tag_music_bank(second))
     install_audio(game, audio, phrases=True, packed_audio=packed_audio)
     if live:
         data = game / "data.asm"
@@ -313,6 +335,9 @@ bossArt:
         incbin "boss_ne.bin"
         incbin "boss_sw.bin"
         incbin "boss_se.bin"
+        ifdef BONUS_AUDIO
+            include "boss_music.a80"
+        endif
     endif
     assert $ <= #cb00
 
