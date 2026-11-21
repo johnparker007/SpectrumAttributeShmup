@@ -179,7 +179,8 @@ def verify_choice(emulator, game, model, choice):
     # Use a sparse trace for sustained gameplay. The emulator tests every
     # breakpoint at each instruction, even after the startup probes pass.
     retries = classic_restarts(choice)
-    spool.write_bytes(str(choice).encode("ascii") * 50 + b"\rn" * retries)
+    # Cycle to the classic opening before an unattended ship can reach GAME OVER.
+    spool.write_bytes(str(choice).encode("ascii") * 18 + b"\rn" * retries)
     frame2_halt = f"PC={s['halt1']:04X}H"
     watch = [(points["halt2"], "TSTATESP"), (frame2_halt, "TSTATESP")]
     wave_probe = f"PC={s['stepWave.saveSlot']:04X}H"
@@ -219,25 +220,20 @@ def verify_choice(emulator, game, model, choice):
     entrances = [value for condition, value in rows if condition == wave_probe]
     yellow_count = YELLOW_FIRE_COUNTS[choice - 1]
     opening = [GREEN_SHIP_Y[0][3]] * green_wave_size
-    yellow_spawns = []
     clocks = [v // FRAME for condition, v in rows if condition == wave_clock_probe]
     before_next_wave = clocks[green_wave_size] - clocks[green_wave_size - 1]
-    gap = WAVE_GAPS[choice - 1][int(yellow_count == 255)]
+    gap = WAVE_GAPS[choice - 1][0]  # the classic order always opens green, yellow
     if before_next_wave != 2 * (gap + 1):
         raise ValueError(f"{model} map {choice}: unexpected first wave gap of {before_next_wave} frames")
-    if yellow_count != 255:
-        opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4))
-        yellow_spawns = clocks[green_wave_size:green_wave_size + yellow_wave_size]
-        gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
-        if len(gaps) != yellow_wave_size - 1 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
-            raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
+    opening.extend(128 * 256 + y for y in (8, 35, 15, 39, 19, 28, 4))
+    yellow_spawns = clocks[green_wave_size:green_wave_size + yellow_wave_size]
+    gaps = [b - a for a, b in zip(yellow_spawns, yellow_spawns[1:])]
+    if len(gaps) != yellow_wave_size - 1 or min(gaps) != 10 or (choice <= 5 and max(gaps) != 10):
+        raise ValueError(f"{model} map {choice}: incorrect yellow entry intervals {gaps}")
     roster = ROSTERS[choice-1]
-    if len(roster) > 2:
-        y, upward = spawn_lane(FLIERS[roster[2]-2], 0, True)
-        state = (s["catalogPaths"] >> 7 & 255) | upward
-        opening.append(256 * state + y)
-    else:
-        opening.append(64 * 256 + GREEN_SHIP_Y[1][3])
+    y, upward = spawn_lane(FLIERS[roster[2]-2], 0, True)
+    state = (s["catalogPaths"] >> 7 & 255) | upward
+    opening.append(256 * state + y)
     if entrances[:len(opening)] != opening:
         raise ValueError(f"{model} map {choice}: expected entrances {opening}, saw {entrances[:len(opening)]}")
     queued = [value for condition, value in rows if condition == queue_probe]
@@ -277,10 +273,6 @@ def verify_choice(emulator, game, model, choice):
 
 def check_yellow_path(rows, probe, fire_count, spawns, queued, shots):
     states = [(v & 255, v >> 8 & 255, v >> 16) for condition, v in rows if condition == probe]
-    if fire_count == 255:
-        if any(state & 128 for _, _, state in states) or queued or shots:
-            raise ValueError("Yellow ships appeared on a green-only level")
-        return
     first = states.index((67, 8, 128))
     turn = states.index((26, 8, 129), first)
     approach = states[first:turn]

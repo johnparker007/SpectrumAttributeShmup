@@ -42,7 +42,7 @@ GREEN_SHIP_Y = (GREEN_TOP_Y, tuple(GREEN_TRAVEL_Y - y for y in GREEN_TOP_Y))
 # Every green member takes the former level 4 shot at the first visible column.
 GREEN_FIRE_COLUMNS = (63,) * 9
 GREEN_FAST_FROM = 6
-YELLOW_FIRE_COUNTS = (255, 1, 1, 1, 1, 2, 2, 2, 2)
+YELLOW_FIRE_COUNTS = (1, 1, 1, 1, 1, 2, 2, 2, 2)
 # Last spawn to first spawn, minus the tick that actually spawns the ship.
 # The first value applies before a yellow wave, the second before other types.
 WAVE_GAPS = ((2, 2), (19, 15), (17, 13), (15, 11), (13, 10), (11, 9), (9, 8), (7, 6), (5, 5))

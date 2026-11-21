@@ -27,47 +27,49 @@ The level loader selects the green flier's firing column and the level's bullet 
 | 1–5 | One slow aimed shot on entry |
 | 6–9 | One shot on entry at the original speed |
 
-Every wave contains seven ships of one type. Level 1 has only the green flier. Each mixed level has three wave orders, and each new attempt advances to the next order for that level. On level 9 the opening pairs are Polar Wraith / Azure Hopper, Ruby Crown / Silver Splitter and Green Sine / Yellow Z. The order chosen for an attempt repeats during that run.
+Every wave contains seven ships of one type. On a fresh start, level 1 opens with Green Sine, Yellow Z, Cobalt Skimmer and Ivory Stair in that order. Each level has three wave orders. A new attempt advances to the next order, which repeats during that run. Level 2 opens with Scarlet Hook and level 3 with Amber Kite on the first visit. On level 9 the opening pairs are Polar Wraith / Azure Hopper, Ruby Crown / Silver Splitter and Green Sine / Yellow Z.
 
-Levels 2–5 give every resident type one wave per rotation. From level 6 the two newest types get a second wave, rising to the newest three on level 7 and the newest four on levels 8–9. On level 1 the next formation can begin three ticks (120 ms) after the seventh green ship enters. Within a formation, green ships enter ten ticks apart and yellow ships five ticks apart. When a sprite slot is busy the next entrant waits. Two full waves and the player use fifteen of the sixteen sprite slots.
+Levels 1–5 give every resident type one wave per rotation. From level 6 selected later types get a second wave. On level 1 the next formation can begin three ticks (120 ms) after the seventh ship enters. Within a formation, green ships enter ten ticks apart and yellow ships five ticks apart. When a sprite slot is busy the next entrant waits. Two full waves and the player use fifteen of the sixteen sprite slots.
 
-| Level | Additional resident types | Resident types |
+| Level | Resident types alongside Green Sine and Yellow Z | Total |
 | --- | --- | ---: |
-| 1 | Green sine only | 1 |
+| 1 | Cobalt Skimmer, Ivory Stair | 4 |
 | 2 | Cobalt Skimmer, Scarlet Hook | 4 |
 | 3 | Cobalt Skimmer, Scarlet Hook, Ivory Stair, Amber Kite | 6 |
 | 4 | Ivory Stair, Amber Kite, Violet Needle, Mint Manta | 6 |
 | 5 | Violet Needle, Mint Manta, Copper Drill, Azure Hopper | 6 |
 | 6 | Copper Drill, Azure Hopper, Rose Claw, Jade Pendulum | 6 |
-| 7 | Copper Drill, Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet | 7 |
-| 8 | Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
+| 7 | Amber Kite, Rose Claw, Jade Pendulum, Silver Splitter, Crimson Comet | 7 |
+| 8 | Copper Drill, Jade Pendulum, Silver Splitter, Crimson Comet, Rose Claw, Polar Wraith | 8 |
 | 9 | Azure Hopper, Jade Pendulum, Silver Splitter, Crimson Comet, Polar Wraith, Ruby Crown | 8 |
 
 Each of the fourteen additional waves uses seven entry heights. Cobalt Skimmers fly straight across in evenly spaced lanes. Scarlet Hooks enter from alternating edges and turn back towards their starting height. Azure Hoppers accelerate through two parts of a double hop, and Silver Splitters break inward after a long straight approach. Each completed green wave flips the vertical orientation for subsequent formations.
+
+On level 1 the Skimmer and Stair each take a single slow aimed shot near the right edge. Yellow Z fires at the end of its retreat. Amber Kite first appears on level 3 with two firing positions, sits out levels 5 and 6, and returns on level 7 with six firing positions in the volley cycle.
 
 The additional fliers mix aimed shots with fixed bearings that mirror their flight path. From level 4 they share a 64-tick volley cycle across overlapping formations. At the start of the cycle they take one reading of the player's position. Each aimed shot uses its own launch point and that same target, so moving away from the point draws the fire behind the ship. During the rest of the cycle these fliers hold fire and their existing bullets continue across the screen. Green and yellow fliers keep their individual attack patterns. All waves share the 24-bullet pool and only one of the additional fliers can launch per tick.
 
 | Level | Firing positions per additional flier | Ticks open / resting | Gap before yellow / other wave (ticks) |
 | --- | ---: | ---: | ---: |
-| 1 | — | — | — / 3 |
+| 1 | 1 | Always open | 3 / 3 |
 | 2 | 2 | Always open | 20 / 16 |
 | 3 | 2 for Stair and Kite, 3 for Skimmer and Hook | Always open | 18 / 14 |
 | 4 | 3 | 56 / 8 | 16 / 12 |
 | 5 | 4 | 52 / 12 | 14 / 11 |
 | 6 | 5 | 48 / 16 | 12 / 10 |
 | 7 | 6 | 46 / 18 | 10 / 9 |
-| 8 | 8 | 43 / 21 | 8 / 7 |
+| 8 | 6 for Copper Drill, 8 for the others | 43 / 21 | 8 / 7 |
 | 9 | 10 | 40 / 24 | 6 / 6 |
 
 The build bakes each ship's vertical steps, horizontal dashes, entry lanes and firing positions into its existing 256-byte path page. GET READY enables the positions for the selected difficulty. Each ship shares its four animation frames across every difficulty. See [the enemy catalogue](../tools/enemy_catalog.py) for the editable formations, paths, bearings and rosters.
 
-The sixteen compressed ship packets occupy 2,366 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
+The sixteen compressed ship packets occupy 2,366 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. Level 1 expands 1,536 bytes of art and paths. An eight-species level expands 3,584 bytes. A returning species reuses its packet and gets its current level’s firing positions during GET READY. The renderer reads the resident poses directly throughout play.
 
-| Enemy graphics and path load in the original roster benchmark | Grey +2 | Black +2A |
+| Enemy graphics and path load | Grey +2 | Black +2A |
 | --- | ---: | ---: |
-| Level 1 enemy load | 13.2 ms | 14.0 ms |
-| Level 2 enemy load | 44.0 ms | 46.7 ms |
-| Longest enemy load, levels 1–9 | 101.3 ms | 104.1 ms |
+| Level 1 enemy load | 43.3 ms | 45.1 ms |
+| Level 2 enemy load | 44.4 ms | 46.8 ms |
+| Longest enemy load, levels 1–9 | 102.5 ms | 107.3 ms |
 
 The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full wave order, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there. Use `--restarts --levels 9` to check the four successive openings on the playable TAP.
 
@@ -77,7 +79,7 @@ Yellow fliers enter at varied heights and travel straight left at one dot per ga
 
 | Level | Yellow flier firing |
 | --- | --- |
-| 2–5 | One slow aimed shot at the end of the retreat |
+| 1–5 | One slow aimed shot at the end of the retreat |
 | 6–9 | An aimed shot halfway through the retreat and another at its end |
 
 All enemies on a level share the same 32 prebaked bullet directions and speed. Up to 24 enemy bullets can be active at once. They alternate yellow and white on successive 25 Hz gameplay ticks.
@@ -106,17 +108,17 @@ The build packs the tiles used across the nine levels into 17 shared ZX0 strips 
 
 | Level | Packed map bytes | Resident tiles | Grey +2 to gameplay | Black +2A to gameplay |
 | --- | ---: | ---: | ---: | ---: |
-| 1 | 386 | 111 | 1.21 s | 1.26 s |
+| 1 | 386 | 111 | 1.25 s | 1.28 s |
 | 2 | 310 | 99 | 1.23 s | 1.26 s |
-| 3 | 354 | 86 | 1.23 s | 1.28 s |
+| 3 | 354 | 86 | 1.23 s | 1.26 s |
 | 4 | 222 | 73 | 1.21 s | 1.24 s |
-| 5 | 232 | 72 | 1.21 s | 1.26 s |
+| 5 | 232 | 72 | 1.21 s | 1.24 s |
 | 6 | 272 | 96 | 1.25 s | 1.30 s |
-| 7 | 343 | 103 | 1.29 s | 1.30 s |
-| 8 | 451 | 87 | 1.27 s | 1.30 s |
+| 7 | 343 | 103 | 1.29 s | 1.32 s |
+| 8 | 451 | 87 | 1.27 s | 1.32 s |
 | 9 | 398 | 96 | 1.29 s | 1.30 s |
 
-Run `tools/verify_level_tiles.py --game <assembled-game-directory> --emulator <zesarux.exe>` to check the normal and shifted graphics, GET READY text and elapsed time on all nine levels. The longest scenery-art installation was 293 ms on the +2 and 300 ms on the +2A. A separate level 9 roster trace reached gameplay at 1.32 s on the +2A.
+Run `tools/verify_level_tiles.py --game <assembled-game-directory> --emulator <zesarux.exe>` to check the normal and shifted graphics, GET READY text and elapsed time on all nine levels. The longest scenery-art installation was 293 ms on the +2 and 300 ms on the +2A.
 
 `tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all nine level keys on both models, screen text, sample map data, bank restoration, renderer startup, wave entrances, the yellow retreat and firing stages, and green shot aiming and speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 

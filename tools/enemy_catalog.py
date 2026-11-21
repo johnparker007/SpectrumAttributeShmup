@@ -24,11 +24,11 @@ AIM = None
 # Bearings count upwards from left. Fixed angles reflect with the flight path.
 FLIERS = (
     Flier("cobalt_skimmer", (0, 0), False, RANK, (), 8,
-          ((44, AIM), (24, AIM), (58, AIM), (33, 0), (62, AIM), (15, 0))),
+          ((58, AIM), (24, AIM), (44, AIM), (33, 0), (62, AIM), (15, 0))),
     Flier("scarlet_hook", (0, 0, 0, 2, 13, 20, 16, 6, 5), True, PINCER, ((24, 39),), 9,
           ((39, AIM), (54, AIM), (22, 2), (61, AIM), (34, 30), (17, AIM))),
     Flier("ivory_stair", (0, 0, 0, 7, 7, 7, 14, 14, 14, 20, 20), False, INTERLEAVE, (), 8,
-          ((47, AIM), (32, 0), (57, AIM), (23, AIM), (62, AIM), (15, 0))),
+          ((57, AIM), (32, 0), (47, AIM), (23, AIM), (62, AIM), (15, 0))),
     Flier("amber_kite", (0, 0, 8, 19, 9, 0, 10, 20, 8), False, FAN, ((29, 42),), 8,
           ((45, AIM), (30, 29), (58, AIM), (18, 3), (62, AIM), (38, AIM))),
     Flier("violet_needle", (0, 0, 0, 0, 0, 13, 19, 19, 19), False, RANK, ((23, 49),), 7,
@@ -60,17 +60,27 @@ FLIERS = (
            (19, 29), (31, 3), (23, 29), (56, 3))),
 )
 NAMES = ("green_sine", "yellow_z", *(ship.name for ship in FLIERS))
-ROSTERS = (
-    (0,), (0, 1, 2, 3), (0, 1, 2, 3, 4, 5), (0, 1, 4, 5, 6, 7), (0, 1, 6, 7, 8, 9),
-    (0, 1, 8, 9, 10, 11), (0, 1, 8, 10, 11, 12, 13),
-    (0, 1, 10, 11, 12, 13, 14, 15), (0, 1, 9, 11, 12, 13, 14, 15),
+# Slots 0 and 1 use the dedicated green and yellow movement routines.
+# The remaining slots can bring a species back at the new level's difficulty.
+ROSTERS = tuple(
+    (0, 1, *(NAMES.index(name) for name in ships))
+    for ships in (
+        ("cobalt_skimmer", "ivory_stair"),
+        ("cobalt_skimmer", "scarlet_hook"),
+        ("cobalt_skimmer", "scarlet_hook", "ivory_stair", "amber_kite"),
+        ("ivory_stair", "amber_kite", "violet_needle", "mint_manta"),
+        ("violet_needle", "mint_manta", "copper_drill", "azure_hopper"),
+        ("copper_drill", "azure_hopper", "rose_claw", "jade_pendulum"),
+        ("amber_kite", "rose_claw", "jade_pendulum", "silver_splitter", "crimson_comet"),
+        ("copper_drill", "jade_pendulum", "silver_splitter", "crimson_comet", "rose_claw", "polar_wraith"),
+        ("azure_hopper", "jade_pendulum", "silver_splitter", "crimson_comet", "polar_wraith", "ruby_crown"),
+    )
 )
 MAX_RESIDENT = 8  # One 256-byte art page per resident species in bank 0.
 
 # Each number picks a resident art/path slot for one complete wave. Levels
 # with the same roster size can share the orders even when the art differs.
 ORDERS = {
-    1: ((0,),) * 3,
     4: ((0, 1, 2, 3), (2, 0, 3, 1), (3, 2, 1, 0)),
     6: ((0, 1, 2, 3, 4, 5), (4, 2, 5, 0, 3, 1), (5, 3, 1, 4, 0, 2)),
     7: ((0, 1, 2, 5, 4, 3, 6, 4, 6, 5), (5, 3, 6, 1, 4, 2, 5, 0, 6, 4),
@@ -81,7 +91,7 @@ ORDERS = {
 # Level 6 has the same number of residents as levels 3–5, but its two
 # newest ships each get a second wave in the rotation.
 LEVEL_SIX_ORDERS = ((0, 1, 2, 4, 3, 5, 4, 5), (4, 2, 5, 0, 4, 3, 5, 1), (5, 3, 4, 1, 5, 0, 4, 2))
-FIRST_ORDER = (0, 0, 0, 0, 0, 1, 1, 2, 1)
+FIRST_ORDER = (0, 2, 2, 0, 0, 1, 1, 2, 1)
 ORDER_COUNT = 3
 
 
@@ -152,11 +162,11 @@ def settings(level, species):
     if species < 2:
         return (9 if species == 0 else 4), ()
     ship = FLIERS[species - 2]
-    counts = (0, 2, 3, 3, 4, 5, 6, 8, 10)
-    gap = (0, 4, 3, 2, 1, 0, -1, -2, -3)
+    counts = (1, 2, 3, 3, 4, 5, 6, 8, 10)
+    gap = (5, 4, 3, 2, 1, 0, -1, -2, -3)
     guns = counts[level - 1]
     if level == 3 and species in (4, 5):
-        guns = 2  # Introduce Stair and Kite before enabling their third shot.
+        guns = 2  # Stair and Kite get their third shot in level 4.
     return ship.spacing + gap[level - 1], ship.guns[:guns]
 
 

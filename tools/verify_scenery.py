@@ -123,7 +123,7 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     for watch, _ in checks[8:13]:
         assert [v for k, v in play if k == watch][:7] == [stage*257 for stage in stages]
     assert [v for k, v in play if k == colours][:12] == [7 + 256*56, 6 + 256*48]*6
-    bases = (symbols["enemyArt"], symbols["enemyArt" if level == 1 else "yellowArt"])
+    bases = (symbols["enemyArt"], symbols["yellowArt"])
     if catalog:
         bases = tuple(symbols["enemyArt"] + (2+slot%6)*256 for slot in (1, 9))
         # Slot zero takes the bonus-awarding hit. The survivors reach their

@@ -187,7 +187,7 @@ def verify_waves(emulator, game, model, level, scratch, camp=False):
             times.append((point, value))
 
     assert spawns > wave_length, (model, level, "incomplete rotation", spawns)
-    assert level == 1 or aimed > 0
+    assert aimed > 0, (model, level, "no aimed shots from the additional fliers")
     if camp:
         assert pressure_at_corner > 0, (model, level, "no shots aimed at the corner")
         if level == 9:
@@ -206,8 +206,10 @@ def verify_restarts(emulator, game, model, level, scratch):
     reset, spawn = (f"PC={s[name]:04X}H" for name in ("resetLevelWaves", "writeSpawnArt"))
     spool = scratch / f"restarts-{model}-{level}.txt"
     orders = wave_orders(level)
-    wait = b"n" * 27
-    spool.write_bytes(str(level).encode("ascii") * 50 + (wait + b"\r") * len(orders) + wait)
+    # Observe a formation, then restart while the unattended player still has
+    # ships. Enter is ignored during the two seconds before GAME OVER.
+    wait = b"n" * 16
+    spool.write_bytes(str(level).encode("ascii") * 12 + (wait + b"\r") * len(orders) + wait)
     log = breakpoint_log(emulator, game / "main.tap", model, 62,
                          [(reset, "A"), (spawn, "B")], True, spool)
     runs = []
@@ -239,8 +241,8 @@ if __name__ == "__main__":
     parser.add_argument("--camp", action="store_true", help="Hold fire in the upper right during the wave check")
     parser.add_argument("--restarts", action="store_true", help="Exercise repeated Enter restarts on the playable TAP")
     args = parser.parse_args()
-    if args.camp and (not args.waves or 1 in args.levels):
-        parser.error("--camp needs --waves and armed levels")
+    if args.camp and not args.waves:
+        parser.error("--camp needs --waves")
     if args.restarts and args.waves:
         parser.error("--restarts checks the playable TAP directly")
     with TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=4) as workers:
