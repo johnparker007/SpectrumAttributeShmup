@@ -1,0 +1,166 @@
+; Logical bank 1. D = A targets missed, E = bonus in hundreds of points.
+displaySectorResults:
+    push de
+    call clearMenuScreen
+    ld a,(selectedLevel) : add a,'1'
+    ld (resultLevel),a
+    inc a : ld (resultNextLevel),a
+    ld hl,resultHeading : ld de,#4090    ; row 4
+    call resultCentre
+
+    ld hl,resultTarget : ld de,resultLine
+    call resultCopy
+    pop bc : push bc                     ; B = misses, C = award
+    ld a,b : or a
+    jr nz,.miss
+    ld hl,resultNo : call resultCopy
+    jr .shooting
+.miss:
+    call resultDecimal
+.shooting:
+    ld hl,resultShooting : call resultCopy
+    ld hl,resultLine : ld de,#4830       ; row 9
+    call resultCentre
+
+    pop bc
+    ld a,c : push af
+    ld hl,resultBonus
+    cp 100 : jr nz,.amount
+    ld hl,resultPerfect
+.amount:
+    ld de,resultLine : call resultCopy
+    pop af : push af : call resultDecimal
+    pop af : or a : jr z,.points
+    ld hl,resultZeros : call resultCopy
+.points:
+    ld hl,resultPts : call resultCopy
+    ld hl,resultLine : ld de,#4870       ; row 11
+    call resultCentre
+
+    ; Convert four packed BCD digits and the two implied zeros; skip leading zeros.
+    ld de,resultDigits
+    ld a,(hudScore+1) : call resultBcd
+    ld a,(hudScore) : call resultBcd
+    ld hl,resultScore : ld de,resultLine : call resultCopy
+    ld hl,resultDigits
+.leading:
+    ld a,(hl) : cp '0' : jr nz,.digits
+    inc hl : ld a,(hl) : or a : jr nz,.leading
+    dec hl
+.digits:
+    call resultCopy
+    ld hl,resultLine : ld de,#48d0       ; row 14
+    call resultCentre
+    ld hl,resultNext
+    ld a,(selectedLevel) : cp 8 : jr nz,.footer
+    ld hl,resultFinal
+.footer:
+    ld de,#5070                          ; row 19
+    call resultCentre
+sectorResultsDrawn:
+    ei
+    call sectorFanfare
+    ld b,85
+.hold:
+    halt : djnz .hold
+    ret
+
+; Centre a zero-terminated string around the character column in DE.
+resultCentre:
+    push hl
+    ld b,0
+.length:
+    ld a,(hl) : or a : jr z,.draw
+    inc hl : inc b : jr .length
+.draw:
+    srl b : ld a,e : sub b : ld e,a
+    pop hl : jp drawScreenText
+
+; Append a string to DE, leaving DE at the new terminator.
+resultCopy:
+    ld a,(hl) : ld (de),a : or a : ret z
+    inc hl : inc de : jr resultCopy
+
+; Append an unsigned byte in decimal.
+resultDecimal:
+    ld b,'0'
+.hundreds:
+    cp 100 : jr c,.tens
+    sub 100 : inc b : jr .hundreds
+.tens:
+    ld c,a : ld a,b : cp '0' : jr z,.under100
+    ld (de),a : inc de
+.under100:
+    ld a,c : ld c,'0'
+.ten:
+    cp 10 : jr c,.units
+    sub 10 : inc c : jr .ten
+.units:
+    push af : ld a,b : cp '0' : jr nz,.writeTen
+    ld a,c : cp '0' : jr z,.writeOne
+.writeTen:
+    ld a,c : ld (de),a : inc de
+.writeOne:
+    pop af
+resultDigit:
+    and 15 : add a,'0' : ld (de),a : inc de : ret
+resultBcd:
+    push af : rrca : rrca : rrca : rrca : call resultDigit
+    pop af : jr resultDigit
+
+resultHeading: db "YOU CLEARED LEVEL "
+resultLevel: db "1",0
+resultNext: db "NOW ENTERING LEVEL "
+resultNextLevel: db "2",0
+resultFinal: db "ALL SECTORS CLEAR",0
+resultTarget: db "[A] ",0
+resultNo: db "NO",0
+resultShooting: db " MISS SHOOTING",0
+resultBonus: db "BONUS ",0
+resultPerfect: db "PERFECT BONUS ",0
+resultPts: db " PTS",0
+resultZeros: db "00",0
+resultScore: db "SCORE ",0
+resultDigits: db "000000",0
+resultLine: defs 25
+
+; A two-voice C-major cadence. Each phrase releases both tones for its last
+; two frames, leaving a clean attack even where the harmony repeats a note.
+sectorFanfare:
+    ld a,7 : ld e,#3c : call resultAy   ; A/B tones only, noise off
+    ld hl,resultNotes
+.note:
+    ld a,(hl) : inc hl : or a : ret z
+    push af
+    xor a
+    ld d,4
+.period:
+    ld e,(hl) : inc hl : call resultAy
+    inc a : dec d : jr nz,.period
+    ld a,8 : ld e,12 : call resultAy
+    inc a : ld e,9 : call resultAy
+    pop af : ld b,a
+.sustain:
+    halt : djnz .sustain
+    ld a,8 : ld e,0 : call resultAy
+    inc a : call resultAy
+    halt : halt : jr .note
+
+resultAy:
+    ld bc,#fffd : out (c),a
+    ld b,#bf : out (c),e : ret
+
+    macro RESULT_NOTE frames,lead,bass
+        db frames-2
+        dw lead,bass
+    endm
+resultNotes:
+    RESULT_NOTE 8,212,424      ; C5 / C4
+    RESULT_NOTE 8,168,424      ; E5 / C4
+    RESULT_NOTE 12,141,336     ; G5 / E4
+    RESULT_NOTE 8,106,283      ; C6 / G4
+    RESULT_NOTE 16,126,317     ; A5 / F4
+    RESULT_NOTE 12,141,283     ; G5 / G4
+    RESULT_NOTE 8,112,283      ; B5 / G4
+    RESULT_NOTE 36,106,212     ; C6 / C5
+    db 0

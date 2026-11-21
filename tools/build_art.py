@@ -215,12 +215,18 @@ def build_art(output, *, sprite_dir=None):
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
     level_targets = bytearray()
+    a_totals = bytearray()
     for number, (data, _) in enumerate(levels, 1):
         unpacked = maps / f"{map_output(number)}.bin"
         unpacked.write_bytes(data)
         level_targets.append(max(data) >= DESTRUCTIBLE_TILE)
+        count = data.count(DESTRUCTIBLE_TILE)  # First fixture on destructible.tsx is the A.
+        if count > 255:
+            raise ValueError(f"Level {number} exceeds the 255 A-target counter")
+        a_totals.append(count)
         run([ZX0 / "zx0.exe", "-f", unpacked.resolve(), unpacked.with_suffix(".zx0").resolve()], maps)
     (output / "level_targets.bin").write_bytes(level_targets)
+    (output / "level_a_totals.bin").write_bytes(a_totals)
 
 
 def main():

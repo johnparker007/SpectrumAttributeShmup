@@ -14,8 +14,27 @@ bossSectorCleared:
         ld a,10 : call writeSoundEffect
     endif
     ld a,(selectedLevel)
+    ld e,a : ld d,0
+    ld hl,levelATotals : add hl,de
+    ld a,(sceneryAHits)
+    ld e,a : ld a,(hl) : sub e
+    ld d,a                           ; D = misses for the results line
+    ld e,0
+    ld a,(hl) : or a                 ; a map without targets earns no bonus
+    jr z,sectorBonusCredited
+    ld a,d : cp 4
+    jr nc,sectorBonusCredited
+    ld hl,sectorBonusHundreds
+    ld c,a : ld b,0 : add hl,bc
+    ld b,(hl) : ld e,b              ; E = hundreds awarded, preserved by hudAward
+.credit:
+    call hudAward
+    djnz .credit
+sectorBonusCredited:
+    call showSectorResults
+    ld a,(selectedLevel)
     cp 8
-    jr z,bossVictory
+    jp z,selectNextLevel
     add a,'2'
     ld (readyLevel),a
     ld hl,(hudScore) : push hl
@@ -31,24 +50,7 @@ bossSectorCleared:
     call bossFinishHud
     jp startLevelRenderer
 
-bossVictory:
-    call bossFinishHud
-    ; Blank the playfield attributes while preserving the complete score HUD.
-    ld hl,#5800 : ld de,#5801 : ld bc,23*32-1
-    ld (hl),0 : ldir
-    ld hl,bossVictoryText : ld de,#4848
-    call drawScreenText
-    ld hl,#5948
-    ld b,bossVictoryTextEnd-bossVictoryText-1
-.show:
-    ld (hl),HUD_ATTR : inc hl : djnz .show
-    ei
-    ld b,150
-.hold:
-    halt : djnz .hold
-    jp selectNextLevel
-bossVictoryText: db "ALL SECTORS CLEAR",0
-bossVictoryTextEnd:
+sectorBonusHundreds: db 100,50,20,10
 
 bossFinishHud:
     call hudStep

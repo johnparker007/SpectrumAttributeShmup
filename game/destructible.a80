@@ -33,7 +33,9 @@ sceneryStep:
     edup
     ret
 
-; HL = paired shot (X,Y). Return carry clear, HL = hit cell, E = column.
+; HL = paired shot (X,Y). On a hit carry is clear and Z identifies the A
+; fixture (tile 124). The caller preserves both flags until sceneryStartBlast.
+; HL points to the hit cell and E holds its column.
 ; Both shot lanes share X. Their row origins are either equal or 18 apart.
 sceneryProbePair:
     ld a,(tileMapScroll_H)
@@ -69,13 +71,18 @@ sceneryTestCell:
     ld a,(hl)
     cp DESTRUCTIBLE_TILE
     jr c,.miss
-    inc e
+    inc de                       ; advance E without changing the tile comparison
     ret
 .miss:
     dec l
     ret
 
 sceneryStartBlast:
+    jr nz,.counted
+    ld a,(sceneryAHits)
+    inc a
+    ld (sceneryAHits),a
+.counted:
     ld c,l
     ld a,e
     cp 8
@@ -184,6 +191,7 @@ sceneryAgeOne:
     ret
 
 resetScenery:
+    ld (sceneryAHits),a
     ld (sceneryBlastCount),a     ; caller supplies zero
     ld hl,sceneryBlasts
     dup SCENERY_BLAST_SLOTS
@@ -194,12 +202,14 @@ resetScenery:
     ret
 
 sceneryEnabled: db 0
+sceneryAHits: db 0
 sceneryBlastCount: db 0
 sceneryBlasts: defs SCENERY_BLAST_SLOTS*3
     align 8
 sceneryBlastStages: db 0,BLAST_TILE+2,BLAST_TILE+2
     db BLAST_TILE+1,BLAST_TILE+1,BLAST_TILE,BLAST_TILE
 levelScenery: incbin "level_targets.bin"
+levelATotals: incbin "level_a_totals.bin"
 
 ; Y can be any logical screen row. The page-aligned table avoids a second
 ; multiply-by-18 for the lower lane of a shot. It lives in pageable bank 0.

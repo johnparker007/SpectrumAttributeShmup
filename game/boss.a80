@@ -63,9 +63,9 @@ bossEnter:
 BOSS_X equ 46
 BOSS_HITS equ 32
 BOSS_BAR_X equ (64-BOSS_HITS)/2
-BOSS_BAR_FULL equ #40 | YELLOW | (YELLOW << 3)
+BOSS_BAR_FULL equ #40 | COLOR_GREEN | (COLOR_GREEN << 3)
 BOSS_BAR_EMPTY equ #40 | 2 | (2 << 3)
-BOSS_BAR_HALF equ #40 | YELLOW | (2 << 3)
+BOSS_BAR_HALF equ #40 | COLOR_GREEN | (2 << 3)
 bossStep:
     dup 4,part
         ld hl,bossArt+part*60

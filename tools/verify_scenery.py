@@ -90,6 +90,8 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
         checks.append((armed, "B"))
         accepted = pc("moveCatalogShip.gunPositionWritten")
         checks.append((accepted, "B"))
+    a_hits = end + " AND 8=8"
+    checks.append((a_hits, peek(symbols["sceneryAHits"])))
     if bonus:
         checks.append((pc("hudScoreAwarded.extraLife"), "TSTATESP"))
     spool = game / f"sector-{model}-{level}.txt"
@@ -118,6 +120,8 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     assert all(k != j and w//FRAME == v//FRAME + 1
                for (k, v), (j, w) in zip(halts, halts[1:])), (model, level, "missed interrupt")
     assert [v for k, v in play if k == end][:7] == [5]*6 + [0]
+    # Five paired shots hit both barrel aliases. Only slots 0 and 4 held As.
+    assert [v for k, v in play if k == a_hits][:7] == [2]*7
     assert [v for k, v in play if k == checks[7][0]][:3] == [79, 79, 0]
     stages = (121, 121, 122, 122, 123, 123, symbols["SCENERY_MOUNT"])
     for watch, _ in checks[8:13]:

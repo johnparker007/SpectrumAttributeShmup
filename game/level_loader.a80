@@ -75,4 +75,11 @@ unpackEnemyPacket:
     call dzx0_standard
     xor a
     jp swapPage
+    ifdef LEVEL_MENU
+; The results code and tune share the map bank and run with the renderer idle.
+showSectorResults:
+    ld a,1 : call swapPage
+    call displaySectorResults
+    jp menuMusicRestore
+    endif
     endif

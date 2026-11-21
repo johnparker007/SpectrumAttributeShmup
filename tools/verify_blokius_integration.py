@@ -242,7 +242,7 @@ doSinScroll equ barrelScroll_Update
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
                              "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80", "level_tiles.a80",
-                             "boss.a80", "boss_transition.a80", "boss_music.a80"):
+                             "boss.a80", "boss_transition.a80", "boss_music.a80", "sector_results.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -367,6 +367,11 @@ luminance128Extra: incbin "gfx/luminance-128k-extra.bin"
         endif
     endif
 ''' + game_over_resource + b'''
+    ifdef LEVEL_MENU
+        ifdef LEVEL_WAVES
+            include "sector_results.a80"
+        endif
+    endif
 tileStore1 equ $
     assert $ <= #10000
     ifdef LEVEL_MENU

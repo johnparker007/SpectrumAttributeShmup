@@ -273,6 +273,29 @@ def dress_section(section, sector, part):
                 row[x] = first + {VENT: 11, GRILLE: 22, HATCH: 23}[tile]
 
 
+def place_bonus_targets(rows, sector):
+    """One A per 32 columns, with time to line up the opening shot."""
+    for district in range(8):
+        start = district * 32
+        centre = start + 16
+        lane = 1 + (sector + 3 * district) % 4
+        mounts = [(x, y) for x in range(start + 4, start + 29) for y in range(6)
+                  if rows[y][x] in (PLATE, CRATE)]
+        if mounts:
+            x, y = min(mounts, key=lambda p: abs(p[0]-centre) + 2*abs(p[1]-lane))
+        else:
+            # The antenna and radiator stretches occasionally need a small service deck.
+            bays = [(x, y) for x in range(start + 5, start + 28) for y in range(1, 5)
+                    if rows[y][x-1:x+2] == [SKY]*3]
+            x, y = min(bays, key=lambda p: abs(p[0]-centre) + 2*abs(p[1]-lane))
+            rows[y][x-1:x+2] = [PLATE, PLATE, PLATE]
+        for row in rows:
+            for col in range(start, start + 32):
+                if row[col] == CRATE:
+                    row[col] = FUSE
+        rows[y][x] = CRATE
+
+
 def build_maps(directory):
     directory.mkdir(exist_ok=True, parents=True)
     for n, (name, route) in enumerate(ROUTES):
@@ -296,6 +319,7 @@ def build_maps(directory):
             visits[key] = variant + 1
             for row, part in zip(rows, section.rows):
                 row.extend(part)
+        place_bonus_targets(rows, n)
         xml = ET.Element(
             "map", version="1.10", tiledversion="1.10.0", orientation="orthogonal",
             renderorder="right-down", width="256", height="6", tilewidth="8", tileheight="8",

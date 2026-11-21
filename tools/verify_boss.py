@@ -7,7 +7,7 @@ import shutil
 from struct import unpack_from
 from tempfile import TemporaryDirectory
 
-from build_art import LEVEL_MAPS, ZX0, map_output
+from build_art import DESTRUCTIBLE_TILE, LEVEL_MAPS, ZX0, map_output
 from profile_ringo8 import FRAME, HIT
 from trace_zesarux import breakpoint_log, read_symbols
 from verify_ay_phrases import unpack
@@ -26,13 +26,22 @@ def make_trial(game, dest, assembler):
     shutil.copytree(game, dest)
     # Present columns 243..251 in the opening viewport and stream 252..255.
     # The normal column counter, end padding, last wave and boss all still run.
+    totals = bytearray()
     for level in range(1, len(LEVEL_MAPS) + 1):
         path = dest / "maps" / (map_output(level) + ".bin")
         original = path.read_bytes()
-        opening = bytes(original[x * 6 + y] for y in range(6) for x in range(243, 252))
-        trial_map = opening + original[252 * 6:]
+        rows = [[original[x * 6 + y] for x in range(243, 256)] for y in range(6)]
+        # A short shooting gallery lets the player try every bonus tier.
+        for row in rows:
+            row[:] = [1 if tile == DESTRUCTIBLE_TILE else tile for tile in row]
+        for x, y in ((4, 2), (7, 3), (9, 1), (11, 4)):
+            rows[y][x-1:x+2] = (1, DESTRUCTIBLE_TILE, 1)
+        trial_map = bytes(tile for row in rows for tile in row[:9]) + bytes(
+            rows[y][x] for x in range(9, 13) for y in range(6))
+        totals.append(trial_map.count(DESTRUCTIBLE_TILE))
         path.write_bytes(trial_map.ljust(len(original), b"\0"))
         run([ZX0 / "zx0.exe", "-f", path, path.with_suffix(".zx0")], dest)
+    (dest / "level_a_totals.bin").write_bytes(totals)
     barrel = dest / "barrelScroll.asm"
     source = barrel.read_text()
     select = "ld (sourceTileMapReadColumn), a"
@@ -49,14 +58,18 @@ def make_pilot(trial, pilot, assembler):
     assert src.count(marker) == 1
     path.write_text(src.replace(marker, "    call bossTestPilot\n"))
 
-    # Exercise a bonus threshold during the boss explosion. Two surviving
-    # ships at the handoff distinguish a carry from the default three.
+    # Seed distinct shooting results and cross the first extra-ship threshold
+    # during clearance on levels 1/2 and during the boss explosion thereafter.
     path = pilot / "boss.a80"
     src = path.read_text()
     marker = "\nbossEnter:\n"
     assert src.count(marker) == 1
-    src = src.replace(marker, marker + "    ld a,1 : ld (playerLives),a\n"
-                      "    ld hl,#0195 : ld (hudScore),hl\n")
+    src = src.replace(marker, marker + """
+    ld a,1 : ld (playerLives),a
+    ld a,(selectedLevel)
+    ld hl,#0150 : cp 2 : jr c,1f : ld hl,#0195
+1:  ld (hudScore),hl
+""")
     path.write_text(src + """
 bossTestPilot:
     ld a,65 : ld (invincibleTicks),a
@@ -64,7 +77,19 @@ bossTestPilot:
     ld a,(playerXY+1) : cp b : ld a,16 : jr z,1f
     ld a,20 : jr nc,1f : ld a,24
 1:  ret
+bossTestTally:
+    ld a,(selectedLevel) : cp 4 : ret z  ; level 5 keeps the actual shooting result
+    ld c,a
+    ld a,4 : sub c : jr nc,1f : xor a
+1:  ld (sceneryAHits),a : ret
 """)
+    # The pilot keeps shooting A fixtures through the boss fight. Seed the
+    # requested result only after the very last gameplay tick has run.
+    path = pilot / "boss_transition.a80"
+    source = path.read_text()
+    marker = "    call disableRender\n"
+    assert source.count(marker) == 1
+    path.write_text(source.replace(marker, marker + "    call bossTestTally\n"))
     assemble(pilot, assembler)
 
 
@@ -150,6 +175,8 @@ def verify(trial, emulator, model, level, pilot=False):
 
     gate, enter, tick, volley = map(pc, ("finishLastWave", "bossEnter", "gameplayComplete", "bossFire.volley"))
     commit, play = map(pc, ("bossSectorCleared", "firstFrameLogic"))
+    credit, panel, glyph = map(pc, ("sectorBonusCredited", "sectorResultsDrawn", "drawScreenText"))
+    chord = pc("resultAy")
     emitted = pc("enemyShotEmitted")
     death = pc("bossDestroyed")
     bar = pc("bossEnergyDrawn")
@@ -165,9 +192,14 @@ def verify(trial, emulator, model, level, pilot=False):
                (volley, word("playerXY")), (emitted, "B+256*C+65536*D"), (death, word("hudScore")),
                (commit, peek("playerLives")+"+256*"+word("hudScore")),
                (pc("startLevelRenderer"), peek("playerLives")+"+256*"+word("hudScore")),
-               (pc("bossVictory"), word("hudScore")), (pc("menuWait"), "TSTATESP"),
+               (pc("menuWait"), "TSTATESP"),
                (pc("halt1"), "TSTATESP"), (pc("halt2"), "TSTATESP")]
     if pilot:
+        hits = tick + " AND 11=11"  # the completed gameplay tick has bank 0 mapped
+        watches.extend(((hits, peek("sceneryAHits")), (credit, "DE"),
+                        (credit+" AND 1=1", peek("playerLives")+"+256*"+word("hudScore")),
+                        (panel, f"PEEKW({s['intProc']+1:04X}H)"), (glyph, "DE*256+PEEK(HL)"),
+                        (chord, "A+256*E"), (pc("showSectorReady"), "TSTATESP")))
         watches.extend(((ay_write, "A+256*E"), (pc("damageBoss"), peek("bossHealth")),
                         (bar, "DE-" + word("attrPointer")), (bar_health, peek("bossHealth"))))
         watches.extend((point, f"PEEKW(DE-{16-2*i})") for i, point in enumerate(bar_words))
@@ -246,22 +278,48 @@ def verify(trial, emulator, model, level, pilot=False):
         for hp, *words in zip(remaining, *(values(encounter, key) for key in bar_words), strict=True):
             dots = [colour for pair in words for attr in pair.to_bytes(2, "little")
                     for colour in (attr & 7, (attr >> 3) & 7)]
-            assert dots == [6]*hp + [2]*(32-hp), (model, level, hp, dots)
+            assert dots == [4]*hp + [2]*(32-hp), (model, level, hp, dots)
         carry = values(events, commit)[0]
         handoff = events[next(i for i, (k, _) in enumerate(events) if k == commit):]
         assert values(handoff, ay_write)[:3] == [8, 9, 10]
         # The HUD stores packed BCD hundreds. The boss awards ten of them.
         before = int(f"{values(events, death)[0]:04x}")
         after = int(f"{carry // 256:04x}")
-        assert before == 195 and after == before + 10 and carry % 256 == 2
+        assert before == (150 if level <= 2 else 195) and after == before + 10
+        if level == 5:
+            actual = values(opening, hits) + values(encounter, hits)
+            assert actual and 0 < actual[-1] <= 4
+            assert all(b-a in (0, 1) for a, b in zip([0]+actual, actual))
+            misses = 4 - actual[-1]
+        else:
+            misses = min(level-1, 4)
+        award = (100, 50, 20, 10, 0)[misses]
+        assert values(handoff, credit)[0] == misses*256 + award
+        awarded = values(handoff, credit+" AND 1=1")[0]
+        score = int(f"{awarded//256:04x}") * 100
+        assert score == (after + award) * 100 and awarded % 256 == 2
+        until_panel = handoff[:next(i for i, (k, _) in enumerate(handoff) if k == panel)]
+        chars = values(until_panel, glyph)
+        lines = bytes(x%256 for x in chars).split(b'\0')[:-1]
+        label = str(misses) if misses else 'NO'
+        expected = [f"YOU CLEARED LEVEL {level}", f"[A] {label} MISS SHOOTING",
+                    f"{'PERFECT ' if not misses else ''}BONUS {award*100} PTS", f"SCORE {score}",
+                    f"NOW ENTERING LEVEL {level+1}" if level < 9 else "ALL SECTORS CLEAR"]
+        assert [line.decode() for line in lines] == expected, (model, level, lines)
+        assert values(handoff, panel)[0] == s["nullProc"]
+        stop = pc("showSectorReady") if level < 9 else pc("menuWait")
+        presentation = handoff[:next(i for i, (k, _) in enumerate(handoff) if k == stop)]
+        sound = values(presentation, chord)
+        assert sound[0] == 7 + 256*0x3c and len(sound) == 1+8*8
+        assert sound[-2:] == [8, 9]
         if level < 9:
             renderer = next(i for i, (key, _) in enumerate(handoff) if key == play)
             next_boss = next((i for i, (key, _) in enumerate(handoff[renderer:], renderer)
                               if key == enter), len(handoff))
             assert not values(handoff[renderer:next_boss], bar), (model, level, "gauge after handoff")
-            assert values(events,pc("startLevelRenderer"))[0] == carry and level in values(events,play)
+            assert values(handoff,pc("startLevelRenderer"))[0] == awarded and level in values(events,play)
         else:
-            assert values(events,pc("bossVictory")) == [carry//256] and values(events,pc("menuWait"))
+            assert values(handoff,pc("menuWait")) and not values(presentation, pc("startLevelRenderer"))
     print(f"{model} level {level}: {len(spawns)//7} complete waves, four joined sprites, {len(shot_ticks)} volleys of {1+2*wings}, "
           f"{margin} T minimum; {'cleared' if pilot else 'playtest TAP'}", flush=True)
 
@@ -284,7 +342,7 @@ if __name__ == "__main__":
         make_music_pilot(trial, music_pilot, assembler)
         with ThreadPoolExecutor(max_workers=3) as pool:
             jobs = [pool.submit(verify,game,args.emulator.resolve(),model,level,game==pilot)
-                    for game,levels in ((trial,(1,5,9)),(pilot,(1,9))) for level in levels for model in MODELS]
+                    for game,levels in ((trial,(1,5,9)),(pilot,(1,2,3,4,5,9))) for level in levels for model in MODELS]
             jobs.extend(pool.submit(verify_music, music_pilot, args.emulator.resolve(), model) for model in MODELS)
             for job in jobs:
                 job.result()
