@@ -1,0 +1,85 @@
+; GET READY only. The map buffer holds up to 32 raw tiles before the map
+; itself is unpacked. IX walks runs of (source tile, local tile, count).
+; Place each compressed strip where it fits in the assembled memory map.
+; Bank 7 has a gap between the shadow attributes and the menu raster at #e000.
+    macro STORE_TILE packet,logical,length,filename
+        if tileNext7+length<=#e000
+logical equ 7
+            page 7
+            org tileNext7
+tileNext7 = tileNext7+length
+        else
+            if tileNext4+length<=#10000
+logical equ 4
+                page 4
+                org tileNext4
+tileNext4 = tileNext4+length
+            else
+logical equ 1
+                page 1
+                org tileNext1
+tileNext1 = tileNext1+length
+                assert tileNext1<=#10000
+            endif
+        endif
+packet: incbin filename
+    endm
+
+installLevelTiles:
+    ld a,(selectedLevel)
+    add a,a
+    ld e,a : ld d,0
+    ld hl,packedTileLevels
+    add hl,de
+    ld e,(hl) : inc hl : ld d,(hl)
+    push de : pop ix
+.packet:
+    ld a,(ix)
+    or a
+    ret z
+    ld l,(ix+1) : ld h,(ix+2)
+    call unpackTileStrip
+    ld a,(ix+3) : ld iyl,a
+    ld bc,4 : add ix,bc
+.run:
+    ld a,(ix+1)
+    call .offset
+    ld de,tileSet : add hl,de : push hl
+    ld a,(ix)
+    call .offset
+    ld de,sourceTileMap : add hl,de : push hl
+    ld a,(ix+2)
+    add a,a : add a,a : add a,a : ld iyh,a ; 8 rows per tile
+    ld a,(ix+2)
+    call .offset
+    ld b,h : ld c,l
+    pop hl : pop de
+    push hl : push de
+    call copyTileRun
+    pop de : pop hl
+    assert tileSet=_tileSet
+.row:
+    ; Each raw row has two padding bytes and four INK/PAPER pairs.
+    ; Shift by one dot. The right edge gets black from the row padding.
+    xor a : ld (de),a : inc de : inc hl
+    ld b,4
+.pair:
+    ld a,(hl) : and 56 : rrca : rrca : rrca : or 64 : ld c,a
+    inc hl
+    ld a,(hl) : and 7 : rlca : rlca : rlca : or c
+    ld (de),a : inc de
+    djnz .pair
+    ld a,(hl) : and 56 : rrca : rrca : rrca : or 64
+    ld (de),a : inc de : inc hl
+.rowReady:
+    dec iyh : jr nz,.row
+    ld bc,3 : add ix,bc
+    dec iyl : jr nz,.run
+    jp .packet
+
+.offset:
+    ld l,a : ld h,0
+    add hl,hl : add hl,hl : add hl,hl : add hl,hl
+    ld e,l : ld d,h
+    add hl,hl : add hl,de
+    ret

@@ -218,6 +218,60 @@ ROUTES = (
     ('Reactor Gates',  'GFMG.BBCFGM.GFCG'),
 )
 
+THEMES = ("frontier", "relay", "reactor")
+THEME_TILE = 135  # Follows the 128 common tiles and seven fixture/effect tiles.
+# Keep the original firing lanes and target clusters in place. These sections
+# have room for new structures between the inhabited decks.
+LANDMARK_PARTS = (
+    (0, 4, 6, 9, 12, 15), (0, 2, 4, 9, 11, 14), (1, 2, 6, 9, 12, 14),
+    (2, 4, 7, 9, 11, 14), (0, 3, 5, 9, 12, 14), (0, 3, 5, 8, 13, 14),
+    (0, 3, 5, 10, 13, 14), (2, 3, 9, 10, 12, 15), (0, 3, 8, 9, 12, 15),
+)
+
+
+def landmark(section, sector, variant):
+    """Build silhouettes at two-screen scale from the sector's 32×16 and 16×16 art."""
+    first = THEME_TILE + sector % 3 * 24
+
+    def machine(x, y, offset, width):
+        section.stamp(x, y, tuple(tuple(first + offset + 12*row + i for i in range(width))
+                                  for row in range(2)))
+
+    if sector in (1, 3):  # Fossils and ore seams grow out of a broken shelf.
+        flip = variant % 2
+        y = 1 if flip else 3
+        section.rock(0, 0 if flip else 3, [(1, 5), (0, 7), (0, 6)])
+        machine(1, y, 0, 4)
+        machine(9, 3-y//2, 4, 4)
+        machine(13, 0 if flip else 4, 8, 2)
+    elif sector in (4, 5, 6):  # Solar wings, receivers and accelerator girders.
+        y = 1 if variant % 2 else 3
+        section.put(1, y+1, *([TRUSS]*14))
+        machine(1, y-1, 0, 4)
+        machine(9, y-1, 4, 4)
+        machine(5 if variant % 2 else 13, y, 8, 2)
+        section.put(5, y+1, JOINT, THEME_TILE+72, JOINT)
+    else:  # Service bays. Hull-mounted targets sit between the machinery.
+        y = (1, 0, 3, 2)[variant]
+        section.deck(0, y, 15, 3)
+        machine(1, y, 0 if variant % 2 == 0 else 4, 4)
+        machine(8, y, 4 if variant % 2 == 0 else 0, 4)
+        machine(13, y, 8, 2)
+        section.put(5, y+1, first+11, PLATE, THEME_TILE+72)
+        section.put(3, y+2, first+22, PIPE, first+23)
+
+
+def dress_section(section, sector, part):
+    first = THEME_TILE + sector % 3 * 24
+    for y, row in enumerate(section.rows):
+        for x, tile in enumerate(row):
+            if tile == RAM:
+                row[x] = THEME_TILE + 72
+            elif tile == PLATE and (x + 2*y + part) % 5 == 0:
+                row[x] = first + 10
+            elif tile in (VENT, GRILLE, HATCH):
+                row[x] = first + {VENT: 11, GRILLE: 22, HATCH: 23}[tile]
+
 
 def build_maps(directory):
     directory.mkdir(exist_ok=True, parents=True)
@@ -225,10 +279,20 @@ def build_maps(directory):
         assert len(route) == 16
         rows = [[] for _ in range(6)]
         visits = {}
-        for key in route:
+        for part, key in enumerate(route):
             section = Section()
             variant = visits.get(key, n) % 4
-            BUILDERS[key](section, variant)
+            if part in LANDMARK_PARTS[n]:
+                landmark(section, n, (LANDMARK_PARTS[n].index(part) + n) % 4)
+            else:
+                BUILDERS[key](section, variant)
+                if n == 7 and key == "C":
+                    # Hang the grapple and scrapped hull above/below the cargo rows.
+                    y = 0 if variant % 2 else 4
+                    for start, offset in ((1, 24), (9, 28)):
+                        for dy in range(2):
+                            section.put(start, y+dy, *(THEME_TILE+offset+12*dy+i for i in range(4)))
+            dress_section(section, n, part)
             visits[key] = variant + 1
             for row, part in zip(rows, section.rows):
                 row.extend(part)
@@ -239,9 +303,10 @@ def build_maps(directory):
         )
         ET.SubElement(xml, "tileset", firstgid="1", source="tileSet.tsx")
         ET.SubElement(xml, "tileset", firstgid="129", source="destructible.tsx")
+        ET.SubElement(xml, "tileset", firstgid=str(THEME_TILE+1), source=THEMES[n//3]+".tsx")
         layer = ET.SubElement(xml, "layer", id="1", name=name, width="256", height="6")
         data = ET.SubElement(layer, "data", encoding="csv")
-        gids = [[129 + tile - CRATE if tile >= CRATE else 1 + tile for tile in row] for row in rows]
+        gids = [[129 + tile - CRATE if CRATE <= tile <= GEM else 1 + tile for tile in row] for row in rows]
         data.text = "\n" + ",\n".join(",".join(map(str, row)) for row in gids) + "\n"
         ET.indent(xml, space=" ")
         contents = ET.tostring(xml, encoding="utf-8", xml_declaration=True)

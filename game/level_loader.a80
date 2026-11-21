@@ -2,6 +2,14 @@
 loadLevel:
     ld (selectedLevel),a
     push af
+    ifdef LEVEL_WAVES
+        di
+        ld a,4
+        call swapPage
+tileLoadBegin:
+        call installLevelTiles
+tileLoadEnd:
+    endif
     ld a,1
     call swapPage
     pop af
@@ -41,6 +49,24 @@ enemyLoadEnd:
 selectedLevel: db 0
 
     ifdef LEVEL_WAVES
+; The caller lives above the shifted atlas in logical bank 4. Only these
+; two short copies have to execute in fixed RAM while that bank is hidden.
+unpackTileStrip:
+    call swapPage
+    ld de,sourceTileMap
+    call dzx0_standard
+    jr tileRestorePage
+copyTileRun:
+    push bc
+    ld a,6
+    call swapPage
+    pop bc
+copyTileBytes:
+    ldir
+tileRestorePage:
+    ld a,4
+    jp swapPage
+
 ; Fixed RAM trampoline. Both the source and destination banks use #c000.
 unpackEnemyPacket:
     ld a,6

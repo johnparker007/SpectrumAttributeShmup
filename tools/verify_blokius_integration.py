@@ -77,6 +77,8 @@ def install(game, assembler, audio=None, live=False, replay=None, menu=True, *, 
     if not separator or not tail_start:
         raise ValueError("Unexpected Blokius scenery include or vector assertion")
     if live:
+        if not prototype_waves:
+            prefix = prefix.replace(b"call initTiles", b"call fillPixels", 1)
         prefix = prefix.replace(b'incbin "maps/tilemap.bin"', b"""defs SOURCE_TILEMAP_WIDTH*SOURCE_TILEMAP_HEIGHT,0
     include "level_loader.a80"
     ifdef LEVEL_MENU
@@ -210,7 +212,7 @@ doSinScroll equ barrelScroll_Update
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
-                             "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80"):
+                             "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80", "level_tiles.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -309,6 +311,8 @@ SCENERY_MOUNT equ {SCENERY_MOUNT}
 
 """.encode("ascii")
         code = code[:test_art] + scenery_source + code[tiles:]
+        if not prototype_waves:
+            code = code.replace(b'incbin "tileSet.png.bin"', b'defs 128*48,0', 1)
         code = code.replace(b"    assert testSmallSprite+60 <= #cb00\n", b"", 1)
 
         levels = "".join(f'packedLevel{n}: incbin "maps/{map_output(n)}.zx0"\n'
@@ -324,6 +328,7 @@ luminance128Extra: incbin "gfx/luminance-128k-extra.bin"
         endif
     endif
 ''' + game_over_resource + b'''
+tileStore1 equ $
     assert $ <= #10000
     ifdef LEVEL_MENU
         page 3
@@ -356,6 +361,15 @@ luminancePlusExtra: incbin "gfx/luminance-plus-extra.bin"
         endif
     endif
     ifdef LEVEL_WAVES
+        page 4
+        org _tileSetEnd
+        include "level_tiles.a80"
+        include "tile_lists.a80"
+        assert $<=#10000
+tileNext4 = $
+tileNext1 = tileStore1
+tileNext7 = #db00
+        include "tile_packets.a80"
         page 6
         org tileSetEnd
         include "enemy_packets.a80"

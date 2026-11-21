@@ -8,7 +8,7 @@ On the keyboard, use **O** and **P** to move left and right, **Q** and **A** to 
 
 Green sine fliers enter beyond the right edge and move left one logical dot every other game tick. The renderer clips them as they exit on the left. Each green wave has seven ships, with at least ten ticks between spawns. The mirrored paths span all 41 dots of vertical ship travel, with the first visible column aligned to the top or bottom edge. An Enter restart flips the first wave’s entrance. The build bakes both paths as absolute Y coordinates indexed by X.
 
-The scenery and tile animation tables advance every other game tick. The eight preshifted parallax frames each stay visible for four game ticks. The other four animated tiles use the same frame duration.
+The scenery and tile animation tables advance every other game tick. Each pose of the winding drum, scanner or rotor lasts four game ticks (160 ms). The four quadrants of the common extractor use the same frame duration. Eight blue stars move at two speeds behind sky tiles.
 
 The level loader selects the green flier's firing column and the level's bullet speed during **GET READY**. Each armed green flier gets one shot when it crosses that column. The shot uses the closest of 32 bearings towards the player, or points left while the player is absent. Slow trajectories average about two thirds of the original speed. Each in-flight shot uses the same three-byte record and reads X and Y deltas from the selected pair of 256-byte tables.
 
@@ -43,12 +43,11 @@ The build bakes each ship's vertical steps, horizontal dashes, entry lanes and f
 
 The sixteen compressed ship packets occupy 2,313 bytes in bank 6. Bank 0 reserves 2,048 bytes for eight sets of flight poses and 1,536 bytes for six additional flight paths. A one-species level expands 256 bytes of art. An eight-species level expands 3,584 bytes of art and paths. The renderer reads the resident poses directly throughout play.
 
-| GET READY measurement | Grey +2 | Black +2A |
+| Enemy graphics and path load in the original roster benchmark | Grey +2 | Black +2A |
 | --- | ---: | ---: |
 | Level 1 enemy load | 13.2 ms | 14.0 ms |
 | Level 2 enemy load | 44.0 ms | 46.7 ms |
 | Longest enemy load, levels 1–9 | 101.3 ms | 104.1 ms |
-| Longest map and enemy load together | 128.2 ms | 132.7 ms |
 
 The headless loader check traces each decompressed byte and its destination on both machines. The gameplay check follows a full wave order, including entry lanes, each ship's X and Y, bullet origins and bearings. Run `tools/verify_enemy_catalog.py` on an assembled game directory, adding `--waves PATH_TO_SJASMPLUS` for the gameplay check. Add `--levels 9 --camp` to hold fire at the upper-right movement limit and check that aimed shots and ship losses occur there. Use `--restarts --levels 9` to check the four successive openings on the playable TAP.
 
@@ -82,19 +81,23 @@ The first game slot reads the keyboard, resolves the previous collision flags, m
 
 ## Reproduce
 
-Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (**0**) to start Level 1 with that controller. A held fire button must be released when returning to the menu. **1–9** start a test map with the current controller. Press **R** to redefine keys. Sinclair fire takes priority over its direction keys on the same keyboard row. The test maps share a tile sheet. Level 9 adds destructible scenery and shortens the gap between green and yellow waves. The ready screen displays the selected level while ZX0 Standard expands its map into the 1,536-byte buffer. The renderer stays idle until gameplay starts. The loader uses logical bank 1 for compressed maps and restores bank 0 before configuring the wave.
+Press the keyboard Fire key (Space by default), Kempston fire or Sinclair fire (**0**) to start Level 1 with that controller. A held fire button must be released when returning to the menu. **1–9** start a level with the current controller. Press **R** to redefine keys. Sinclair fire takes priority over its direction keys on the same keyboard row.
 
-| Map | Packed bytes | 128K family unpack T-states | +2A unpack T-states |
-| --- | ---: | ---: | ---: |
-| 1 | 463 | 142,338 | 147,434 |
-| 2 | 477 | 142,980 | 148,038 |
-| 3 | 457 | 139,939 | 145,270 |
-| 4 | 463 | 140,528 | 145,750 |
-| 5 | 443 | 138,895 | 143,914 |
-| 6 | 452 | 140,561 | 145,957 |
-| 7 | 466 | 142,336 | 147,389 |
-| 8 | 465 | 143,157 | 148,265 |
-| 9 | 485 | 144,624 (+2) | 149,625 |
+The build packs the tiles used across the nine levels into 17 shared ZX0 strips (3,842 bytes). At GET READY, a per-level list selects strips and copies runs of tiles into the two existing renderer banks. The loader uses the future 1,536-byte map buffer as scratch space, generates the shifted rows, then unpacks the map over the scratch space and loads the enemy roster. The renderer stays idle throughout. The following measurements come from the playable TAP. The last two columns include the 35-frame ready hold, enemy loading and screen setup.
+
+| Level | Packed map bytes | Resident tiles | Grey +2 to gameplay | Black +2A to gameplay |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 386 | 111 | 1.21 s | 1.26 s |
+| 2 | 310 | 99 | 1.23 s | 1.26 s |
+| 3 | 354 | 86 | 1.23 s | 1.28 s |
+| 4 | 222 | 73 | 1.21 s | 1.24 s |
+| 5 | 232 | 72 | 1.21 s | 1.26 s |
+| 6 | 272 | 96 | 1.25 s | 1.30 s |
+| 7 | 343 | 103 | 1.29 s | 1.30 s |
+| 8 | 451 | 87 | 1.27 s | 1.30 s |
+| 9 | 398 | 96 | 1.29 s | 1.30 s |
+
+Run `tools/verify_level_tiles.py --game <assembled-game-directory> --emulator <zesarux.exe>` to check the normal and shifted graphics, GET READY text and elapsed time on all nine levels. The longest scenery-art installation was 293 ms on the +2 and 300 ms on the +2A. A separate level 9 roster trace reached gameplay at 1.32 s on the +2A.
 
 `tools/verify_level_menu.py` takes the same assembler, emulator and optional TAP output arguments as the gameplay verifier. It checks all nine level keys on both models, screen text, sample map data, bank restoration, renderer startup, wave entrances, the yellow retreat and firing stages, and green shot aiming and speed. It also checks at least 150 consecutive gameplay frame pairs after each choice. Measurements include the call to ZX0 and exclude the ready screen delay and level setup.
 

@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 
 from verify_zesarux_raster import run
 from enemy_catalog import FLIERS, pack_catalog
+from level_tiles import BASE, TARGETS, layout, pack_tiles, read_map, read_sheet
+from level_tiles import BLAST as BLAST_TILE, MOUNT as SCENERY_MOUNT, TARGET as DESTRUCTIBLE_TILE
 
 
 ART = Path(__file__).resolve().parents[1] / "art"
@@ -24,10 +26,6 @@ MENU_LOGO_COOL = (0x44, 0x45, 0x41, 0x43)  # Green, cyan, blue, magenta.
 # Each six-bit window in this circular order is unique, so nearby sections
 # of the ribbon keep changing even when only part of the strip is visible.
 MENU_LOGO_RUN_ORDER = bytes.fromhex("69 cb 66 24 28 fd 5d e0")
-DESTRUCTIBLE_TILE = 124
-BLAST_TILE = 121
-SCENERY_MOUNT = 104  # Scorched deck plate revealed underneath every fixture.
-DESTRUCTIBLE_TILESET = "destructible.tsx"
 SPRITES = {
     "player": "player_art.bin",
     "enemy_green_sine": "enemy_art.bin",
@@ -117,38 +115,6 @@ def convert_image(source, converter, output, size):
     return data
 
 
-def map_bytes(source):
-    root = ET.parse(source).getroot()
-    layers = root.findall("layer")
-    if (root.get("width"), root.get("height")) != ("256", "6") or len(layers) != 1:
-        raise ValueError("The scenery map must have one 256 by 6 tile layer")
-    layer = layers[0].find("data")
-    if layer is None or layer.get("encoding") != "csv" or layer.get("compression"):
-        raise ValueError("Save the scenery map with CSV layer data")
-    base = root.find("tileset[@source='tileSet.tsx']")
-    target = root.find(f"tileset[@source='{DESTRUCTIBLE_TILESET}']")
-    if base is None or base.get("firstgid") != "1":
-        raise ValueError("Use the Blokius base tileset with firstgid 1")
-    target_gid = None
-    if target is not None:
-        target_gid = int(target.get("firstgid"))
-        tileset = ET.parse(source.parent / DESTRUCTIBLE_TILESET).getroot()
-        marked = {int(t.get("id")) for t in tileset.findall("tile")
-                  if t.find("properties/property[@name='destructible'][@value='true']") is not None}
-        if target_gid <= 128 or marked != set(range(4)):
-            raise ValueError("Place the marked destructible tileset after the 128 base tiles")
-    gids = [int(value.strip()) for value in layer.text.split(",") if value.strip()]
-    targets = {} if target_gid is None else {target_gid+i: DESTRUCTIBLE_TILE+i for i in range(4)}
-    if len(gids) != 1536 or any(not 1 <= gid <= BLAST_TILE and gid not in targets for gid in gids):
-        raise ValueError("Use scenery tiles 0–120 or a marked intact destructible")
-    tiles = [targets.get(gid, gid - 1) for gid in gids]
-    # The barrel starts with nine complete columns, then streams six tiles
-    # per incoming column. Preserve that layout when exporting from Tiled.
-    opening = [tiles[y * 256 + x] for y in range(6) for x in range(9)]
-    incoming = [tiles[y * 256 + x] for x in range(9, 256) for y in range(6)]
-    return bytes(opening + incoming)
-
-
 def map_output(number):
     return f"tilemap-{number}" if number > 1 else "tilemap"
 
@@ -185,22 +151,37 @@ def build_art(output, *, sprite_dir=None):
     gfx.mkdir(exist_ok=True)
     (output / MENU_LOGO).write_bytes(logo_bitmap(ART / "gfx/blokius-logo.pbm"))
     (output / MENU_LOGO_RASTER).write_bytes(logo_raster())
-    tiles = convert_image(ART / "gfx/tileSet.png", "converter-tiles.exe", gfx / "tileSet.png.bin", (128, 64))
-    if len(tiles) != 6144:
-        raise ValueError("The tile converter produced an unexpected sheet size")
-    targets = convert_image(ART / "gfx/destructible.png", "converter-tiles.exe", gfx / "destructible.bin", (56, 8))
-    if len(targets) != 7 * 48:
-        raise ValueError("Expected four intact targets and three explosion frames")
+    levels = []
+    sheets = {}
+    for filename in LEVEL_MAPS:
+        cells, used_sheets = read_map(ART / "maps" / filename)
+        try:
+            levels.append(layout(cells, used_sheets))
+        except ValueError as error:
+            raise ValueError(f"{filename}: {error}") from error
+        sheets.update(used_sheets)
+    if TARGETS not in sheets:
+        sheets[TARGETS] = read_sheet(ART / "maps" / TARGETS)
+    raw = {name: convert_image(sheet.image, "converter-tiles.exe", gfx / (sheet.image.stem + ".bin"), sheet.size)
+           for name, sheet in sheets.items()}
+    if any(len(raw[name]) != sheet.count * 48 for name, sheet in sheets.items()):
+        raise ValueError("The tile converter returned an incomplete atlas")
+    tiles, targets = raw[BASE], raw[TARGETS]
     mount = tiles[SCENERY_MOUNT * 48:(SCENERY_MOUNT + 1) * 48]
-    fixtures = targets[:4 * 48]
     blasts = bytearray(targets[4 * 48:])
-    # Black dots in the blast art expose the deck. Each attribute holds two
-    # independent dots, one in INK and one in PAPER.
     for i, attribute in enumerate(blasts):
         for mask in (0x07, 0x38):
             if (attribute & mask) == 0:
                 blasts[i] |= mount[i % len(mount)] & mask
-    (gfx / "tileSet.png.bin").write_bytes(tiles[:BLAST_TILE * 48] + blasts + fixtures)
+    raw[BASE] = tiles[:BLAST_TILE * 48] + blasts + targets[:4 * 48]
+    # Retain the first level as a static atlas for the archived prototype probes.
+    for number, (_, resident) in enumerate(levels, 1):
+        atlas = bytearray(128 * 48)
+        for slot, (name, idx) in resident.items():
+            atlas[slot * 48:(slot+1) * 48] = raw[name][idx * 48:(idx+1) * 48]
+        (gfx / f"level-{number}.bin").write_bytes(atlas)
+    shutil.copyfile(gfx / "level-1.bin", gfx / "tileSet.png.bin")
+    pack_tiles(output.resolve(), levels, sheets, raw, ZX0 / "zx0.exe", run)
     flight_sprites = set()
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
@@ -233,9 +214,8 @@ def build_art(output, *, sprite_dir=None):
     maps = output / "maps"
     maps.mkdir(exist_ok=True)
     level_targets = bytearray()
-    for number, name in enumerate(LEVEL_MAPS, 1):
+    for number, (data, _) in enumerate(levels, 1):
         unpacked = maps / f"{map_output(number)}.bin"
-        data = map_bytes(ART / "maps" / name)
         unpacked.write_bytes(data)
         level_targets.append(max(data) >= DESTRUCTIBLE_TILE)
         run([ZX0 / "zx0.exe", "-f", unpacked.resolve(), unpacked.with_suffix(".zx0").resolve()], maps)

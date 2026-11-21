@@ -60,7 +60,7 @@ def verify_load(emulator, game, model, level, scratch):
         return tstates * 20 / FRAME
 
     print(f"{model} level {level} ({len(roster)} species): enemies {last-first} T / {ms(last-first):.1f} ms, "
-          f"map + enemies {ms(last-load):.1f} ms, selection to renderer {ms(play-start):.1f} ms", flush=True)
+          f"scenery + enemies {ms(last-load):.1f} ms, selection to renderer {ms(play-start):.1f} ms", flush=True)
 
 
 def wave_probe(game, assembler, directory, camp=False):
