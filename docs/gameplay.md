@@ -10,6 +10,8 @@ Green sine fliers enter beyond the right edge and move left one logical dot ever
 
 The scenery and tile animation tables advance every other game tick. Each pose of the winding drum, scanner or rotor lasts four game ticks (160 ms). The four quadrants of the common extractor use the same frame duration. Eight blue stars move at two speeds behind sky tiles.
 
+The 256-column maps take about 2 minutes 38.4 seconds to scroll from the first playable frame. Each additional column represents 0.64 seconds of flight. The boss entrance also depends on how quickly the last wave clears. In a full-length test on the grey +2 and black +2A, the level 1 boss entered at 2:47.3 and the level 9 boss at 2:42.9.
+
 At the end of each map, the current seven-ship wave finishes spawning. Once the last flier has left or finished exploding, a 10×10 boss enters from the right and patrols vertically. Its four 5×5 quarters share 32 hit points on every level. A centred gauge on the top row starts with 32 green dots. Each hit turns one dot red, working from right to left. Projectiles draw over the gauge. The centre shot of each boss volley aims at the player and neighbouring shots are one of the 32 bearings apart.
 
 | Levels | Shots per boss volley | Time between volleys by level |
@@ -18,7 +20,9 @@ At the end of each map, the current seven-ship wave finishes spawning. Once the 
 | 4–6 | 3 | 1.28, 1.12, 0.96 seconds |
 | 7–9 | 5 | 0.96, 0.80, 0.64 seconds |
 
-Destroying the boss clears the enemy bullets and awards 1,000 points. Each level has eight magenta A targets mounted on deck tiles. A short AY fanfare plays over the white-on-black clearance screen. Shooting all eight As earns a further 10,000 points. Missing one, two or three earns 5,000, 2,000 or 1,000 respectively. Four or more misses earn zero. Other destructible fixtures leave their usual craters and have no bearing on the bonus. The build counts As directly from the edited map.
+Destroying the boss clears the enemy bullets and awards 1,000 points. Each level has eight green A targets mounted on deck tiles. A short AY fanfare plays over the white-on-black clearance screen. Shooting all eight As earns a further 10,000 points. Missing one, two or three earns 5,000, 2,000 or 1,000 respectively. Four or more misses earn zero. Other destructible fixtures leave their usual craters and have no bearing on the bonus. The build counts As directly from the edited map.
+
+Levels 1 and 2 offer eight separate shots at the A targets. Level 3 introduces a pair staggered by three columns and separated by one row. The vertical gaps widen through levels 4 and 5. Trios appear from level 6. Level 9 has a trio, a pair and a final trio. In each group the top and bottom targets share a column, with the middle target of each trio offset by one column.
 
 The bonus counts towards extra ships. Score and surviving ships carry into the next sector. Clearing level 9 shows the final score and **ALL SECTORS CLEAR** before returning to the title. To export a playtest TAP with a four-target shooting gallery near each boss, run `tools/verify_boss.py --game <assembled-game-directory> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --trial-tap <output.tap>`.
 

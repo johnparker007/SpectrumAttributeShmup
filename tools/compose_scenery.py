@@ -10,7 +10,7 @@ SKY, PLATE, VENT, RAM = 0, 1, 2, 3
 TRUSS, MAST, BRACE, JOINT = 16, 17, 18, 19
 PIPE, RISER, HATCH, GRILLE = 20, 21, 26, 27
 # Internal IDs 124–127 export as the four marked tiles on the target sheet.
-CRATE, CELL, FUSE, GEM = range(124, 128)
+BONUS_A, CELL, FUSE, GEM = range(124, 128)
 FAN = ((12, 13), (28, 29))
 DISH = ((36, 37, 38), (52, 53, 54))
 TANK = ((39, 40), (55, 56))
@@ -129,7 +129,7 @@ def cargo(section, variant):
     y = variant % 2
     for x in (0, 7):
         section.deck(x, y, 6, 4)
-        section.put(x + 1, y + 1, PLATE, CRATE, CELL, GRILLE)
+        section.put(x + 1, y + 1, PLATE, FUSE, CELL, GRILLE)
         section.put(x + 1, y + 2, VENT, FUSE, GEM, PLATE)
     section.put(6, y + 2, PIPE)
     if variant >= 2:
@@ -192,7 +192,7 @@ def hangar(section, variant):
     # openings are actual sky; the red fixtures sit in intact armour.
     y = variant % 2
     section.deck(0, y, 16, 5)
-    section.put(0, y + 1, GRILLE, PLATE, PLATE, CRATE, PLATE, VENT)
+    section.put(0, y + 1, GRILLE, PLATE, PLATE, FUSE, PLATE, VENT)
     section.put(1, y + 3, VENT, PLATE, GEM, PLATE, HATCH)
     for x, width in ((6,3),(12,2)):
         section.put(x, y + 1, *[SKY] * width)
@@ -273,27 +273,29 @@ def dress_section(section, sector, part):
                 row[x] = first + {VENT: 11, GRILLE: 22, HATCH: 23}[tile]
 
 
+# Tiled coordinates, left to right. Pairs start one lane apart on level 3.
+# Staggered triples start on level 6. Level 9 pairs the top and bottom rows.
+A_TARGETS = (
+    ((12,1), (48,4), (77,2), (115,2), (139,1), (176,4), (205,3), (240,1)),
+    ((22,1), (48,1), (88,4), (112,3), (144,2), (167,1), (203,4), (243,2)),
+    ((16,4), (44,2), (80,3), (116,3), (119,4), (176,1), (209,1), (241,4)),
+    ((7,1), (50,1), (79,1), (82,3), (142,4), (168,4), (170,2), (242,1)),
+    ((16,1), (45,4), (47,1), (79,3), (112,2), (175,1), (177,4), (240,2)),
+    ((16,2), (86,0), (88,3), (118,3), (161,1), (163,3), (164,4), (240,3)),
+    ((23,1), (24,4), (99,2), (100,4), (101,0), (143,3), (241,0), (242,4)),
+    ((17,3), (66,1), (67,5), (150,2), (151,0), (151,5), (216,1), (216,5)),
+    ((38,0), (38,5), (39,2), (129,0), (129,5), (228,3), (229,0), (229,5)),
+)
+
+
 def place_bonus_targets(rows, sector):
-    """One A per 32 columns, with time to line up the opening shot."""
-    for district in range(8):
-        start = district * 32
-        centre = start + 16
-        lane = 1 + (sector + 3 * district) % 4
-        mounts = [(x, y) for x in range(start + 4, start + 29) for y in range(6)
-                  if rows[y][x] in (PLATE, CRATE)]
-        if mounts:
-            x, y = min(mounts, key=lambda p: abs(p[0]-centre) + 2*abs(p[1]-lane))
-        else:
-            # The antenna and radiator stretches occasionally need a small service deck.
-            bays = [(x, y) for x in range(start + 5, start + 28) for y in range(1, 5)
-                    if rows[y][x-1:x+2] == [SKY]*3]
-            x, y = min(bays, key=lambda p: abs(p[0]-centre) + 2*abs(p[1]-lane))
-            rows[y][x-1:x+2] = [PLATE, PLATE, PLATE]
-        for row in rows:
-            for col in range(start, start + 32):
-                if row[col] == CRATE:
-                    row[col] = FUSE
-        rows[y][x] = CRATE
+    for x, y in A_TARGETS[sector]:
+        row = rows[y]
+        if row[x] == SKY:
+            assert row[x-1:x+2] == [SKY]*3, (sector+1, x, y)
+            row[x-1:x+2] = [PLATE, PLATE, PLATE]
+        assert row[x] == PLATE, (sector+1, x, y)
+        row[x] = BONUS_A
 
 
 def build_maps(directory):
@@ -330,7 +332,7 @@ def build_maps(directory):
         ET.SubElement(xml, "tileset", firstgid=str(THEME_TILE+1), source=THEMES[n//3]+".tsx")
         layer = ET.SubElement(xml, "layer", id="1", name=name, width="256", height="6")
         data = ET.SubElement(layer, "data", encoding="csv")
-        gids = [[129 + tile - CRATE if CRATE <= tile <= GEM else 1 + tile for tile in row] for row in rows]
+        gids = [[129 + tile - BONUS_A if BONUS_A <= tile <= GEM else 1 + tile for tile in row] for row in rows]
         data.text = "\n" + ",\n".join(",".join(map(str, row)) for row in gids) + "\n"
         ET.indent(xml, space=" ")
         contents = ET.tostring(xml, encoding="utf-8", xml_declaration=True)
