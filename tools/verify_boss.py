@@ -302,7 +302,7 @@ def verify(trial, emulator, model, level, pilot=False):
         chars = values(until_panel, glyph)
         lines = bytes(x%256 for x in chars).split(b'\0')[:-1]
         label = str(misses) if misses else 'NO'
-        expected = [f"YOU CLEARED LEVEL {level}", f"[A] {label} MISS SHOOTING",
+        expected = [f"YOU CLEARED LEVEL {level}", f"CRATES {label} MISS SHOOTING",
                     f"{'PERFECT ' if not misses else ''}BONUS {award*100} PTS", f"SCORE {score}",
                     f"NOW ENTERING LEVEL {level+1}" if level < 9 else "ALL SECTORS CLEAR"]
         assert [line.decode() for line in lines] == expected, (model, level, lines)

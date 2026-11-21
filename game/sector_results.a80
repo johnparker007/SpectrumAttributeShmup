@@ -1,4 +1,4 @@
-; Logical bank 1. D = A targets missed, E = bonus in hundreds of points.
+; Logical bank 1. D = crates missed, E = bonus in hundreds of points.
 displaySectorResults:
     push de
     call clearMenuScreen
@@ -113,7 +113,7 @@ resultLevel: db "1",0
 resultNext: db "NOW ENTERING LEVEL "
 resultNextLevel: db "2",0
 resultFinal: db "ALL SECTORS CLEAR",0
-resultTarget: db "[A] ",0
+resultTarget: db "CRATES ",0
 resultNo: db "NO",0
 resultShooting: db " MISS SHOOTING",0
 resultBonus: db "BONUS ",0
