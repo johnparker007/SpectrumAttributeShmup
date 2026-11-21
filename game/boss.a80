@@ -1,0 +1,193 @@
+; One controller owns the first four ordinary enemy boxes and sprites.
+; stepWave reaches this gate only when the map has stopped and a spawn is due.
+finishLastWave:
+    ld a,(waveRemaining)
+    cp GREEN_WAVE_SIZE
+    jp nz,stepWave.spawnNormally       ; finish the current formation of seven
+    ld hl,enemy_boxes
+    ld de,enemyMotion+1
+    ld b,WAVE_ENEMIES
+.wait:
+    ld a,(hl)
+    cp HIDDEN_BOX
+    ret nz
+    ld a,(de)
+    or a
+    ret nz                             ; wait for the last explosion to finish
+    inc hl : inc hl
+    inc de : inc de
+    djnz .wait
+    ld a,(playerLives)
+    or a
+    ret z
+bossEnter:
+    ld hl,bossStep
+    ld (waveController+1),hl
+    ld hl,bossFire
+    ld (gunController+1),hl
+    ld hl,63+18*256
+    ld (bossXY),hl
+    ld a,1
+    ld (bossDeltaY),a
+    ld a,16
+    ld (bossCooldown),a
+    ld a,(selectedLevel)               ; zero-based
+    add a,a
+    ld e,a : ld d,0
+    add a,8
+    ld (bossHealth),a
+    ld hl,bossGuns
+    add hl,de
+    ld a,(hl)
+    ld (bossPeriod),a
+    inc hl
+    ld a,(hl)
+    ld (bossWings),a
+    ; No wave art is replaced, so an Enter restart can reuse the level roster.
+    dup 4,part
+        ld hl,bossArt+part*60
+        ld (sprite09+part*SPRITE+SPRITE.IMAGE),hl
+    edup
+    jp bossPosition
+
+BOSS_X equ 46
+bossStep:
+    dup 4,part
+        ld hl,bossArt+part*60
+        ld a,(collision_actual+part)
+        or a
+        jr z,1f
+        ld hl,bossHealth
+        dec (hl)
+        jp z,bossDestroyed
+        ld hl,explosion1               ; flash the quadrant that was struck
+1:      ld (sprite09+part*SPRITE+SPRITE.IMAGE),hl
+    edup
+    ld hl,bossXY
+    ld a,(hl)
+    cp BOSS_X
+    jr z,.patrol
+    dec (hl)
+    jr bossPosition
+.patrol:
+    ld a,(gameTick)
+    rrca
+    ret c
+    inc hl
+    ld a,(bossDeltaY)
+    add a,(hl)
+    ld (hl),a
+    cp 1
+    jr z,.turn
+    cp PLAYFIELD_HEIGHT-11
+    jr nz,bossPosition
+.turn:
+    ld a,(bossDeltaY)
+    neg
+    ld (bossDeltaY),a
+bossPosition:
+    ld hl,(bossXY)
+    ld (enemy_boxes),hl
+    ld de,5
+    add hl,de
+    ld (enemy_boxes+2),hl
+    ld de,5*256
+    add hl,de
+    ld (enemy_boxes+6),hl
+    ld de,-5
+    add hl,de
+    ld (enemy_boxes+4),hl
+    ret
+
+; The existing allocator and 32-direction trajectories serve every volley.
+; Adjacent shots in the fan are one bearing (11.25 degrees) apart.
+bossFire:
+    ld a,(bossXY)
+    cp BOSS_X
+    ret nz
+    ld hl,bossCooldown
+    dec (hl)
+    ret nz
+    ld a,(bossPeriod)
+    ld (hl),a
+    ld a,(playerLives)
+    or a
+    ret z
+    ld a,(respawnWait)
+    or a
+    ret nz
+    ld bc,(bossXY)                     ; X in C, Y in B
+    ld a,b : add a,4 : ld b,c : ld c,a
+    call aimIncoming
+    ld a,(bossWings)
+    ld e,a
+    add a,a : add a,a : add a,a
+    neg
+    add a,d : ld d,a                   ; first bearing
+    ld a,e : add a,a : inc a : ld e,a
+.volley:
+    call emitIncoming
+    ld a,d : add a,8 : ld d,a
+    dec e
+    jr nz,.volley
+    ret
+
+bossDestroyed:
+    ld hl,bossAftermath
+    ld (waveController+1),hl
+    ld hl,bossQuiet
+    ld (gunController+1),hl
+    ; The final hit clears hostile fire. Keep the four last-drawn positions
+    ; while the ordinary sprite compositor displays the explosions there.
+    ld a,#ff
+    ld hl,enemy_records
+    ld de,3
+    ld b,ENEMY_COUNT
+.clearShots:
+    ld (hl),a : add hl,de
+    djnz .clearShots
+    ld a,HIDDEN_BOX
+    dup 4,part
+        ld (enemy_boxes+part*2),a
+    edup
+    ld a,32
+    ld (bossWait),a
+    ifdef LIVE_SFX
+        call startExplosionSound
+    endif
+    ld a,EXPLOSION_TICKS
+    jr setBossExplosions
+
+bossAftermath:
+    ld a,(playerLives)
+    or a
+    ret z                             ; a simultaneous last-life loss wins
+    ld hl,bossWait
+    dec (hl)
+    jp z,bossSectorCleared
+    ld a,(hl)
+    cp 22
+    ret c
+    push af
+    call hudAward                     ; ten 100-point awards preserve bonus thresholds
+    pop af
+    sub 21
+    srl a
+    jr nz,setBossExplosions
+    ld a,#ff                          ; compositor retires all four sprites
+setBossExplosions:
+    dup 4,part
+        ld (enemyMotion+2*part+1),a
+    edup
+bossQuiet:
+    ret
+
+bossGuns:                             ; volley interval in 25 Hz ticks, shots on either side
+    db 36,0, 32,0, 28,0, 32,1, 28,1, 24,1, 24,2, 20,2, 16,2
+bossXY: dw 0
+bossHealth: db 0
+bossDeltaY: db 0
+bossCooldown: db 0
+bossPeriod: db 0
+bossWings: db 0
+bossWait: db 0

@@ -118,6 +118,12 @@ stepWave:
     dec (hl)
     ret
 .findSlot:
+    ifdef LEVEL_WAVES
+        ld a,(barrelScrollComplete)
+        or a
+        jp nz,finishLastWave
+    endif
+.spawnNormally:
     ld a,(spawnSlot)
     add a,a
     ld e,a
@@ -374,6 +380,10 @@ configureLevelWaves:
     ret
 
 resetLevelWaves:
+    ld hl,stepWave
+    ld (waveController+1),hl
+    ld hl,spawnIncoming
+    ld (gunController+1),hl
     ld a,(greenStartPhase)
     xor #40                      ; a retry starts with the opposite entrance
     ld (greenStartPhase),a

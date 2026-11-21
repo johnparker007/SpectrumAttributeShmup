@@ -101,6 +101,7 @@ menuSelected:
     call menuMusicPage
     call menuTrackMute
     call menuMusicRestore
+showSectorReady:
     call clearMenuScreen
     ld hl,readyTitle
     ld de,#484b               ; row 10, column 11
@@ -131,6 +132,9 @@ returnToMenu:
 selectNextLevel:
     call showLevelMenu
 restartSelectedLevel:
+    call prepareSelectedLevel
+    jp levelPrepared
+prepareSelectedLevel:
     di
     call rewindBarrel
     ; The first render pass otherwise reads the old level's buffer and tile list.
@@ -168,7 +172,7 @@ restartSelectedLevel:
     ld (greenStartPhase),a
     ld hl,testAudioRecipe
     ld (phrase_next),hl
-    jp levelPrepared
+    ret
 
 ; The PT3 player and its self-modifying state share logical bank 3.
 menuFrame:

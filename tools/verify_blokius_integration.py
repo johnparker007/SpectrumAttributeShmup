@@ -111,6 +111,7 @@ levelPrepared:
             call gameInit
             di
         endif
+startLevelRenderer:
         call enableRender
         ei
         halt
@@ -212,7 +213,8 @@ doSinScroll equ barrelScroll_Update
         if not prototype_waves:
             defines.extend(("LEVEL_WAVES", "BOTTOM_HUD"))
             for filename in ("bottom_hud.a80", "bottom_hud_updates.a80", "bottom_hud_timing.a80",
-                             "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80", "level_tiles.a80"):
+                             "sky_stars.a80", "scenery_stream.a80", "enemy_catalog.a80", "level_tiles.a80",
+                             "boss.a80", "boss_transition.a80"):
                 shutil.copyfile(TESTS.parent / "game" / filename, game / filename)
             shutil.copyfile(TESTS.parent / "game" / "destructible.a80", game / "destructible.a80")
             install_bottom_raster(game)
@@ -306,6 +308,11 @@ BLAST_TILE equ {BLAST_TILE}
 SCENERY_MOUNT equ {SCENERY_MOUNT}
         include "destructible.a80"
         include "bottom_hud_updates.a80"
+bossArt:
+        incbin "boss_nw.bin"
+        incbin "boss_ne.bin"
+        incbin "boss_sw.bin"
+        incbin "boss_se.bin"
     endif
     assert $ <= #cb00
 
@@ -385,6 +392,7 @@ yellowArt equ enemyArt+256
 catalogPaths: defs 6*256         ; mirrored flight samples and gun gates
         assert (high catalogPaths)*2%256>=#a0 && ((high catalogPaths)+5)*2%256<#c0
         include "enemy_catalog.a80"
+        include "boss_transition.a80"
         assert $<=#e000
     endif
     org #e000
@@ -399,6 +407,7 @@ catalogPaths: defs 6*256         ; mirrored flight samples and gun gates
         include "sky_stars.a80"
         include "scenery_stream.a80"
         DRAW_INCOMING_POOL
+        include "boss.a80"
     endif
     assert $ <= #10000
 ''')

@@ -10,6 +10,7 @@ The playable build reads these files on every build.
 | `sprites/enemy_green_sine.png`, then `enemy_green_sine_2.png` through `_4.png` | Green sine flier folding and extending its fins |
 | `sprites/enemy_yellow_z.png`, then `enemy_yellow_z_2.png` through `_4.png` | Yellow Z flier with a spinning cyan core |
 | `sprites/enemy_<name>.png`, then `enemy_<name>_2.png` through `_4.png` | Four editable flight poses for each of the fourteen additional ships |
+| `sprites/boss_nw.png`, `boss_ne.png`, `boss_sw.png`, `boss_se.png` | Top-left, top-right, bottom-left and bottom-right quarters of the 10×10 sector boss |
 | `sprites/explosion_1.png` through `explosion_3.png` | Shared three-frame explosion, 5 by 5 dots per frame |
 | `maps/level.tmx` through `maps/level-9.tmx` | Nine 256 × 6 maps. Each layer carries the sector name |
 | `maps/tileSet.tsx` | Tiled scenery palette with previews of the extractor and pump animations |

@@ -10,6 +10,16 @@ Green sine fliers enter beyond the right edge and move left one logical dot ever
 
 The scenery and tile animation tables advance every other game tick. Each pose of the winding drum, scanner or rotor lasts four game ticks (160 ms). The four quadrants of the common extractor use the same frame duration. Eight blue stars move at two speeds behind sky tiles.
 
+At the end of each map, the current seven-ship wave finishes spawning. Once the last flier has left or finished exploding, a 10×10 boss enters from the right and patrols vertically. Its four 5×5 quarters share one health pool. The centre shot of each volley aims at the player and neighbouring shots are one of the 32 bearings apart.
+
+| Levels | Hits to destroy the boss | Shots per volley | Time between volleys by level |
+| --- | --- | --- | --- |
+| 1–3 | 8, 10, 12 | 1 | 1.44, 1.28, 1.12 seconds |
+| 4–6 | 14, 16, 18 | 3 | 1.28, 1.12, 0.96 seconds |
+| 7–9 | 20, 22, 24 | 5 | 0.96, 0.80, 0.64 seconds |
+
+Destroying the boss clears the enemy bullets and awards 1,000 points. Score and surviving ships carry into the next sector. Clearing level 9 shows the final score and **ALL SECTORS CLEAR** before returning to the title. To export a playtest TAP starting near the end of each sector, run `tools/verify_boss.py --game <assembled-game-directory> --assembler <sjasmplus.exe> --emulator <zesarux.exe> --trial-tap <output.tap>`.
+
 The level loader selects the green flier's firing column and the level's bullet speed during **GET READY**. Each armed green flier gets one shot when it crosses that column. The shot uses the closest of 32 bearings towards the player, or points left while the player is absent. Slow trajectories average about two thirds of the original speed. Each in-flight shot uses the same three-byte record and reads X and Y deltas from the selected pair of 256-byte tables.
 
 | Level | Green flier firing |

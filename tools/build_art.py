@@ -186,6 +186,7 @@ def build_art(output, *, sprite_dir=None):
     if sprite_dir is None:
         sprite_dir = ART / "sprites"
         sprites = {**SPRITES, "enemy_yellow_z": "yellow_art.bin"}
+        sprites.update({f"boss_{part}": f"boss_{part}.bin" for part in ("nw", "ne", "sw", "se")})
         extra = {"enemy_" + ship.name for ship in FLIERS}
         sprites.update({name: f"{name}.bin" for name in sorted(extra)})
         flight_sprites = {"enemy_green_sine", "enemy_yellow_z"} | extra

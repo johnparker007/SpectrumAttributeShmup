@@ -1,0 +1,67 @@
+; Sector handoff in the bank 0 gap before the wave controller.
+    ifdef LEVEL_MENU
+bossSectorCleared:
+    pop hl                            ; waveController and motionStep return addresses
+    pop hl
+    di
+    call disableRender
+    xor a
+    ld e,a                            ; silence all three AY amplitudes
+    call swapPage
+    ifdef LIVE_SFX
+        ld a,8 : call writeSoundEffect
+        ld a,9 : call writeSoundEffect
+        ld a,10 : call writeSoundEffect
+    endif
+    ld a,(selectedLevel)
+    cp 8
+    jr z,bossVictory
+    add a,'2'
+    ld (readyLevel),a
+    ld hl,(hudScore) : push hl
+    ld a,(playerLives) : push af
+    ei
+    call showSectorReady
+    call prepareSelectedLevel
+    call gameInit
+    pop af : ld (playerLives),a
+    pop hl : ld (hudScore),hl
+    ld a,(1<<HUD_SCORE_DIRTY)|(1<<HUD_LIVES_DIRTY)|(1<<HUD_TENS_DIRTY)
+    ld (hudPending),a
+    call bossFinishHud
+    jp startLevelRenderer
+
+bossVictory:
+    call bossFinishHud
+    ; Blank the playfield attributes while preserving the complete score HUD.
+    ld hl,#5800 : ld de,#5801 : ld bc,23*32-1
+    ld (hl),0 : ldir
+    ld hl,bossVictoryText : ld de,#4848
+    call drawScreenText
+    ld hl,#5948
+    ld b,bossVictoryTextEnd-bossVictoryText-1
+.show:
+    ld (hl),HUD_ATTR : inc hl : djnz .show
+    ei
+    ld b,150
+.hold:
+    halt : djnz .hold
+    jp selectNextLevel
+bossVictoryText: db "ALL SECTORS CLEAR",0
+bossVictoryTextEnd:
+
+bossFinishHud:
+    call hudStep
+    ld a,(hudPending)
+    or a
+    jr nz,bossFinishHud
+    ld a,(hudRow)
+    cp 8
+    jr nz,bossFinishHud
+    ret
+    else
+bossSectorCleared:
+    ld hl,bossQuiet
+    ld (waveController+1),hl
+    ret
+    endif

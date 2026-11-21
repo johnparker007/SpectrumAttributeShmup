@@ -82,9 +82,11 @@ controlsReady:
     call movePlayer
     call firePlayer
 .moveEnemy:
+waveController equ $
     call stepWave
     call movePlayerPairs
     call moveIncoming
+gunController equ $
     call spawnIncoming
     call syncActors
     ld hl,gameTick

@@ -18,15 +18,21 @@ sectorSeed:
     ld (tileMapScroll_H),a
     ld a,8
     ld (sceneryBlastCount),a
-    dup 8,i
-        ld hl,(18+i)+(28+i)*256
-        ld (sceneryBlasts+3*i),hl
-        ld a,1
-        ld (sceneryBlasts+3*i+2),a
-        ld a,BLAST_TILE+2
-        ld (tileMap+18+i),a
-        ld (tileMap+28+i),a
-    edup
+    ld hl,sceneryBlasts
+    ld de,18+28*256
+    ld b,8
+.seedBlast:
+    ld (hl),e : inc hl
+    ld (hl),d : inc hl
+    ld (hl),1 : inc hl
+    inc e : inc d
+    djnz .seedBlast
+    ld hl,tileMap+18 : ld de,tileMap+28 : ld b,8
+    ld a,BLAST_TILE+2
+.seedTile:
+    ld (hl),a : inc hl
+    ld (de),a : inc de
+    djnz .seedTile
     dup PLAYER_PAIRS,i
         ld hl,(3+i*8)+20*256
         ld (player_pairs+2*i),hl
@@ -37,19 +43,19 @@ sectorSeed:
         ld (tileMap+64+i),a
     edup
     dup WAVE_ENEMIES,i
-        ld hl,(23+2*i)+(1+5*(i%3))*256
-        ld (enemy_boxes+2*i),hl
         ifdef STRESS_CATALOG
             ; Occupy all fifteen slots with the six scripted level-nine species.
             ; Every ship is on its real path, one step before its first gun.
             ld a,(catalogStressPositions+3*i+2)
-            or (high catalogPaths+i%6)*2
+            or ((high catalogPaths+i%6)*2) & #ff
             ld (enemyMotion+2*i),a
             ld hl,enemyArt+(2+i%6)*256
             ld (sprite09+i*SPRITE+SPRITE.IMAGE),hl
             ld hl,(catalogStressPositions+3*i)
             ld (enemy_boxes+2*i),hl
         else
+        ld hl,(23+2*i)+(1+5*(i%3))*256
+        ld (enemy_boxes+2*i),hl
         if i>=8
             ld a,(residentCount)
             dec a
@@ -62,12 +68,10 @@ sectorSeed:
         endif
         endif
     edup
-    dup ENEMY_COUNT,i
-        ld hl,(17+i)+(4+(i%5)*6)*256
-        ld (enemy_records+3*i),hl
-        ld a,((i%4)*8)
-        ld (enemy_records+3*i+2),a
-    edup
+    ld hl,sectorTestBullets
+    ld de,enemy_records
+    ld bc,ENEMY_COUNT*3
+    ldir
     ifdef STRESS_BONUS_LIFE
         ; Start with a full row of wide icons. The first real hit awards the
         ; 19th spare while the projectile, sprite and scenery pools are busy.
@@ -86,6 +90,10 @@ sectorSeed:
         ld (collision_actual),a
     endif
     jp syncActors
+sectorTestBullets:
+    dup ENEMY_COUNT,i
+        db 17+i,4+(i%5)*6,(i%4)*8
+    edup
     ifdef STRESS_CATALOG
 catalogStressPositions: incbin "catalog-stress.bin"
     endif
