@@ -87,7 +87,7 @@ sectorSeed:
     ifdef STRESS_BONUS_LIFE
         ; Start with a full row of wide icons. The first real hit awards the
         ; 19th spare while the projectile, sprite and scenery pools are busy.
-        ld hl,#8199
+        ld hl,#4999             ; the kill crosses 500,000
         ld (hudScore),hl
         ld a,19
         ld (playerLives),a

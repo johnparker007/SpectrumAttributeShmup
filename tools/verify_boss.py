@@ -58,8 +58,8 @@ def make_pilot(trial, pilot, assembler):
     assert src.count(marker) == 1
     path.write_text(src.replace(marker, "    call bossTestPilot\n"))
 
-    # Seed distinct shooting results and cross the first extra-ship threshold
-    # during clearance on levels 1/2 and during the boss explosion thereafter.
+    # Cross 50k and 200k through crate bonuses on levels 1 and 2.
+    # On later levels the boss kill itself crosses 500k.
     path = pilot / "boss.a80"
     src = path.read_text()
     marker = "\nbossEnter:\n"
@@ -67,7 +67,9 @@ def make_pilot(trial, pilot, assembler):
     src = src.replace(marker, marker + """
     ld a,1 : ld (playerLives),a
     ld a,(selectedLevel)
-    ld hl,#0150 : cp 2 : jr c,1f : ld hl,#0195
+    ld hl,#0450 : or a : jr z,1f
+    ld hl,#1950 : cp 1 : jr z,1f
+    ld hl,#4995
 1:  ld (hudScore),hl
 """)
     path.write_text(src + """
@@ -285,7 +287,7 @@ def verify(trial, emulator, model, level, pilot=False):
         # The HUD stores packed BCD hundreds. The boss awards ten of them.
         before = int(f"{values(events, death)[0]:04x}")
         after = int(f"{carry // 256:04x}")
-        assert before == (150 if level <= 2 else 195) and after == before + 10
+        assert before == {1: 450, 2: 1950}.get(level, 4995) and after == before + 10
         if level == 5:
             actual = values(opening, hits) + values(encounter, hits)
             assert actual and 0 < actual[-1] <= 4

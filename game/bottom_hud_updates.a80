@@ -22,12 +22,9 @@ hudScoreAwarded:
     cp high FIRST_BONUS_HUNDREDS
     jr z,.extraLife
     endif
-    cp #07                      ; subsequent awards start at 70,000
-    ret c
-    and 15                      ; tens of thousands digit, packed BCD
-    cp 2
+    cp #20                      ; 200,000 points
     jr z,.extraLife
-    cp 7
+    cp #50                      ; 500,000 points, the final award
     ret nz
 .extraLife:
     set HUD_LIVES_DIRTY,(hl)

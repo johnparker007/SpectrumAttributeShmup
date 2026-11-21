@@ -18,9 +18,9 @@ bonusProbe:
     call startShotSound
     call startExplosionSound
     ld bc,BONUS_TEST_TICKS : call checkTicks
-    ld hl,#0699
+    ld hl,#1999
     ld (hudScore),hl
-    call hudAward               ; 70,000
+    call hudAward               ; 200,000
     ld bc,3 : call checkTicks
     call resetEncounter         ; interrupt the second chime
     ld bc,4 : call checkTicks

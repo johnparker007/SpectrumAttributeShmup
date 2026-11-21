@@ -5,7 +5,7 @@ HUD_SCORE_DIRTY equ 0
 HUD_LIVES_DIRTY equ 1
     ifdef BOTTOM_HUD
 HUD_TENS_DIRTY equ 2
-FIRST_BONUS_HUNDREDS equ #0200  ; 20,000 points, in packed BCD hundreds
+FIRST_BONUS_HUNDREDS equ #0500  ; 50,000 points, in packed BCD hundreds
 HUD_LIFE_X equ 8
 HUD_LIFE_COLUMNS equ HUD_DIGIT_RIGHT-3-HUD_LIFE_X   ; columns 8-25
 HUD_BITMAP_HIGH equ #50
