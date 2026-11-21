@@ -279,6 +279,9 @@ updatePlayerLife:
     ld a,(player_hit)
     or a
     ret z
+    ifdef LIVE_SFX
+        call startExplosionSound
+    endif
     ld hl,playerLives
     dec (hl)
     ld hl,playerExplosion

@@ -19,6 +19,7 @@ from build_art import (
 )
 from bottom_hud import install_bottom_raster
 from bonus_chime import bake_bonus, tag_music_bank
+from extract_ay_effects import bake_noise_sample
 from menu_luminance import build_luminance
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -281,6 +282,7 @@ doSinScroll equ barrelScroll_Update
                 shutil.copyfile(MUSIC / effect, game / "gfx" / effect)
             if not prototype_waves:
                 (game / "gfx/extra-ship.bin").write_bytes(bake_bonus(MUSIC / "extra-ship.vt2"))
+                (game / "gfx/armour-hit.bin").write_bytes(bake_noise_sample(MUSIC / "armour-hit.vt2"))
         if replay is not None:
             controls = bytearray()
             for command, group in groupby(replay):

@@ -1,4 +1,4 @@
-"""Read back all three AY channels through two real bonus awards and a restart."""
+"""Read the AY chip through bonus awards, boss impacts, player deaths and restart."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -70,8 +70,9 @@ def main():
                                 game / "bonus_chime.sym", ["passed", "failed"], model, 3) for model in MODELS]
             for model, job in zip(MODELS, jobs):
                 if [e["labels"] for e in job.result()["events"]] != [["passed"]]:
-                    raise ValueError(f"{model}: incorrect AY registers during bonus playback")
-                print(f"{model}: {len(expected)//11} ticks matched across all three AY channels")
+                    raise ValueError(f"{model}: incorrect AY registers or collision sound")
+                print(f"{model}: {len(expected)//11} bonus-mix ticks matched across all three AY channels; "
+                      "armour, ram, boss kill and player bullet-death sounds passed")
 
 
 if __name__ == "__main__":

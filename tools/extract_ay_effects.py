@@ -8,6 +8,24 @@ import re
 from verify_ay_stream import register_pairs
 
 
+def bake_noise_sample(path):
+    """Bake the noise period and volume of each 50 Hz sample step."""
+    sections = re.split(r"^\[([^\]]+)\]\s*$", path.read_text(encoding="utf-8-sig"), flags=re.M)
+    module = dict(zip(sections[1::2], sections[2::2], strict=True))
+    rows = module["Sample1"].strip().splitlines()
+    if not rows or rows[-1].split() != ["...", "+000_", "+00_", "0_", "L"]:
+        raise ValueError(f"{path}: end sample 1 with a silent loop")
+    data = bytearray()
+    for line in rows[:-1]:
+        step = re.fullmatch(r"\.N\.\s+\+000_\s+([+-][0-9A-F]{2})_\s+([0-9A-F])_", line.strip(), re.I)
+        if not step:
+            raise ValueError(f"{path}: expected fixed noise offset and volume, got {line!r}")
+        data.extend((int(step[1], 16) & 31, int(step[2], 16)))
+    if not 0 < len(data) < 256:
+        raise ValueError(f"{path}: expected 1 to 127 noise steps")
+    return bytes(data)
+
+
 def extract(module, capture):
     parts = re.split(r"^\[(.+)\]\s*$", module, flags=re.MULTILINE)
     sections = dict(zip(parts[1::2], parts[2::2], strict=True))

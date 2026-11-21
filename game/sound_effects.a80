@@ -5,11 +5,33 @@ startShotSound:
     ret
 
 startExplosionSound:
+    ifdef BOTTOM_HUD
+    ld a,low explosionNoiseEnd
+    ld (soundEffectsTick.noiseEndCompare+1),a
+    endif
     push hl
     ld hl,explosionNoise
     ld (explosionNoiseCursor),hl
     pop hl
     ret
+
+    ifdef BOTTOM_HUD
+; A surviving armoured target can retrigger the tap. A full explosion owns
+; the noise generator until it finishes, including on a simultaneous ram.
+startImpactSound:
+    ld a,(explosionNoiseCursor+1)
+    or a
+    jr z,.start
+    ld a,(soundEffectsTick.noiseEndCompare+1)
+    cp low explosionNoiseEnd
+    ret z
+.start:
+    ld a,low impactNoiseEnd
+    ld (soundEffectsTick.noiseEndCompare+1),a
+    ld hl,impactNoise
+    ld (explosionNoiseCursor),hl
+    ret
+    endif
 
 resetSoundEffects:
     ld hl,0
@@ -63,6 +85,7 @@ soundEffectsTick:
     ld e,(hl)
     inc hl
     ld a,l
+.noiseEndCompare:
     cp low explosionNoiseEnd
     jr nz,.explosionNext
     ld hl,0
@@ -174,6 +197,11 @@ explosionNoiseEnd:
     assert explosionNoiseEnd-explosionNoise < 256
 
     ifdef BOTTOM_HUD
+impactNoise: incbin "gfx/armour-hit.bin"
+impactNoiseEnd:
+    assert impactNoiseEnd-impactNoise > 0 && impactNoiseEnd-impactNoise < 256
+    assert low impactNoiseEnd != low explosionNoiseEnd
+
 ; Consume the initial all-register packet before enabling the renderer.
 ; The first gameplay frame, like every later frame, plays one music tick.
 initGameSoundAndActors:

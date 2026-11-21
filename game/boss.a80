@@ -63,6 +63,9 @@ bossStep:
         ld hl,bossHealth
         dec (hl)
         jp z,bossDestroyed
+        ifdef LIVE_SFX
+            call startImpactSound
+        endif
         ld hl,explosion1               ; flash the quadrant that was struck
 1:      ld (sprite09+part*SPRITE+SPRITE.IMAGE),hl
     edup
