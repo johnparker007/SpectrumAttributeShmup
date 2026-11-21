@@ -67,3 +67,14 @@ streamSceneryTile:
 .padding:
     xor a
     jr .paddingReady
+
+; Only the shared graphics pointer changes. Both barrel copies continue to
+; hold the shootable ID until a hit replaces them with the explosion.
+selectCratePose:
+    ld c,a
+    add a,a : add a,low cratePosePointers
+    ld l,a : ld h,high cratePosePointers
+    ld e,(hl) : inc l : ld d,(hl)
+    ld (tilesLUT+DESTRUCTIBLE_TILE*2),de
+    ld a,c
+    ret

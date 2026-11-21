@@ -92,6 +92,9 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
         checks.append((accepted, "B"))
     a_hits = end + " AND 8=8"
     checks.append((a_hits, peek(symbols["sceneryAHits"])))
+    sheen = end + " AND 9=9"
+    crate = symbols["DESTRUCTIBLE_TILE"]
+    checks.append((sheen, f"PEEKW({symbols['tilesLUT']+2*crate:04X}H)"))
     if bonus:
         checks.append((pc("hudScoreAwarded.extraLife"), "TSTATESP"))
     spool = game / f"sector-{model}-{level}.txt"
@@ -122,6 +125,11 @@ def verify(emulator, game, model, level, *, bonus=False, catalog=False):
     assert [v for k, v in play if k == end][:7] == [5]*6 + [0]
     # Five paired shots hit both barrel aliases. Only slots 0 and 4 held As.
     assert [v for k, v in play if k == a_hits][:7] == [2]*7
+    first = symbols["CRATE_SHEEN_FIRST"]
+    count = symbols["CRATE_SHEEN_POSES"]
+    cycle = [*range(first, first+count)] + [crate]*(32-count)
+    pointers = [v for k, v in play if k == sheen]
+    assert pointers[:64] == [symbols["tileSet"] + 48*slot for slot in cycle*2]
     assert [v for k, v in play if k == checks[7][0]][:3] == [79, 79, 0]
     stages = (121, 121, 122, 122, 123, 123, symbols["SCENERY_MOUNT"])
     for watch, _ in checks[8:13]:

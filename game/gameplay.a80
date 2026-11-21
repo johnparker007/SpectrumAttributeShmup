@@ -33,6 +33,11 @@ gameInit:
 
 scrollScenery:
     ld a,(gameTick)
+    ifdef LEVEL_WAVES
+        and 31
+        cp CRATE_SHEEN_POSES+1
+        call c,selectCratePose      ; keeps tick parity for the scroll below
+    endif
     rrca
     ret c
     call barrelScroll_DoAnimations
@@ -441,6 +446,10 @@ rewindBarrel:
     ld (tilesLUT+28*2),hl
     ld hl,tileSet+29*48
     ld (tilesLUT+29*2),hl
+    ifdef LEVEL_WAVES
+        ld hl,tileSet+DESTRUCTIBLE_TILE*48
+        ld (tilesLUT+DESTRUCTIBLE_TILE*2),hl
+    endif
     jp barrelScroll_Init
 
 playerXY: dw 0

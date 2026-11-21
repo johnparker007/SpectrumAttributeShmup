@@ -20,7 +20,7 @@ At the end of each map, the current seven-ship wave finishes spawning. Once the 
 | 4–6 | 3 | 1.28, 1.12, 0.96 seconds |
 | 7–9 | 5 | 0.96, 0.80, 0.64 seconds |
 
-Destroying the boss clears the enemy bullets and awards 1,000 points. Each level has eight green A targets mounted on deck tiles. A short AY fanfare plays over the white-on-black clearance screen. Shooting all eight As earns a further 10,000 points. Missing one, two or three earns 5,000, 2,000 or 1,000 respectively. Four or more misses earn zero. Other destructible fixtures leave their usual craters and have no bearing on the bonus. The build counts As directly from the edited map.
+Destroying the boss clears the enemy bullets and awards 1,000 points. Each level has eight striped bonus crates mounted on deck tiles and marked [A] on the clearance screen. A short AY fanfare plays over the white-on-black clearance screen. Shooting all eight As earns a further 10,000 points. Missing one, two or three earns 5,000, 2,000 or 1,000 respectively. Four or more misses earn zero. Other destructible fixtures leave their usual craters and have no bearing on the bonus. The build counts As directly from the edited map.
 
 Levels 1 and 2 offer eight separate shots at the A targets. Level 3 introduces a pair staggered by three columns and separated by one row. The vertical gaps widen through levels 4 and 5. Trios appear from level 6. Level 9 has a trio, a pair and a final trio. In each group the top and bottom targets share a column, with the middle target of each trio offset by one column.
 

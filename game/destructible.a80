@@ -211,6 +211,14 @@ sceneryBlastStages: db 0,BLAST_TILE+2,BLAST_TILE+2
 levelScenery: incbin "level_targets.bin"
 levelATotals: incbin "level_a_totals.bin"
 
+; One pose per 25 Hz tick, followed by the resting crate for 26 ticks.
+cratePosePointers:
+    dup CRATE_SHEEN_POSES,i
+        dw tileSet+(CRATE_SHEEN_FIRST+i)*48
+    edup
+    dw tileSet+DESTRUCTIBLE_TILE*48
+    assert high cratePosePointers=high($-1)
+
 ; Y can be any logical screen row. The page-aligned table avoids a second
 ; multiply-by-18 for the lower lane of a shot. It lives in pageable bank 0.
     align 256

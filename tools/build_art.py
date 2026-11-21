@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 from verify_zesarux_raster import run
 from enemy_catalog import FLIERS, pack_catalog
-from level_tiles import BASE, TARGETS, layout, pack_tiles, read_map, read_sheet
+from level_tiles import BASE, TARGETS, SHEEN_OFFSETS, TILE_BYTES, layout, pack_tiles, read_map, read_sheet
 from level_tiles import BLAST as BLAST_TILE, MOUNT as SCENERY_MOUNT, TARGET as DESTRUCTIBLE_TILE
 
 
@@ -142,6 +142,23 @@ def hud_life_icon(sprite):
     return bytes(icon)
 
 
+def crate_sheen(crate):
+    """Sweep a one-dot reflection over the red and magenta metal, leaving the grooves dark."""
+    poses = bytearray()
+    for diagonal in SHEEN_OFFSETS:
+        frame = bytearray(crate)
+        for y in range(8):
+            x = y + diagonal
+            if 0 <= x < 8:
+                pair = y * 6 + 2 + x // 2
+                shift = 3 * (x % 2)
+                colour = (frame[pair] >> shift) & 7
+                if colour in (2, 3):
+                    frame[pair] |= 7 << shift
+        poses.extend(frame)
+    return poses
+
+
 def build_art(output, *, sprite_dir=None):
     output.mkdir(parents=True, exist_ok=True)
     font = output / SCREEN_FONT
@@ -174,6 +191,7 @@ def build_art(output, *, sprite_dir=None):
             if (attribute & mask) == 0:
                 blasts[i] |= mount[i % len(mount)] & mask
     raw[BASE] = tiles[:BLAST_TILE * 48] + blasts + targets[:4 * 48]
+    raw[TARGETS] = targets + crate_sheen(targets[:TILE_BYTES])
     # Retain the first level as a static atlas for the archived prototype probes.
     for number, (_, resident) in enumerate(levels, 1):
         atlas = bytearray(128 * 48)

@@ -20,6 +20,7 @@ from build_art import (
 from bottom_hud import install_bottom_raster
 from bonus_chime import bake_bonus, tag_music_bank
 from extract_ay_effects import bake_noise_sample
+from level_tiles import SHEEN_FIRST, SHEEN_OFFSETS
 from menu_luminance import build_luminance
 from profile_blokius import build, capture
 from profile_ringo8 import FRAME, HIT, MODELS
@@ -333,6 +334,8 @@ doSinScroll equ barrelScroll_Update
         # Leave bank 0 space after the renderer, with the AY recipe still at #cb00.
         scenery_source = f"""    ifdef LEVEL_WAVES
 DESTRUCTIBLE_TILE equ {DESTRUCTIBLE_TILE}
+CRATE_SHEEN_FIRST equ {SHEEN_FIRST}
+CRATE_SHEEN_POSES equ {len(SHEEN_OFFSETS)}
 BLAST_TILE equ {BLAST_TILE}
 SCENERY_MOUNT equ {SCENERY_MOUNT}
         include "destructible.a80"

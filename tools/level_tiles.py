@@ -11,6 +11,9 @@ TARGETS = "destructible.tsx"
 MOUNT, BLAST, TARGET = 104, 121, 124
 TILE_BYTES = 48
 STARS = range(64, 80)
+# Six build-generated poses follow the seven editor tiles in the packed fixture art.
+SHEEN_OFFSETS = (5, 3, 1, -1, -3, -5)
+SHEEN_FIRST = BLAST - len(SHEEN_OFFSETS)
 # Resident frame order is the order of the beam renderer's pointer tables.
 TRACKS = {"pump": (3, (10, 9, 8, 7, 6, 5, 4, 3)),
           "fanNW": (12, (12, 14, 44, 46)), "fanNE": (13, (13, 15, 45, 47)),
@@ -103,6 +106,9 @@ def layout(cells, sheets):
 
     for idx in (0, *STARS):
         bind(idx, (BASE, idx))
+    if (TARGETS, 0) in used:
+        for i in range(len(SHEEN_OFFSETS)):
+            bind(SHEEN_FIRST + i, (TARGETS, sheets[TARGETS].count + i))
     if any(name == TARGETS for name, _ in used):
         for idx in (MOUNT, BLAST, BLAST+1, BLAST+2):
             bind(idx, (BASE, idx))
