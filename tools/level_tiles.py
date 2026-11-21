@@ -12,7 +12,7 @@ MOUNT, BLAST, TARGET = 104, 121, 124
 TILE_BYTES = 48
 STARS = range(64, 80)
 # Six build-generated poses follow the seven editor tiles in the packed fixture art.
-SHEEN_OFFSETS = (5, 3, 1, -1, -3, -5)
+SHEEN_OFFSETS = (-5, -3, -1, 1, 3, 5)
 SHEEN_FIRST = BLAST - len(SHEEN_OFFSETS)
 # Resident frame order is the order of the beam renderer's pointer tables.
 TRACKS = {"pump": (3, (10, 9, 8, 7, 6, 5, 4, 3)),
